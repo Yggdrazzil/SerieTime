@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, ScrollView, StyleSheet, Pressable } from 'react-native';
+import { View, Text, TextInput, ScrollView, StyleSheet, Pressable, Image, ActivityIndicator } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, tmdbImage } from '@/lib/api';
 import { COLORS } from '@/lib/theme';
 import { EmptyState, Loading } from '@/components/ui';
@@ -11,6 +11,7 @@ import { EmptyState, Loading } from '@/components/ui';
 type FeedItem = {
   id: string | null;
   tmdbId: string | null;
+  tvdbId: string | null;
   type: 'show' | 'movie';
   title: string;
   year: number | null;
@@ -112,31 +113,74 @@ function Feed({ items, loading }: { items?: FeedItem[]; loading: boolean }) {
 
 function SearchResults({ results, loading, query }: { results?: FeedItem[]; loading: boolean; query: string }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const [addingKey, setAddingKey] = useState<string | null>(null);
+
+  // Ouvre un résultat : local -> détail direct ; externe (TheTVDB/TMDb) -> ajout puis détail.
+  const open = async (r: FeedItem, key: string) => {
+    if (r.id) {
+      router.push(`/show/${r.id}${r.type === 'movie' ? '?type=movie' : ''}`);
+      return;
+    }
+    if (addingKey) return;
+    setAddingKey(key);
+    try {
+      let mediaId: string | null = null;
+      if (r.tvdbId) {
+        const res = await api.post<{ mediaId: string }>('/api/shows/add-from-tvdb', { tvdbId: r.tvdbId });
+        mediaId = res.mediaId;
+      } else if (r.tmdbId && r.type === 'show') {
+        const res = await api.post<{ mediaId: string }>('/api/shows/add-from-tmdb', { tmdbId: r.tmdbId });
+        mediaId = res.mediaId;
+      } else if (r.tmdbId && r.type === 'movie') {
+        const res = await api.post<{ mediaId: string }>('/api/movies/add-from-tmdb', { tmdbId: r.tmdbId });
+        mediaId = res.mediaId;
+      }
+      if (mediaId) {
+        queryClient.invalidateQueries({ queryKey: ['shows'] });
+        queryClient.invalidateQueries({ queryKey: ['movies'] });
+        router.push(`/show/${mediaId}${r.type === 'movie' ? '?type=movie' : ''}`);
+      }
+    } finally {
+      setAddingKey(null);
+    }
+  };
+
   if (loading) return <Loading />;
   if (!results || results.length === 0)
     return <EmptyState title="Toutes nos excuses" message={`Nous n'avons trouvé aucun résultat pour « ${query} »`} />;
   return (
-    <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
-      {results.map((r) => (
-        <Pressable
-          key={`${r.type}-${r.id ?? r.tmdbId}`}
-          style={styles.resultRow}
-          onPress={() => r.id && router.push(`/show/${r.id}${r.type === 'movie' ? '?type=movie' : ''}`)}
-        >
-          <View style={styles.resultPoster}>
-            <Feather name="image" size={18} color="#b4b4b4" />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.resultTitle} numberOfLines={1}>
-              {r.title}
-            </Text>
-            <Text style={styles.resultMeta}>
-              {[r.type === 'show' ? 'Série' : 'Film', r.year].filter(Boolean).join(' · ')}
-            </Text>
-          </View>
-          {r.inLibrary ? <Text style={styles.followed}>SUIVI</Text> : null}
-        </Pressable>
-      ))}
+    <ScrollView contentContainerStyle={{ paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
+      {results.map((r) => {
+        const key = `${r.type}-${r.id ?? r.tvdbId ?? r.tmdbId}`;
+        const poster = tmdbImage(r.posterPath, 'w185');
+        return (
+          <Pressable key={key} style={styles.resultRow} onPress={() => open(r, key)}>
+            {poster ? (
+              <Image source={{ uri: poster }} style={styles.resultPoster} resizeMode="cover" />
+            ) : (
+              <View style={styles.resultPoster}>
+                <Feather name="image" size={18} color="#b4b4b4" />
+              </View>
+            )}
+            <View style={{ flex: 1 }}>
+              <Text style={styles.resultTitle} numberOfLines={1}>
+                {r.title}
+              </Text>
+              <Text style={styles.resultMeta}>
+                {[r.type === 'show' ? 'Série' : 'Film', r.year].filter(Boolean).join(' · ')}
+              </Text>
+            </View>
+            {addingKey === key ? (
+              <ActivityIndicator color={COLORS.black} />
+            ) : r.inLibrary ? (
+              <Text style={styles.followed}>SUIVI</Text>
+            ) : r.id ? null : (
+              <Feather name="plus" size={22} color={COLORS.black} />
+            )}
+          </Pressable>
+        );
+      })}
     </ScrollView>
   );
 }

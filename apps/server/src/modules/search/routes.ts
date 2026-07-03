@@ -4,10 +4,12 @@ import { prisma } from '../../db/client.js';
 import { requireAuth } from '../auth/routes.js';
 import { serializeMedia } from '../media/serialize.js';
 import { tmdbEnabled, tmdbSearch, tmdbSearchPerson, tmdbTrending } from '../../services/tmdb/index.js';
+import { tvdbEnabled, tvdbLanguage, tvdbSearch } from '../../services/tvdb/index.js';
 
 type SearchResult = {
   id: string | null;
   tmdbId: string | null;
+  tvdbId: string | null;
   type: 'show' | 'movie';
   title: string;
   year: number | null;
@@ -70,6 +72,7 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
     const results: SearchResult[] = local.map((m) => ({
       id: m.id,
       tmdbId: m.tmdbId,
+      tvdbId: m.tvdbId,
       type: m.type as 'show' | 'movie',
       title: m.localizedTitle ?? m.title,
       year: m.year,
@@ -87,6 +90,7 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
         results.push({
           id: null,
           tmdbId: String(r.id),
+          tvdbId: null,
           type: r.media_type === 'movie' ? 'movie' : 'show',
           title: r.name ?? r.title ?? '',
           year: (r.first_air_date ?? r.release_date)
@@ -95,6 +99,30 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
           posterPath: r.poster_path ?? null,
           backdropPath: r.backdrop_path ?? null,
           overview: r.overview ?? null,
+          inLibrary: false,
+        });
+      }
+    }
+
+    // Séries TheTVDB (source alternative, ex. exports TV Time). Ajoutées si activée
+    // et non déjà présentes (par tvdb_id local ou titre déjà listé).
+    if (tvdbEnabled()) {
+      const knownTvdb = new Set(local.map((m) => m.tvdbId).filter(Boolean));
+      const knownTitles = new Set(results.map((r) => r.title.toLowerCase()));
+      const remote = await tvdbSearch(q);
+      for (const r of remote.slice(0, 20)) {
+        if (knownTvdb.has(r.tvdb_id)) continue;
+        if (knownTitles.has(r.name.toLowerCase())) continue;
+        results.push({
+          id: null,
+          tmdbId: null,
+          tvdbId: r.tvdb_id,
+          type: 'show',
+          title: r.name,
+          year: r.year ? Number(r.year) : r.first_air_time ? new Date(r.first_air_time).getFullYear() : null,
+          posterPath: r.image_url ?? null,
+          backdropPath: null,
+          overview: r.overviews?.[tvdbLanguage()] ?? r.overview ?? null,
           inLibrary: false,
         });
       }
@@ -132,6 +160,7 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
           cards.push({
             id: null,
             tmdbId: String(r.id),
+            tvdbId: null,
             type: status.media.type === 'show' ? 'show' : 'movie',
             title: r.name ?? r.title ?? '',
             year: (r.first_air_date ?? r.release_date)
@@ -150,6 +179,7 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
         cards.push({
           id: null,
           tmdbId: String(r.id),
+          tvdbId: null,
           type: r.title ? 'movie' : 'show',
           title: r.name ?? r.title ?? '',
           year: (r.first_air_date ?? r.release_date)

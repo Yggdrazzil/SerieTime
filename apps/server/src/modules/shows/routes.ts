@@ -495,6 +495,19 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
     });
     return { mediaId: media.id };
   });
+
+  app.post('/api/shows/add-from-tvdb', async (request, reply) => {
+    const { tvdbId } = z.object({ tvdbId: z.string() }).parse(request.body);
+    const { ensureShowFromTvdb } = await import('../../services/tvdb/index.js');
+    const media = await ensureShowFromTvdb(tvdbId);
+    if (!media) return reply.code(502).send({ error: 'tvdb_unavailable' });
+    await prisma.userMediaStatus.upsert({
+      where: { userId_mediaId: { userId: request.userId, mediaId: media.id } },
+      create: { userId: request.userId, mediaId: media.id, status: 'not_started' },
+      update: {},
+    });
+    return { mediaId: media.id };
+  });
 }
 
 export { markEpisodeWatched };

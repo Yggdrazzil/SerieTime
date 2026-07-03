@@ -56,10 +56,19 @@ l'app fonctionne mais affiche des posters vides et ne peut pas enrichir la reche
 Renseignez `TMDB_API_KEY` (ou `TMDB_READ_ACCESS_TOKEN`) dans `.env`. **TVmaze** sert de fallback
 séries (épisodes, calendrier) et ne nécessite pas de clé.
 
-### Configuration optionnelle TheTVDB
+### Configuration TheTVDB (source de contenu séries)
 
-Désactivé par défaut. Activez-le (`TVDB_ENABLED=true`, `TVDB_API_KEY`, `TVDB_PIN`) uniquement si
-vos exports TV Time contiennent des identifiants TheTVDB et que le matching TMDb échoue.
+TheTVDB (la base historiquement utilisée par TV Time) peut alimenter directement l'app. Activez-la
+avec `TVDB_ENABLED=true` et `TVDB_API_KEY="votre-clé-v4"` (clé projet v4 sur
+[thetvdb.com/dashboard](https://www.thetvdb.com/dashboard) ; `TVDB_PIN` n'est requis que pour les
+clés « user-supported »). Une fois activée :
+
+- la **recherche** de séries renvoie les résultats TheTVDB (avec affiches), même sans clé TMDb ;
+- ajouter une série depuis la recherche crée la fiche locale avec ses **saisons et épisodes**
+  (`POST /api/shows/add-from-tvdb`).
+
+TMDb reste recommandé pour les films, les castings et les fournisseurs « où regarder ». Les clés
+API restent **exclusivement côté serveur**.
 
 Les clés API restent **exclusivement côté serveur** — jamais exposées au mobile.
 

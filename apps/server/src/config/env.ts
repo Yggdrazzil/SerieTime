@@ -1,3 +1,7 @@
+// Charge le fichier .env dans process.env AVANT toute lecture de configuration.
+// Sans cela, ce module lit process.env trop tôt (avant l'init de Prisma) et
+// ignore silencieusement toutes les valeurs du .env (clés TMDb/TheTVDB, secrets…).
+import 'dotenv/config';
 import { z } from 'zod';
 
 const envSchema = z.object({
@@ -16,8 +20,15 @@ const envSchema = z.object({
   GOOGLE_CLIENT_IDS: z.string().default(''),
   FACEBOOK_APP_ID: z.string().default(''),
   FACEBOOK_APP_SECRET: z.string().default(''),
-  TVMAZE_ENABLED: z.coerce.boolean().default(true),
-  TVDB_ENABLED: z.coerce.boolean().default(false),
+  // NB : z.coerce.boolean() rendrait "false" -> true. On parse la chaîne explicitement.
+  TVMAZE_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => (v == null ? true : v.trim().toLowerCase() === 'true' || v.trim() === '1')),
+  TVDB_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => (v == null ? false : v.trim().toLowerCase() === 'true' || v.trim() === '1')),
   TVDB_API_KEY: z.string().default(''),
   TVDB_PIN: z.string().default(''),
   DEFAULT_LANGUAGE: z.string().default('fr-FR'),
