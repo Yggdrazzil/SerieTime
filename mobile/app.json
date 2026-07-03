@@ -35,6 +35,9 @@
       "expo-router",
       "expo-font"
     ],
+    "extra": {
+      "serverUrl": ""
+    },
     "experiments": {
       "typedRoutes": true
     }

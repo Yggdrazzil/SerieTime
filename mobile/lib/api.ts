@@ -1,4 +1,5 @@
 import { useAppStore } from './store';
+import { CONFIGURED_SERVER_URL } from './config';
 
 export class ApiError extends Error {
   status: number;
@@ -10,8 +11,14 @@ export class ApiError extends Error {
   }
 }
 
+// URL effective : la valeur « bakée » (production) prime, sinon celle saisie (dev).
+export function resolvedServerUrl(): string | null {
+  return CONFIGURED_SERVER_URL ?? useAppStore.getState().serverUrl;
+}
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const { serverUrl, token } = useAppStore.getState();
+  const { token } = useAppStore.getState();
+  const serverUrl = resolvedServerUrl();
   if (!serverUrl) throw new ApiError(0, 'no_server');
   const res = await fetch(`${serverUrl}${path}`, {
     method,

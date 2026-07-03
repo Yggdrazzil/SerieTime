@@ -11,6 +11,11 @@ const envSchema = z.object({
   SESSION_DURATION_DAYS: z.coerce.number().default(30),
   TMDB_API_KEY: z.string().default(''),
   TMDB_READ_ACCESS_TOKEN: z.string().default(''),
+  // SSO — audiences Google acceptées (Client IDs Web/Android/iOS, séparés par des virgules)
+  // et identifiants de l'app Facebook Login. Laisser vide désactive le provider concerné.
+  GOOGLE_CLIENT_IDS: z.string().default(''),
+  FACEBOOK_APP_ID: z.string().default(''),
+  FACEBOOK_APP_SECRET: z.string().default(''),
   TVMAZE_ENABLED: z.coerce.boolean().default(true),
   TVDB_ENABLED: z.coerce.boolean().default(false),
   TVDB_API_KEY: z.string().default(''),

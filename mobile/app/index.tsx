@@ -2,11 +2,12 @@ import React, { useEffect } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { Redirect } from 'expo-router';
 import { useAppStore } from '@/lib/store';
+import { resolvedServerUrl } from '@/lib/api';
 import { COLORS } from '@/lib/theme';
 
-// Porte d'entrée : redirige vers la config serveur, la connexion ou l'app.
+// Porte d'entrée : redirige vers l'onboarding (serveur + connexion) ou l'app.
 export default function Index() {
-  const { hydrated, serverUrl, token } = useAppStore();
+  const { hydrated, token } = useAppStore();
 
   if (!hydrated) {
     return (
@@ -15,6 +16,6 @@ export default function Index() {
       </View>
     );
   }
-  if (!serverUrl || !token) return <Redirect href="/setup" />;
+  if (!resolvedServerUrl() || !token) return <Redirect href="/setup" />;
   return <Redirect href="/(tabs)" />;
 }

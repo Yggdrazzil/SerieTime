@@ -35,6 +35,7 @@ function serializeUser(user: {
   birthYear: number | null;
   gender: string | null;
   countryCode: string;
+  provider: string;
 }) {
   return {
     id: user.id,
@@ -45,6 +46,7 @@ function serializeUser(user: {
     birthYear: user.birthYear,
     gender: user.gender,
     countryCode: user.countryCode,
+    provider: user.provider,
   };
 }
 
@@ -55,30 +57,122 @@ async function createSession(userId: string) {
   return { token, expiresAt };
 }
 
+// ---------------------------------------------------------------------------
+// SSO — vérification des jetons auprès du fournisseur (côté serveur uniquement).
+// ---------------------------------------------------------------------------
+
+type OAuthProfile = {
+  providerId: string;
+  email: string | null;
+  displayName: string;
+  avatarUrl: string | null;
+};
+
+// Vérifie un ID token Google via l'endpoint tokeninfo et contrôle l'audience.
+async function verifyGoogleToken(idToken: string): Promise<OAuthProfile> {
+  const res = await fetch(
+    `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`,
+  );
+  if (!res.ok) throw new Error('google_verify_failed');
+  const data = (await res.json()) as Record<string, string | undefined>;
+  if (!data.sub) throw new Error('google_no_sub');
+  const allowed = env.GOOGLE_CLIENT_IDS.split(',').map((s) => s.trim()).filter(Boolean);
+  if (allowed.length > 0 && (!data.aud || !allowed.includes(data.aud))) {
+    throw new Error('google_bad_audience');
+  }
+  return {
+    providerId: data.sub,
+    email: data.email ?? null,
+    displayName: data.name || data.email || 'Utilisateur',
+    avatarUrl: data.picture ?? null,
+  };
+}
+
+// Vérifie un access token Facebook via le Graph API.
+async function verifyFacebookToken(accessToken: string): Promise<OAuthProfile> {
+  const res = await fetch(
+    `https://graph.facebook.com/me?fields=id,name,email,picture.type(large)&access_token=${encodeURIComponent(accessToken)}`,
+  );
+  if (!res.ok) throw new Error('facebook_verify_failed');
+  const data = (await res.json()) as {
+    id?: string;
+    name?: string;
+    email?: string;
+    picture?: { data?: { url?: string } };
+  };
+  if (!data.id) throw new Error('facebook_no_id');
+  return {
+    providerId: data.id,
+    email: data.email ?? null,
+    displayName: data.name || 'Utilisateur',
+    avatarUrl: data.picture?.data?.url ?? null,
+  };
+}
+
+// Retrouve le compte SSO (provider, providerId) ou le crée à la première connexion.
+async function upsertOAuthUser(provider: 'google' | 'facebook', profile: OAuthProfile) {
+  const existing = await prisma.user.findUnique({
+    where: { provider_providerId: { provider, providerId: profile.providerId } },
+  });
+  if (existing) return existing;
+  return prisma.user.create({
+    data: {
+      provider,
+      providerId: profile.providerId,
+      email: profile.email,
+      displayName: profile.displayName,
+      avatarUrl: profile.avatarUrl,
+      countryCode: env.DEFAULT_COUNTRY,
+    },
+  });
+}
+
 export async function authRoutes(app: FastifyInstance): Promise<void> {
-  app.get('/api/auth/needs-setup', async () => {
-    const count = await prisma.user.count();
-    return { needsSetup: count === 0 };
+  // Quels providers SSO sont configurés côté serveur (le mobile adapte son écran).
+  app.get('/api/auth/providers', async () => ({
+    google: env.GOOGLE_CLIENT_IDS.trim().length > 0,
+    facebook: env.FACEBOOK_APP_ID.trim().length > 0,
+    password: true,
+  }));
+
+  // Connexion / inscription via SSO. Idempotent : crée le compte au premier login.
+  app.post('/api/auth/oauth', async (request, reply) => {
+    const body = z
+      .object({ provider: z.enum(['google', 'facebook']), token: z.string().min(1) })
+      .parse(request.body);
+    let profile: OAuthProfile;
+    try {
+      profile =
+        body.provider === 'google'
+          ? await verifyGoogleToken(body.token)
+          : await verifyFacebookToken(body.token);
+    } catch {
+      return reply.code(401).send({ error: 'invalid_oauth_token' });
+    }
+    const user = await upsertOAuthUser(body.provider, profile);
+    const session = await createSession(user.id);
+    return { user: serializeUser(user), token: session.token, expiresAt: session.expiresAt };
   });
 
-  app.post('/api/auth/setup', async (request, reply) => {
+  // Fallback e-mail / mot de passe — inscription (multi-comptes).
+  app.post('/api/auth/register', async (request, reply) => {
     const body = z
       .object({
         displayName: z.string().min(1).max(80),
-        password: z.string().min(4).max(200),
-        email: z.string().email().optional(),
+        email: z.string().email(),
+        password: z.string().min(6).max(200),
       })
       .parse(request.body);
-
-    const existing = await prisma.user.count();
-    if (existing > 0) {
-      return reply.code(409).send({ error: 'already_setup' });
-    }
+    const existing = await prisma.user.findFirst({
+      where: { provider: 'password', email: body.email },
+    });
+    if (existing) return reply.code(409).send({ error: 'email_taken' });
     const user = await prisma.user.create({
       data: {
         displayName: body.displayName,
         email: body.email,
         passwordHash: await bcrypt.hash(body.password, 10),
+        provider: 'password',
         countryCode: env.DEFAULT_COUNTRY,
       },
     });
@@ -86,9 +180,12 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     return { user: serializeUser(user), token: session.token, expiresAt: session.expiresAt };
   });
 
+  // Fallback e-mail / mot de passe — connexion.
   app.post('/api/auth/login', async (request, reply) => {
-    const body = z.object({ password: z.string() }).parse(request.body);
-    const user = await prisma.user.findFirst({ orderBy: { createdAt: 'asc' } });
+    const body = z.object({ email: z.string().email(), password: z.string() }).parse(request.body);
+    const user = await prisma.user.findFirst({
+      where: { provider: 'password', email: body.email },
+    });
     if (!user?.passwordHash || !(await bcrypt.compare(body.password, user.passwordHash))) {
       return reply.code(401).send({ error: 'invalid_credentials' });
     }
@@ -111,7 +208,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
 
   app.post('/api/auth/password', { preHandler: requireAuth }, async (request, reply) => {
     const body = z
-      .object({ currentPassword: z.string(), newPassword: z.string().min(4).max(200) })
+      .object({ currentPassword: z.string(), newPassword: z.string().min(6).max(200) })
       .parse(request.body);
     const user = await prisma.user.findUnique({ where: { id: request.userId } });
     if (!user?.passwordHash || !(await bcrypt.compare(body.currentPassword, user.passwordHash))) {

@@ -41,8 +41,13 @@ pnpm dev:server                 # démarre l'API sur http://localhost:4000
 
 Vérifier : `curl http://localhost:4000/health` → `{"ok":true,"app":"SerieTime","version":"1.0.0"}`.
 
-Au premier lancement, aucun compte n'existe : l'app mobile propose alors de **créer le compte
-local** (nom d'affichage + mot de passe, e-mail optionnel).
+L'authentification est **multi-comptes par e-mail + mot de passe** : au premier lancement l'app
+propose de **créer un compte** (nom d'affichage + e-mail + mot de passe) ou de **se connecter**.
+Plusieurs personnes peuvent donc utiliser le même serveur, chacune avec sa propre bibliothèque.
+
+> Le SSO Google / Facebook est **prêt côté serveur** mais désactivé par défaut (voir
+> `GOOGLE_CLIENT_IDS` / `FACEBOOK_APP_ID` dans `.env`). Il nécessite un *development build* Expo
+> et n'est pas requis pour la prévisualisation Expo Go.
 
 ### Configuration TMDb (recommandé)
 
@@ -68,8 +73,12 @@ npx expo start
 
 Scanne le QR code avec Expo Go (Android) ou l'appareil photo (iOS). Le téléphone doit être sur le
 **même Wi-Fi** que l'ordinateur, et le serveur joignable via l'**IP locale** (ex.
-`http://192.168.1.42:4000`, pas `localhost`). Au premier lancement l'app demande l'**URL du
-serveur**, teste `GET /health`, puis propose la connexion / création de compte.
+`http://192.168.1.42:4000`, pas `localhost`). En développement l'app demande l'**URL du serveur**,
+teste `GET /health`, puis propose la connexion / création de compte.
+
+Pour un déploiement public, renseigne l'URL du serveur dans `mobile/app.json`
+(`expo.extra.serverUrl`) : l'app s'y connecte alors automatiquement et l'écran « URL du serveur »
+disparaît — l'utilisateur n'a plus qu'à créer son compte.
 
 Détails et build APK : [mobile/README.md](mobile/README.md) et
 [docs/README_ANDROID.md](docs/README_ANDROID.md).
@@ -121,7 +130,9 @@ pnpm test                       # unitaires (core) + intégration (API serveur)
 - L'enrichissement des métadonnées (posters, castings, providers) nécessite une clé TMDb.
 - L'app mobile met en cache les écrans consultés (TanStack Query) ; la recherche externe et
   l'import ZIP exigent le réseau et un serveur joignable.
-- Application mono-utilisateur par serveur (usage personnel).
+- Multi-comptes par serveur (e-mail + mot de passe). Le catalogue (métadonnées séries/films) est
+  partagé, mais la bibliothèque, la progression, les favoris et les stats sont **propres à chaque
+  compte**.
 
 ## Documentation
 

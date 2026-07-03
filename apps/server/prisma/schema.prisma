@@ -22,6 +22,9 @@ model User {
   gender       String?
   countryCode  String   @default("FR")
   passwordHash String?
+  // Identité d'authentification : "password" (fallback e-mail/mdp) ou "google" | "facebook" (SSO).
+  provider     String   @default("password")
+  providerId   String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -32,6 +35,10 @@ model User {
   notifications   Notification[]
   ratings         Rating[]
   sessions        Session[]
+
+  // Un compte SSO est identifié de façon unique par (provider, providerId).
+  // Les comptes "password" ont providerId = null (SQLite autorise plusieurs NULL).
+  @@unique([provider, providerId])
 }
 
 model Session {
