@@ -3,8 +3,9 @@ import { View, Text, TextInput, ScrollView, StyleSheet, Pressable, Image, Activi
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, tmdbImage } from '@/lib/api';
+import { useDebounced } from '@/lib/useDebounced';
 import { COLORS } from '@/lib/theme';
 import { EmptyState, Loading } from '@/components/ui';
 
@@ -125,10 +126,12 @@ function FriendsTab() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [overrides, setOverrides] = useState<Record<string, boolean>>({});
 
+  const dq = useDebounced(q.trim(), 300);
   const search = useQuery({
-    queryKey: ['users', 'search', q],
-    queryFn: () => api.get<{ users: PublicUser[] }>(`/api/users/search?q=${encodeURIComponent(q)}`),
-    enabled: q.trim().length > 1,
+    queryKey: ['users', 'search', dq],
+    queryFn: () => api.get<{ users: PublicUser[] }>(`/api/users/search?q=${encodeURIComponent(dq)}`),
+    enabled: dq.length > 1,
+    placeholderData: keepPreviousData,
   });
 
   const toggle = async (u: PublicUser) => {

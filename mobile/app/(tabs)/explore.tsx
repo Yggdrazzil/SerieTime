@@ -3,8 +3,9 @@ import { View, Text, TextInput, ScrollView, StyleSheet, Pressable, Image, Activi
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, tmdbImage } from '@/lib/api';
+import { useDebounced } from '@/lib/useDebounced';
 import { COLORS } from '@/lib/theme';
 import { EmptyState, Loading } from '@/components/ui';
 
@@ -26,15 +27,18 @@ const PASTELS = ['#F5EFDC', '#DDE7EE', '#EFE0E0', '#E3EEDD'];
 export default function ExploreScreen() {
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState('');
+  // Debounce : une requête quand l'utilisateur marque une pause, pas à chaque frappe.
+  const debouncedQuery = useDebounced(query.trim(), 300);
   const { data, isLoading } = useQuery({
     queryKey: ['explore', 'feed'],
     queryFn: () => api.get<{ feed: FeedItem[] }>('/api/explore/feed'),
     staleTime: 30 * 60_000,
   });
   const search = useQuery({
-    queryKey: ['search', query],
-    queryFn: () => api.get<{ results: FeedItem[] }>(`/api/search?q=${encodeURIComponent(query)}&type=media`),
-    enabled: query.trim().length > 1,
+    queryKey: ['search', debouncedQuery],
+    queryFn: () => api.get<{ results: FeedItem[] }>(`/api/search?q=${encodeURIComponent(debouncedQuery)}&type=media`),
+    enabled: debouncedQuery.length > 1,
+    placeholderData: keepPreviousData, // garde les résultats affichés pendant la frappe
   });
 
   const searching = query.trim().length > 1;
@@ -69,6 +73,24 @@ export default function ExploreScreen() {
 
 function Feed({ items, loading }: { items?: FeedItem[]; loading: boolean }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const [addingKey, setAddingKey] = useState<string | null>(null);
+
+  // Ajoute la recommandation à la bibliothèque puis ouvre sa fiche.
+  const add = async (f: FeedItem, key: string) => {
+    if (addingKey || !f.tmdbId) return;
+    setAddingKey(key);
+    try {
+      const path = f.type === 'movie' ? '/api/movies/add-from-tmdb' : '/api/shows/add-from-tmdb';
+      const res = await api.post<{ mediaId: string }>(path, { tmdbId: f.tmdbId });
+      queryClient.invalidateQueries({ queryKey: ['shows'] });
+      queryClient.invalidateQueries({ queryKey: ['movies'] });
+      router.push(`/show/${res.mediaId}${f.type === 'movie' ? '?type=movie' : ''}`);
+    } finally {
+      setAddingKey(null);
+    }
+  };
+
   if (loading) return <Loading />;
   if (!items || items.length === 0)
     return (
@@ -79,34 +101,37 @@ function Feed({ items, loading }: { items?: FeedItem[]; loading: boolean }) {
     );
   return (
     <ScrollView contentContainerStyle={{ paddingVertical: 8, paddingBottom: 24 }}>
-      {items.map((f, i) => (
-        <View key={`${f.type}-${f.tmdbId}`} style={styles.hero}>
-          <View style={styles.heroImg}>
-            <View style={styles.plus}>
-              <Feather name="plus" size={26} color={COLORS.yellow} />
-            </View>
-            {f.type === 'movie' ? (
-              <View style={styles.play}>
-                <View style={styles.playRing}>
-                  <Feather name="play" size={22} color="#fff" />
+      {items.map((f, i) => {
+        const key = `${f.type}-${f.tmdbId}`;
+        const image = tmdbImage(f.backdropPath, 'w780') ?? tmdbImage(f.posterPath, 'w500');
+        return (
+          <View key={key} style={styles.hero}>
+            <View style={styles.heroImg}>
+              {image ? <Image source={{ uri: image }} style={StyleSheet.absoluteFill} resizeMode="cover" /> : null}
+              <View style={styles.heroShade} />
+              <Pressable style={styles.plus} onPress={() => add(f, key)}>
+                {addingKey === key ? (
+                  <ActivityIndicator color={COLORS.yellow} />
+                ) : (
+                  <Feather name="plus" size={26} color={COLORS.yellow} />
+                )}
+              </Pressable>
+              <View style={styles.heroCap}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Feather name={f.type === 'show' ? 'tv' : 'film'} size={22} color="#fff" />
+                  <Text style={styles.heroTitle}>{f.title}</Text>
                 </View>
+                <Text style={styles.heroMeta}>{f.year ?? ''}</Text>
               </View>
-            ) : null}
-            <View style={styles.heroCap}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Feather name={f.type === 'show' ? 'tv' : 'film'} size={22} color="#fff" />
-                <Text style={styles.heroTitle}>{f.title}</Text>
-              </View>
-              <Text style={styles.heroMeta}>{f.year ?? ''}</Text>
             </View>
+            {f.overview ? (
+              <Text style={[styles.heroDesc, { backgroundColor: PASTELS[i % PASTELS.length] }]} numberOfLines={2}>
+                {f.overview}
+              </Text>
+            ) : null}
           </View>
-          {f.overview ? (
-            <Text style={[styles.heroDesc, { backgroundColor: PASTELS[i % PASTELS.length] }]} numberOfLines={2}>
-              {f.overview}
-            </Text>
-          ) : null}
-        </View>
-      ))}
+        );
+      })}
     </ScrollView>
   );
 }
@@ -190,6 +215,7 @@ const styles = StyleSheet.create({
   input: { flex: 1, fontSize: 19, borderBottomWidth: 1, borderBottomColor: COLORS.border, paddingVertical: 8 },
   hero: { marginHorizontal: 20, marginBottom: 24, borderRadius: 5, overflow: 'hidden', ...{ elevation: 3 } },
   heroImg: { aspectRatio: 16 / 11, backgroundColor: '#26262e', justifyContent: 'flex-end' },
+  heroShade: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.25)' },
   plus: { position: 'absolute', right: 16, top: 16, width: 46, height: 46, borderRadius: 10, borderWidth: 2.5, borderColor: COLORS.yellow, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.25)' },
   play: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
   playRing: { width: 58, height: 58, borderRadius: 29, borderWidth: 3, borderColor: '#fff', alignItems: 'center', justifyContent: 'center' },

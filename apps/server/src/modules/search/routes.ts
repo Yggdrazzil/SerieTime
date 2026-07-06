@@ -110,15 +110,18 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
       const knownTvdb = new Set(local.map((m) => m.tvdbId).filter(Boolean));
       const knownTitles = new Set(results.map((r) => r.title.toLowerCase()));
       const remote = await tvdbSearch(q);
+      const lang = tvdbLanguage();
       for (const r of remote.slice(0, 20)) {
         if (knownTvdb.has(r.tvdb_id)) continue;
-        if (knownTitles.has(r.name.toLowerCase())) continue;
+        // Titre localisé (fra) sinon anglais sinon nom d'origine — évite « ワンピース ».
+        const title = r.translations?.[lang] ?? r.translations?.['eng'] ?? r.name;
+        if (knownTitles.has(title.toLowerCase())) continue;
         results.push({
           id: null,
           tmdbId: null,
           tvdbId: r.tvdb_id,
           type: 'show',
-          title: r.name,
+          title,
           year: r.year ? Number(r.year) : r.first_air_time ? new Date(r.first_air_time).getFullYear() : null,
           posterPath: r.image_url ?? null,
           backdropPath: null,

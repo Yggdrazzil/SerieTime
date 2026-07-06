@@ -89,6 +89,7 @@ export type TvdbSearchResult = {
   first_air_time?: string;
   primary_type?: string;
   overviews?: Record<string, string>;
+  translations?: Record<string, string>;
 };
 
 export async function tvdbSearch(query: string): Promise<TvdbSearchResult[]> {
@@ -136,18 +137,34 @@ export type TvdbEpisode = {
 };
 
 // Épisodes "default" (paginés, page_size=500). On suit links.next jusqu'à null,
-// borné à 50 pages par sécurité.
-export async function tvdbSeriesEpisodes(tvdbId: string): Promise<TvdbEpisode[]> {
+// borné à 50 pages par sécurité. `lang` interroge la variante traduite
+// (/episodes/default/{lang}) — les champs name/overview y sont localisés.
+async function fetchEpisodePages(tvdbId: string, lang?: string): Promise<TvdbEpisode[]> {
+  const base = `/series/${tvdbId}/episodes/default${lang ? `/${lang}` : ''}`;
   const all: TvdbEpisode[] = [];
   for (let page = 0; page < 50; page++) {
     const data = await tvdbGet<{
       data?: { episodes?: TvdbEpisode[] };
       links?: { next?: string | null };
-    }>(`/series/${tvdbId}/episodes/default`, { page: String(page) }, 3 * DAY);
+    }>(base, { page: String(page) }, 3 * DAY);
     all.push(...(data?.data?.episodes ?? []));
     if (!data?.links?.next) break;
   }
   return all;
+}
+
+// Épisodes avec titres/synopsis localisés quand ils existent : la liste
+// canonique (numérotation, dates, images) est fusionnée avec la traduction.
+export async function tvdbSeriesEpisodes(tvdbId: string): Promise<TvdbEpisode[]> {
+  const canonical = await fetchEpisodePages(tvdbId);
+  if (canonical.length === 0) return canonical;
+  const translated = await fetchEpisodePages(tvdbId, tvdbLanguage()).catch(() => []);
+  if (translated.length === 0) return canonical;
+  const byId = new Map(translated.map((e) => [e.id, e]));
+  return canonical.map((e) => {
+    const t = byId.get(e.id);
+    return t ? { ...e, name: t.name ?? e.name, overview: t.overview ?? e.overview } : e;
+  });
 }
 
 export type TvdbTranslation = { name?: string; overview?: string };

@@ -1,9 +1,10 @@
 import React from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Image } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import type { QueueItemDto } from '@/lib/types';
 import { episodeCode } from '@/lib/format';
+import { tmdbImage } from '@/lib/api';
 import { COLORS, RADIUS, SHADOW } from '@/lib/theme';
 import { ShowPill, Badge, CheckCircle } from './ui';
 
@@ -17,12 +18,18 @@ export function EpisodeQueueCard({ item, onCheck }: { item: QueueItemDto; onChec
   const router = useRouter();
   const ep = item.nextEpisode;
   const openShow = () => router.push(`/show/${item.media.id}`);
+  // Vignette : image de l'épisode à voir, sinon affiche de la série.
+  const thumbUri = tmdbImage(ep?.stillPath, 'w300') ?? tmdbImage(item.media.posterPath, 'w342');
 
   return (
     <Pressable style={styles.card} onPress={openShow}>
-      <View style={styles.thumb}>
-        <Feather name="image" size={28} color="#9a9a9a" />
-      </View>
+      {thumbUri ? (
+        <Image source={{ uri: thumbUri }} style={styles.thumb} resizeMode="cover" />
+      ) : (
+        <View style={[styles.thumb, styles.thumbEmpty]}>
+          <Feather name="image" size={28} color="#9a9a9a" />
+        </View>
+      )}
       <View style={styles.body}>
         <ShowPill label={item.media.title} onPress={openShow} />
         {ep ? (
@@ -61,7 +68,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row', marginHorizontal: 12, marginBottom: 12, backgroundColor: COLORS.white,
     borderRadius: RADIUS.card, minHeight: 122, overflow: 'hidden', ...SHADOW.card,
   },
-  thumb: { width: 96, backgroundColor: '#e5e5e5', alignItems: 'center', justifyContent: 'center' },
+  thumb: { width: 96, backgroundColor: '#e5e5e5' },
+  thumbEmpty: { alignItems: 'center', justifyContent: 'center' },
   body: { flex: 1, justifyContent: 'center', paddingHorizontal: 14, paddingVertical: 12, gap: 4 },
   codeRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
   code: { fontSize: 26, fontWeight: '800' },

@@ -23,8 +23,10 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   await app.register(cors, {
     origin: (origin, cb) => {
+      // En développement, tout est autorisé (Expo web sur :8081, outils locaux).
+      if (env.NODE_ENV !== 'production') return cb(null, true);
       const allowed = env.CORS_ALLOWED_ORIGINS.split(',').map((o) => o.trim());
-      // Requêtes sans origin (curl, Capacitor natif) autorisées.
+      // Requêtes sans origin (curl, app native) autorisées.
       if (!origin || allowed.includes(origin)) cb(null, true);
       else cb(null, false);
     },

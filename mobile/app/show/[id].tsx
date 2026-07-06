@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, Pressable, Modal, TextInput, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Pressable, Modal, TextInput, ActivityIndicator, Image } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '@/lib/api';
+import { api, tmdbImage } from '@/lib/api';
 import type { EpisodeDto, MediaDto } from '@/lib/types';
 import { episodeCode } from '@/lib/format';
 import { COLORS, RADIUS, SHADOW } from '@/lib/theme';
@@ -52,6 +52,15 @@ export default function ShowDetail() {
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.white }}>
       <View style={styles.hero}>
+        {(() => {
+          const heroUri = tmdbImage(media.backdropPath, 'w780') ?? tmdbImage(media.posterPath, 'w500');
+          return heroUri ? (
+            <>
+              <Image source={{ uri: heroUri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+              <View style={styles.heroShade} />
+            </>
+          ) : null;
+        })()}
         <View style={[styles.heroBtns, { top: insets.top + 4 }]}>
           <Pressable onPress={() => router.back()} hitSlop={8}>
             <Feather name="chevron-down" size={30} color="#fff" />
@@ -193,6 +202,17 @@ function MovieBody({ media, detail, onToggle }: any) {
 
 type SeasonData = { id: string; seasonNumber: number; title: string; watchedCount: number; totalCount: number; episodes: EpisodeDto[] };
 
+// Vignette d'épisode : image TheTVDB/TMDb si disponible, sinon pictogramme.
+function EpThumb({ stillPath }: { stillPath?: string | null }) {
+  const uri = tmdbImage(stillPath, 'w300');
+  if (uri) return <Image source={{ uri }} style={styles.epThumb} resizeMode="cover" />;
+  return (
+    <View style={[styles.epThumb, { alignItems: 'center', justifyContent: 'center' }]}>
+      <Feather name="image" size={24} color="#9a9a9a" />
+    </View>
+  );
+}
+
 function EpisodesTab({ showId, onChange }: { showId: string; onChange: () => void }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState<Record<number, boolean>>({});
@@ -224,9 +244,7 @@ function EpisodesTab({ showId, onChange }: { showId: string; onChange: () => voi
           <Text style={[styles.sectionTitle, { paddingHorizontal: 24 }]}>Démarrer le suivi</Text>
           <View style={{ padding: 12 }}>
             <View style={styles.eprow}>
-              <View style={styles.epThumb}>
-                <Feather name="image" size={26} color="#9a9a9a" />
-              </View>
+              <EpThumb stillPath={data.nextEpisode.stillPath} />
               <View style={{ flex: 1, padding: 12 }}>
                 <Text style={styles.epCode}>{episodeCode(data.nextEpisode.seasonNumber, data.nextEpisode.episodeNumber)}</Text>
                 <Text numberOfLines={1}>{data.nextEpisode.title}</Text>
@@ -268,9 +286,7 @@ function EpisodesTab({ showId, onChange }: { showId: string; onChange: () => voi
                 {isOpen
                   ? s.episodes.map((e) => (
                       <View key={e.id} style={styles.eprow}>
-                        <View style={styles.epThumb}>
-                          <Feather name="image" size={24} color="#9a9a9a" />
-                        </View>
+                        <EpThumb stillPath={e.stillPath} />
                         <View style={{ flex: 1, padding: 10 }}>
                           <Text style={styles.epCode}>{episodeCode(e.seasonNumber, e.episodeNumber)}</Text>
                           <Text numberOfLines={2}>{e.title}</Text>
@@ -291,7 +307,8 @@ function EpisodesTab({ showId, onChange }: { showId: string; onChange: () => voi
 }
 
 const styles = StyleSheet.create({
-  hero: { height: 240, backgroundColor: '#1a1a22', justifyContent: 'flex-end' },
+  hero: { height: 240, backgroundColor: '#1a1a22', justifyContent: 'flex-end', overflow: 'hidden' },
+  heroShade: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.35)' },
   heroBtns: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 14 },
   heroTitleWrap: { padding: 20 },
   heroTitle: { color: '#fff', fontSize: 27, fontWeight: '800' },
@@ -308,7 +325,7 @@ const styles = StyleSheet.create({
   qbtnSel: { backgroundColor: COLORS.yellow },
   qbtnText: { fontSize: 14, fontWeight: '700' },
   eprow: { flexDirection: 'row', backgroundColor: COLORS.white, borderRadius: 5, minHeight: 92, overflow: 'hidden', marginBottom: 8, ...SHADOW.card },
-  epThumb: { width: 90, backgroundColor: '#e5e5e5', alignItems: 'center', justifyContent: 'center' },
+  epThumb: { width: 90, backgroundColor: '#e5e5e5' },
   epCode: { fontSize: 19, fontWeight: '800' },
   markAllBtn: { width: 40, height: 40, borderRadius: 20, borderWidth: 2, borderColor: COLORS.black, alignItems: 'center', justifyContent: 'center' },
   season: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: 76, paddingHorizontal: 20, backgroundColor: COLORS.white, borderRadius: 5, ...SHADOW.season },
