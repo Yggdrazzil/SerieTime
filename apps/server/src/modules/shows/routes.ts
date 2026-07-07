@@ -73,8 +73,11 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
       const remaining = remainingAiredCount(refs, now);
 
       let group: QueueItemDto['group'];
+      // « Regarder plus tard » (watchlist) : suivi mais volontairement absent
+      // des files À voir / À venir (spec TV Time).
+      if (status.status === 'watchlist') continue;
       if (status.status === 'abandoned') group = 'abandonne';
-      else if (status.status === 'not_started' || status.status === 'watchlist') group = 'pas_commence';
+      else if (status.status === 'not_started') group = 'pas_commence';
       else if (status.status === 'watching' || status.status === 'paused') {
         if (remaining === 0) continue; // à jour → pas dans la file
         const last = status.lastWatchedAt;
@@ -121,7 +124,7 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/shows/upcoming', async (request) => {
     const userId = request.userId;
     const statuses = await prisma.userMediaStatus.findMany({
-      where: { userId, media: { type: 'show' }, isHidden: false, status: { notIn: ['abandoned'] } },
+      where: { userId, media: { type: 'show' }, isHidden: false, status: { notIn: ['abandoned', 'watchlist'] } },
       include: { media: { include: { show: true } } },
     });
     const showIds = statuses.map((s) => s.media.show?.id).filter((id): id is string => !!id);
@@ -484,6 +487,18 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
         backdrops = [...new Set([...backdrops, ...images.backdrops])];
       }
     }
+    // Séries TheTVDB : leurs illustrations alimentent aussi la personnalisation.
+    if (media.tvdbId) {
+      const { tvdbEnabled, tvdbSeriesArtworks } = await import('../../services/tvdb/index.js');
+      if (tvdbEnabled()) {
+        const [tvdbPosters, tvdbBackdrops] = await Promise.all([
+          tvdbSeriesArtworks(media.tvdbId, 2).catch(() => []),
+          tvdbSeriesArtworks(media.tvdbId, 3).catch(() => []),
+        ]);
+        posters = [...new Set([...posters, ...tvdbPosters])].slice(0, 30);
+        backdrops = [...new Set([...backdrops, ...tvdbBackdrops])].slice(0, 30);
+      }
+    }
     return {
       posters,
       backdrops,
@@ -545,11 +560,8 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
     return { ok: true, following: true };
   });
 
-  app.delete('/api/shows/:id/follow', async (request) => {
-    const { id } = request.params as { id: string };
-    await prisma.userMediaStatus.deleteMany({ where: { userId: request.userId, mediaId: id } });
-    return { ok: true, following: false };
-  });
+  // (la suppression du suivi passe par DELETE /api/shows/:id/tracking, qui
+  // nettoie aussi les statuts d'épisodes)
 }
 
 export { markEpisodeWatched };

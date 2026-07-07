@@ -178,6 +178,16 @@ export async function tvdbSeriesEpisodes(tvdbId: string): Promise<TvdbEpisode[]>
   });
 }
 
+// Illustrations d'une série (type 2 = affiches, type 3 = bannières/fonds).
+export async function tvdbSeriesArtworks(tvdbId: string, type: 2 | 3): Promise<string[]> {
+  const data = await tvdbGet<{ data?: { artworks?: { image?: string }[] } }>(
+    `/series/${tvdbId}/artworks`,
+    { type: String(type) },
+    30 * DAY,
+  );
+  return (data?.data?.artworks ?? []).map((a) => a.image).filter((u): u is string => !!u);
+}
+
 export type TvdbTranslation = { name?: string; overview?: string };
 
 export async function tvdbSeriesTranslation(tvdbId: string, lang: string): Promise<TvdbTranslation | null> {

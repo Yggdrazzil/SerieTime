@@ -90,9 +90,21 @@ describe('Consultation vs suivi (façon TV Time)', () => {
     expect(detail.json().media.userStatus).toBe('not_started');
   });
 
-  it('ne plus suivre retire la série de la bibliothèque', async () => {
-    await app.inject({ method: 'DELETE', url: `/api/shows/${mediaId}/follow`, headers: auth() });
+  it('« Regarder plus tard » retire la série des files À voir et À venir', async () => {
+    await app.inject({ method: 'POST', url: `/api/shows/${mediaId}/watchlater`, headers: auth() });
+    const detail = await app.inject({ method: 'GET', url: `/api/shows/${mediaId}`, headers: auth() });
+    expect(detail.json().media.userStatus).toBe('watchlist');
+    const queue = await app.inject({ method: 'GET', url: '/api/shows/queue', headers: auth() });
+    expect(queue.json().items).toHaveLength(0);
+    const upcoming = await app.inject({ method: 'GET', url: '/api/shows/upcoming', headers: auth() });
+    expect(upcoming.json().groups).toHaveLength(0);
+  });
+
+  it('« Supprimer la série » (tracking) retire la série et son historique', async () => {
+    await app.inject({ method: 'DELETE', url: `/api/shows/${mediaId}/tracking`, headers: auth() });
     const mine = await app.inject({ method: 'GET', url: '/api/shows', headers: auth() });
     expect(mine.json().shows).toHaveLength(0);
+    const detail = await app.inject({ method: 'GET', url: `/api/shows/${mediaId}`, headers: auth() });
+    expect(detail.json().media.userStatus).toBeNull();
   });
 });

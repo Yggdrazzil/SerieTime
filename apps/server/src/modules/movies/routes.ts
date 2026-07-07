@@ -174,6 +174,15 @@ export async function movieRoutes(app: FastifyInstance): Promise<void> {
     return { ok: true };
   });
 
+  // Supprimer le film du suivi (équivalent « Supprimer » du menu, spec §32.7).
+  app.delete('/api/movies/:id/tracking', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const media = await prisma.media.findFirst({ where: { id, type: 'movie' } });
+    if (!media) return reply.code(404).send({ error: 'not_found' });
+    await prisma.userMediaStatus.deleteMany({ where: { userId: request.userId, mediaId: id } });
+    return { ok: true };
+  });
+
   // `follow: false` : consultation de la fiche sans ajout à la watchlist.
   app.post('/api/movies/add-from-tmdb', async (request, reply) => {
     const { tmdbId, follow } = z
