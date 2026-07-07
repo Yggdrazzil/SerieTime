@@ -17,7 +17,8 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
 (`apps/server/`, workspace pnpm). Design et parcours calqués sur TV Time
 (références visuelles : `docs/screenshots/reference/`).
 
-- **Branche de travail : `claude/seriestime-repo-setup-3wyz3c`** (PR #1 vers `main`).
+- **Branche de référence : `main`** (à cloner / puller). Le développement passe
+  par des branches courtes fusionnées via pull request.
 - Tests : `pnpm test` (73 tests au 2026-07-07 : 25 core + 48 serveur).
 - Lancement local : voir `README.md` (serveur `pnpm dev:server`, mobile `npx expo start -c`).
 
@@ -58,6 +59,8 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
 > Entrée type : `### AAAA-MM-JJ — Auteur` puis une liste courte de ce qui a changé.
 
 ### 2026-07-07 — Claude
+- **Fusion de la PR #1 dans `main`** : `main` devient la branche de référence
+  pour la collaboration (clone / pull / PR courtes).
 - Personnalisation **affiche + bannière étendue aux films** (routes `/api/movies/:id/poster|banner|images`, menu Personnaliser sur les fiches film). Testé série (24 affiches / 29 bannières TheTVDB) et film.
 - Fiche façon TV Time : barre **« + AJOUTER LA SÉRIE » → « ✓ AJOUTÉE ! »** (2 s), menu `…` complet et fonctionnel (Personnaliser, Favoris, Ajouter à une liste avec création rapide, Regarder plus tard, Supprimer, Partager) avec toasts jaunes.
 - « Regarder plus tard » désormais **exclu** des files « À voir » et « À venir ».

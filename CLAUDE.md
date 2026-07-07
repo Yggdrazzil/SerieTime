@@ -36,9 +36,14 @@ IP : `ipconfig | Select-String "IPv4"`.
 - Contenu via TheTVDB (clé dans `apps/server/.env`, `TVDB_ENABLED=true`) ; TMDb optionnel.
 - Dimension sociale : abonnements, fil, commentaires/réponses, réactions, notifications.
 
-## Branche de travail
+## Branches (organisation d'équipe)
 
-Développer sur `claude/seriestime-repo-setup-3wyz3c` (PR #1 vers `main`).
+- **`main` est la branche de référence** : toujours à jour, c'est elle que le
+  collègue clone et pull.
+- Claude développe sur `claude/seriestime-repo-setup-3wyz3c` (repartie de
+  `main` après chaque fusion) et fusionne via pull request.
+- Le collègue travaille sur des branches courtes par fonctionnalité, fusionnées
+  dans `main` via PR.
 
 ## Suivi d'avancement (règle d'équipe)
 
