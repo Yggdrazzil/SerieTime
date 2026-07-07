@@ -3,7 +3,6 @@ import { View, Text, ScrollView, StyleSheet, Pressable, Image, TextInput, Activi
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as ImagePicker from 'expo-image-picker';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, tmdbImage } from '@/lib/api';
 import { useAppStore } from '@/lib/store';
@@ -59,20 +58,26 @@ export default function EditProfile() {
   }, [coverPick, setCoverPick]);
 
   const pickAvatar = async () => {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) {
-      Alert.alert('Autorisation requise', 'Autorisez l’accès aux photos pour choisir une image.');
-      return;
+    try {
+      // Chargé à la demande : ne peut pas impacter le démarrage de l'app.
+      const ImagePicker = await import('expo-image-picker');
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert('Autorisation requise', 'Autorisez l’accès aux photos pour choisir une image.');
+        return;
+      }
+      const res = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.6,
+        base64: true,
+      });
+      if (res.canceled || !res.assets[0]?.base64) return;
+      setAvatarUrl(`data:image/jpeg;base64,${res.assets[0].base64}`);
+    } catch {
+      Alert.alert('Indisponible', 'Le sélecteur de photos n’a pas pu s’ouvrir.');
     }
-    const res = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.6,
-      base64: true,
-    });
-    if (res.canceled || !res.assets[0]?.base64) return;
-    setAvatarUrl(`data:image/jpeg;base64,${res.assets[0].base64}`);
   };
 
   const save = async () => {
