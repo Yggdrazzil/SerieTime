@@ -59,6 +59,18 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
 > Entrée type : `### AAAA-MM-JJ — Auteur` puis une liste courte de ce qui a changé.
 
 ### 2026-07-07 — Claude
+- **Édition de profil** (écran `/profile/edit`) : photo de profil (upload via
+  expo-image-picker → data URL), photo de couverture (recherche + bannières
+  TheTVDB de n'importe quelle œuvre via `/profile/cover`), nom, année de
+  naissance, sexe, pays. Avatar et couverture affichés sur l'en-tête du profil.
+- **Correctif majeur d'affichage des affiches** : le composant `Poster`
+  n'affichait jamais l'image (rendait `null` quand une URL existait) → toutes
+  les affiches restaient grises/noires. Corrigé (partout : profil, films, etc.).
+- **Profil : les 4 sections** (Séries, Séries préférées, Films, Films préférés)
+  sont **toujours affichées**, avec un état vide quand rien n'est ajouté.
+- Invalidation de `['profile']` après favori/personnalisation → les favoris et
+  changements d'affiche apparaissent immédiatement.
+- `tmdbImage` laisse passer les URL `data:` (avatars base64).
 - **Guide d'onboarding** `docs/ONBOARDING.md` (installation, .env/clé TheTVDB,
   Expo Go, conventions d'équipe) ; `CLAUDE.md` adapté au travail à plusieurs.
 - **Fusion de la PR #1 dans `main`** : `main` devient la branche de référence

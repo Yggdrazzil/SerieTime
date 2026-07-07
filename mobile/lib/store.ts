@@ -15,8 +15,11 @@ type AppState = {
   token: string | null;
   user: UserInfo | null;
   hydrated: boolean;
+  // Couverture choisie dans /profile/cover, récupérée par /profile/edit.
+  coverPick: string | null;
   setServerUrl: (url: string) => void;
   setAuth: (token: string, user: UserInfo) => void;
+  setCoverPick: (url: string | null) => void;
   logout: () => void;
 };
 
@@ -27,8 +30,10 @@ export const useAppStore = create<AppState>()(
       token: null,
       user: null,
       hydrated: false,
+      coverPick: null,
       setServerUrl: (url) => set({ serverUrl: url.replace(/\/+$/, '') }),
       setAuth: (token, user) => set({ token, user }),
+      setCoverPick: (url) => set({ coverPick: url }),
       logout: () => set({ token: null, user: null }),
     }),
     {

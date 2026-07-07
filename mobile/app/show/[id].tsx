@@ -45,6 +45,7 @@ export default function ShowDetail() {
     qc.invalidateQueries({ queryKey: [isMovie ? 'movie' : 'show', id] });
     qc.invalidateQueries({ queryKey: ['shows'] });
     qc.invalidateQueries({ queryKey: ['movies'] });
+    qc.invalidateQueries({ queryKey: ['profile'] });
   };
 
   const favorite = useMutation({

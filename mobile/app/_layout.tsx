@@ -25,6 +25,8 @@ export default function RootLayout() {
             <Stack.Screen name="social" />
             <Stack.Screen name="notifications" />
             <Stack.Screen name="user/[id]" />
+            <Stack.Screen name="profile/edit" />
+            <Stack.Screen name="profile/cover" />
             <Stack.Screen name="import" />
           </Stack>
         </QueryClientProvider>

@@ -335,6 +335,30 @@ describe('SerieTime API', () => {
     expect(banner.statusCode).toBe(200);
   });
 
+  it('met à jour le profil (avatar, couverture, infos)', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/profile',
+      payload: {
+        displayName: 'Etienne Poupou',
+        avatarUrl: 'data:image/jpeg;base64,AAAA',
+        coverUrl: 'https://artworks.thetvdb.com/banners/fanart/original/334824-16.jpg',
+        birthYear: 1993,
+        gender: 'male',
+        countryCode: 'FR',
+      },
+      headers: auth(),
+    });
+    expect(res.statusCode).toBe(200);
+    const profile = await app.inject({ method: 'GET', url: '/api/profile', headers: auth() });
+    const u = profile.json().user;
+    expect(u.displayName).toBe('Etienne Poupou');
+    expect(u.avatarUrl).toBe('data:image/jpeg;base64,AAAA');
+    expect(u.coverUrl).toContain('thetvdb.com');
+    expect(u.birthYear).toBe(1993);
+    expect(u.gender).toBe('male');
+  });
+
   it('change l’affiche et la bannière d’un film', async () => {
     const res = await app.inject({ method: 'GET', url: '/api/movies/profile', headers: auth() });
     const movie = res.json().seen.find((m: { title: string }) => m.title === 'Mickey 17');

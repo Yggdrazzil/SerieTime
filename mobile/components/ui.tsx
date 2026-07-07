@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, Pressable, StyleSheet, ActivityIndicator, Image } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { COLORS, RADIUS } from '@/lib/theme';
 
@@ -56,7 +56,9 @@ export function CheckCircle({
 export function Poster({ title, uri, onPress, width }: { title: string; uri: string | null; onPress?: () => void; width?: number }) {
   return (
     <Pressable style={[styles.poster, width ? { width } : { flex: 1 }]} onPress={onPress}>
-      {uri ? null : (
+      {uri ? (
+        <Image source={{ uri }} style={styles.posterImg} resizeMode="cover" />
+      ) : (
         <>
           <Feather name="image" size={26} color="#b4b4b4" />
           <Text style={styles.posterTitle} numberOfLines={3}>
@@ -127,8 +129,9 @@ export const styles = StyleSheet.create({
   check: { alignItems: 'center', justifyContent: 'center' },
   poster: {
     aspectRatio: 2 / 3, backgroundColor: '#e5e5e5', borderRadius: RADIUS.poster,
-    alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6, gap: 6,
+    alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6, gap: 6, overflow: 'hidden',
   },
+  posterImg: { width: '100%', height: '100%' },
   posterTitle: { fontSize: 12, fontWeight: '700', color: '#777', textAlign: 'center' },
   empty: { alignItems: 'center', paddingVertical: 60, paddingHorizontal: 30 },
   emptyTitle: { fontSize: 20, fontWeight: '800', textAlign: 'center' },

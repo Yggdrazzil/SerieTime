@@ -44,10 +44,11 @@ export const api = {
   del: <T>(path: string) => request<T>('DELETE', path),
 };
 
-// Construit l'URL absolue d'une image TMDb (les posters de démo sont vides sans clé).
+// Construit l'URL d'une image. Les chemins TMDb (« /abc.jpg ») sont préfixés ;
+// les URL absolues (TheTVDB, http) et les images embarquées (data:) passent tel quel.
 export function tmdbImage(path: string | null | undefined, size = 'w342'): string | null {
   if (!path) return null;
-  if (path.startsWith('http')) return path;
+  if (path.startsWith('http') || path.startsWith('data:')) return path;
   return `https://image.tmdb.org/t/p/${size}${path}`;
 }
 
