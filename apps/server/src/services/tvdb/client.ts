@@ -32,14 +32,21 @@ async function getToken(): Promise<string | null> {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.warn(`[tvdb] login refusé (HTTP ${res.status}) — vérifiez TVDB_API_KEY/TVDB_PIN`);
+      return null;
+    }
     const data = (await res.json()) as { data?: { token?: string } };
     const token = data.data?.token;
-    if (!token) return null;
+    if (!token) {
+      console.warn('[tvdb] login sans jeton dans la réponse');
+      return null;
+    }
     // Le jeton dure ~1 mois ; on le rafraîchit chaque jour par prudence.
     cachedToken = { token, expiresAt: Date.now() + DAY };
     return token;
-  } catch {
+  } catch (err) {
+    console.warn(`[tvdb] login injoignable: ${err instanceof Error ? err.message : String(err)}`);
     return null;
   }
 }
@@ -67,7 +74,10 @@ async function tvdbGet<T>(path: string, params: Record<string, string>, ttlMs: n
       if (!token) return cached ? (JSON.parse(cached.responseJson) as T) : null;
       res = await fetch(`${TVDB_BASE}${cacheKey}`, { headers: { Authorization: `Bearer ${token}` } });
     }
-    if (!res.ok) return cached ? (JSON.parse(cached.responseJson) as T) : null;
+    if (!res.ok) {
+      console.warn(`[tvdb] GET ${path} -> HTTP ${res.status}`);
+      return cached ? (JSON.parse(cached.responseJson) as T) : null;
+    }
     const json = (await res.json()) as T;
     await prisma.apiCache.upsert({
       where: { source_cacheKey: { source: 'tvdb', cacheKey } },
@@ -75,7 +85,8 @@ async function tvdbGet<T>(path: string, params: Record<string, string>, ttlMs: n
       update: { responseJson: JSON.stringify(json), expiresAt: new Date(Date.now() + ttlMs) },
     });
     return json;
-  } catch {
+  } catch (err) {
+    console.warn(`[tvdb] GET ${path} en échec: ${err instanceof Error ? err.message : String(err)}`);
     return cached ? (JSON.parse(cached.responseJson) as T) : null;
   }
 }

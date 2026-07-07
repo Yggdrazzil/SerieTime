@@ -46,7 +46,17 @@ export async function buildApp(): Promise<FastifyInstance> {
     return reply.code(statusCode).send({ error: statusCode >= 500 ? 'internal_error' : error.message });
   });
 
-  app.get('/health', async () => ({ ok: true, app: env.APP_NAME, version: APP_VERSION }));
+  // `sources` permet de diagnostiquer la config d'un simple coup d'œil navigateur.
+  app.get('/health', async () => {
+    const { tvdbEnabled } = await import('./services/tvdb/index.js');
+    const { tmdbEnabled } = await import('./services/tmdb/index.js');
+    return {
+      ok: true,
+      app: env.APP_NAME,
+      version: APP_VERSION,
+      sources: { tvdb: tvdbEnabled(), tmdb: tmdbEnabled() },
+    };
+  });
 
   await app.register(authRoutes);
   await app.register(showRoutes);
