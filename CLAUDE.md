@@ -1,10 +1,13 @@
 # Notes pour Claude — SerieTime
 
-## Environnement local de l'utilisateur (Windows / PowerShell)
+> Nouveau sur le projet ? Suivre **`docs/ONBOARDING.md`** (installation complète).
 
-- **Chemin du projet sur la machine de l'utilisateur : `C:\Users\etien\SerieTime`**
-  Toujours préfixer les commandes PowerShell par `cd C:\Users\etien\SerieTime`
-  (l'utilisateur oublie souvent de s'y placer et se retrouve dans `C:\WINDOWS\system32`).
+## Environnements locaux (Windows / PowerShell)
+
+- **Étienne : `C:\Users\etien\SerieTime`** — toujours préfixer les commandes
+  PowerShell par `cd C:\Users\etien\SerieTime` (oubli fréquent → commandes
+  lancées depuis `C:\WINDOWS\system32`).
+- **<collègue : ajoute ici le chemin de ton clone>**
 - Gestionnaires : **pnpm** pour le serveur/monorepo, **npm** pour `mobile/`.
 - Node ≥ 20 requis. `corepack enable` une fois pour pnpm.
 

@@ -59,6 +59,8 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
 > Entrée type : `### AAAA-MM-JJ — Auteur` puis une liste courte de ce qui a changé.
 
 ### 2026-07-07 — Claude
+- **Guide d'onboarding** `docs/ONBOARDING.md` (installation, .env/clé TheTVDB,
+  Expo Go, conventions d'équipe) ; `CLAUDE.md` adapté au travail à plusieurs.
 - **Fusion de la PR #1 dans `main`** : `main` devient la branche de référence
   pour la collaboration (clone / pull / PR courtes).
 - Personnalisation **affiche + bannière étendue aux films** (routes `/api/movies/:id/poster|banner|images`, menu Personnaliser sur les fiches film). Testé série (24 affiches / 29 bannières TheTVDB) et film.
