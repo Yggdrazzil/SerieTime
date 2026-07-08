@@ -35,6 +35,13 @@ export default function Root({ children }: PropsWithChildren) {
                 -moz-osx-font-smoothing: grayscale;
                 text-rendering: optimizeLegibility;
               }
+              /* Tailles identiques pour tous : neutralise le « text scaling »
+                 du navigateur Android (Brave/Chrome) qui gonflait nos textes
+                 par rapport à TV Time. Le zoom page reste possible. */
+              html, body {
+                -webkit-text-size-adjust: 100%;
+                text-size-adjust: none;
+              }
             `,
           }}
         />

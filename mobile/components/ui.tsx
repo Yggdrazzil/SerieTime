@@ -17,7 +17,7 @@ export function ShowPill({ label, onPress }: { label: string; onPress?: () => vo
       <Text style={styles.showPillText} numberOfLines={1}>
         {label.toUpperCase()}
       </Text>
-      <Feather name="chevron-right" size={12} color={COLORS.black} />
+      <Feather name="chevron-right" size={11} color={COLORS.black} />
     </Pressable>
   );
 }
@@ -137,21 +137,24 @@ export function TopTabs({
   );
 }
 
+// Cotes calquées sur TV Time (mesures px sur captures 393dp) : pastille de
+// section 19dp / police 11, pastille de série 17dp / police 10.5 / bord 1.5,
+// badges 15dp / police 10, onglets hauts 42dp / police 14 / soulignement 3.
 export const styles = StyleSheet.create({
-  pillHdr: { alignItems: 'center', paddingVertical: 12 },
+  pillHdr: { alignItems: 'center', paddingVertical: 10 },
   pillText: {
     backgroundColor: COLORS.pillGrey, color: COLORS.white, borderRadius: 999,
-    paddingHorizontal: 18, paddingVertical: 7, fontSize: 12, fontFamily: FONTS.bold,
-    letterSpacing: 0.5, textTransform: 'uppercase', overflow: 'hidden',
+    paddingHorizontal: 14, paddingVertical: 4, fontSize: 11, fontFamily: FONTS.bold,
+    letterSpacing: 0.8, textTransform: 'uppercase', overflow: 'hidden',
   },
   showPill: {
-    flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start',
-    borderWidth: 2, borderColor: COLORS.black, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 3,
+    flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start',
+    borderWidth: 1.5, borderColor: COLORS.black, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 2,
     backgroundColor: COLORS.white, maxWidth: '100%',
   },
-  showPillText: { fontSize: 12, fontFamily: FONTS.bold, letterSpacing: 0.4, flexShrink: 1 },
-  badge: { borderRadius: 4, paddingHorizontal: 8, paddingVertical: 3 },
-  badgeText: { fontSize: 12, fontFamily: FONTS.bold, letterSpacing: 0.4 },
+  showPillText: { fontSize: 10.5, fontFamily: FONTS.bold, letterSpacing: 0.6, flexShrink: 1 },
+  badge: { borderRadius: 4, paddingHorizontal: 7, paddingVertical: 2 },
+  badgeText: { fontSize: 10, fontFamily: FONTS.bold, letterSpacing: 0.5 },
   check: { alignItems: 'center', justifyContent: 'center' },
   poster: {
     aspectRatio: 2 / 3, backgroundColor: '#e5e5e5', borderRadius: RADIUS.poster, overflow: 'hidden',
@@ -164,10 +167,10 @@ export const styles = StyleSheet.create({
   retryBtn: { borderWidth: 2, borderColor: COLORS.black, borderRadius: 999, paddingVertical: 12, paddingHorizontal: 28, marginTop: 16 },
   retryText: { fontSize: 14, fontFamily: FONTS.extraBold, letterSpacing: 0.5 },
   loading: { paddingVertical: 60, alignItems: 'center' },
-  topTabs: { flexDirection: 'row', height: 56, backgroundColor: COLORS.white },
+  topTabs: { flexDirection: 'row', height: 42, backgroundColor: COLORS.white },
   topTab: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  topTabText: { fontSize: 16, fontFamily: FONTS.bold, letterSpacing: 0.6, color: COLORS.textSoft },
+  topTabText: { fontSize: 14, fontFamily: FONTS.bold, letterSpacing: 1, color: COLORS.textSoft },
   topTabActive: { color: COLORS.black },
-  topTabUnder: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 4, backgroundColor: 'transparent' },
+  topTabUnder: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 3, backgroundColor: 'transparent' },
   topTabUnderActive: { backgroundColor: COLORS.black },
 });
