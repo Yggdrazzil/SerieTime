@@ -75,6 +75,12 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
     ~5 cartes visibles au lieu d'une seule ;
   - **code épisode toujours sur une ligne** (`numberOfLines`) et **« +N » restants**
     réduit/discret à droite, il ne casse plus jamais la ligne du code.
+  - **Typographie affinée** (texte jugé « trop grossier / gras » vs TV Time) :
+    les éléments en avant (onglets À VOIR/À VENIR, pastilles de section et de
+    série, code épisode, badges) passent de `extraBold` (Rubik 800) à **`bold`
+    (700)** ; code à 22. + **lissage de police** sur la web app (`app/+html.tsx`,
+    `-webkit-font-smoothing: antialiased`) : sans ça le web rendait le texte plus
+    épais qu'en natif.
 - **Badges façon TV Time** (`apps/server` file « À voir ») :
   - **PREMIERE** désormais aussi pour le **1ᵉʳ épisode d'une saison** (pas seulement
     d'une série) — ex. « S02 | E01 » ;

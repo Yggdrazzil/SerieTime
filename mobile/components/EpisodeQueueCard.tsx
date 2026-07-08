@@ -76,8 +76,8 @@ const styles = StyleSheet.create({
   body: { flex: 1, justifyContent: 'center', paddingHorizontal: 14, paddingVertical: 12, gap: 5 },
   // Le code (S03 | E02) reste sur UNE ligne ; « +N » (restants) ne le pousse jamais.
   codeRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
-  code: { fontSize: 23, fontFamily: FONTS.extraBold, flexShrink: 1 },
-  plus: { fontSize: 14, fontFamily: FONTS.extraBold, color: COLORS.textMuted, flexShrink: 0 },
+  code: { fontSize: 22, fontFamily: FONTS.bold, flexShrink: 1 },
+  plus: { fontSize: 14, fontFamily: FONTS.bold, color: COLORS.textMuted, flexShrink: 0 },
   epTitle: { fontFamily: FONTS.regular, fontSize: 16 },
   badges: { flexDirection: 'row', gap: 6, marginTop: 2 },
   checkWrap: { justifyContent: 'center', paddingRight: 14 },

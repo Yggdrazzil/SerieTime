@@ -18,6 +18,20 @@ export default function Root({ children }: PropsWithChildren) {
         <meta name="theme-color" content="#FFD400" />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
         <link rel="icon" href="/favicon.ico" />
+        {/* Lissage de police : sans ça, la web app rend le texte plus épais /
+            « grossier » qu'en natif. On force l'anticrénelage en niveaux de gris
+            (comme iOS/Android natif) pour un rendu fin et lisible façon TV Time. */}
+        <style
+          dangerouslySetInnerHTML={{
+            __html: `
+              html, body, #root, * {
+                -webkit-font-smoothing: antialiased;
+                -moz-osx-font-smoothing: grayscale;
+                text-rendering: optimizeLegibility;
+              }
+            `,
+          }}
+        />
         <ScrollViewStyleReset />
       </head>
       <body>{children}</body>

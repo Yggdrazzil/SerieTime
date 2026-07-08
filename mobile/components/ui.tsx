@@ -141,7 +141,7 @@ export const styles = StyleSheet.create({
   pillHdr: { alignItems: 'center', paddingVertical: 12 },
   pillText: {
     backgroundColor: COLORS.pillGrey, color: COLORS.white, borderRadius: 999,
-    paddingHorizontal: 18, paddingVertical: 7, fontSize: 12, fontFamily: FONTS.extraBold,
+    paddingHorizontal: 18, paddingVertical: 7, fontSize: 12, fontFamily: FONTS.bold,
     letterSpacing: 0.5, textTransform: 'uppercase', overflow: 'hidden',
   },
   showPill: {
@@ -149,9 +149,9 @@ export const styles = StyleSheet.create({
     borderWidth: 2, borderColor: COLORS.black, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 3,
     backgroundColor: COLORS.white, maxWidth: '100%',
   },
-  showPillText: { fontSize: 12, fontFamily: FONTS.extraBold, letterSpacing: 0.4, flexShrink: 1 },
-  badge: { borderRadius: 3, paddingHorizontal: 8, paddingVertical: 3 },
-  badgeText: { fontSize: 12, fontFamily: FONTS.extraBold, letterSpacing: 0.4 },
+  showPillText: { fontSize: 12, fontFamily: FONTS.bold, letterSpacing: 0.4, flexShrink: 1 },
+  badge: { borderRadius: 4, paddingHorizontal: 8, paddingVertical: 3 },
+  badgeText: { fontSize: 12, fontFamily: FONTS.bold, letterSpacing: 0.4 },
   check: { alignItems: 'center', justifyContent: 'center' },
   poster: {
     aspectRatio: 2 / 3, backgroundColor: '#e5e5e5', borderRadius: RADIUS.poster, overflow: 'hidden',
@@ -166,7 +166,7 @@ export const styles = StyleSheet.create({
   loading: { paddingVertical: 60, alignItems: 'center' },
   topTabs: { flexDirection: 'row', height: 56, backgroundColor: COLORS.white },
   topTab: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  topTabText: { fontSize: 16, fontFamily: FONTS.extraBold, letterSpacing: 0.6, color: COLORS.textSoft },
+  topTabText: { fontSize: 16, fontFamily: FONTS.bold, letterSpacing: 0.6, color: COLORS.textSoft },
   topTabActive: { color: COLORS.black },
   topTabUnder: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 4, backgroundColor: 'transparent' },
   topTabUnderActive: { backgroundColor: COLORS.black },
