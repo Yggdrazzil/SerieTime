@@ -216,15 +216,26 @@ export async function tmdbTrending(type: 'tv' | 'movie', page = 1): Promise<Tmdb
 // langue d'origine (ex. 'ja' pour l'anime japonais).
 export async function tmdbDiscover(
   type: 'tv' | 'movie',
-  opts: { genres?: number[]; language?: string; page?: number } = {},
+  opts: {
+    genres?: number[];
+    language?: string;
+    page?: number;
+    sort?: string;
+    // Fenêtre d'années (incluse) pour varier les époques du flux Explorer.
+    yearGte?: number;
+    yearLte?: number;
+  } = {},
 ): Promise<TmdbSearchResult[]> {
   const params: Record<string, string> = {
-    sort_by: 'popularity.desc',
+    sort_by: opts.sort ?? 'popularity.desc',
     page: String(opts.page ?? 1),
     'vote_count.gte': '20',
   };
   if (opts.genres?.length) params.with_genres = opts.genres.join(',');
   if (opts.language) params.with_original_language = opts.language;
+  const dateField = type === 'tv' ? 'first_air_date' : 'primary_release_date';
+  if (opts.yearGte) params[`${dateField}.gte`] = `${opts.yearGte}-01-01`;
+  if (opts.yearLte) params[`${dateField}.lte`] = `${opts.yearLte}-12-31`;
   const data = await cachedFetch<{ results: TmdbSearchResult[] }>(`/discover/${type}`, params, 1 * DAY);
   return data?.results ?? [];
 }

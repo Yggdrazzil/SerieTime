@@ -219,22 +219,41 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
       }
       // Page tirée au hasard : le pull-to-refresh / bouton ↻ renouvelle le flux.
       const page = 1 + Math.floor(Math.random() * 3);
-      // Chaque catégorie a son propre vivier pour rester fournie (≥15-20) même
-      // filtrée : tendances séries + tendances films + découverte séries + films +
-      // un vivier ANIMÉ dédié (genre animation d'origine japonaise, quasi absent
-      // des tendances). Sans ce vivier, filtrer « Animés » ne laissait que ~3 cartes.
+      // Décennie tirée au hasard : le flux n'est pas QUE des sorties récentes,
+      // il propose aussi des titres plus anciens (toutes époques).
+      const decadeStart = 1980 + Math.floor(Math.random() * 5) * 10; // 1980..2020
+      const yGte = decadeStart;
+      const yLte = decadeStart + 9;
+      // Viviers : tendances (récent) + découverte populaire + CLASSIQUES toutes
+      // époques (tri par votes) + une DÉCENNIE aléatoire + un vivier ANIMÉ dédié.
       const { tmdbDiscover } = await import('../../services/tmdb/index.js');
-      const [tv, movies, discTv, discMovies, animeTv, animeMovies] = await Promise.all([
-        tmdbTrending('tv', page),
-        tmdbTrending('movie', page),
-        tmdbDiscover('tv', { page }),
-        tmdbDiscover('movie', { page }),
-        tmdbDiscover('tv', { genres: [16], language: 'ja', page }),
-        tmdbDiscover('movie', { genres: [16], language: 'ja', page }),
-      ]);
-      const pool = [...tv, ...movies, ...discTv, ...discMovies, ...animeTv, ...animeMovies].sort(
-        () => Math.random() - 0.5,
-      );
+      const [tv, movies, discTv, discMovies, classicTv, classicMovies, oldTv, oldMovies, animeTv, animeMovies, animeOld] =
+        await Promise.all([
+          tmdbTrending('tv', page),
+          tmdbTrending('movie', page),
+          tmdbDiscover('tv', { page }),
+          tmdbDiscover('movie', { page }),
+          tmdbDiscover('tv', { page, sort: 'vote_count.desc' }),
+          tmdbDiscover('movie', { page, sort: 'vote_count.desc' }),
+          tmdbDiscover('tv', { page, yearGte: yGte, yearLte: yLte, sort: 'vote_count.desc' }),
+          tmdbDiscover('movie', { page, yearGte: yGte, yearLte: yLte, sort: 'vote_count.desc' }),
+          tmdbDiscover('tv', { genres: [16], language: 'ja', page }),
+          tmdbDiscover('movie', { genres: [16], language: 'ja', page }),
+          tmdbDiscover('tv', { genres: [16], language: 'ja', page, sort: 'vote_count.desc' }),
+        ]);
+      const pool = [
+        ...tv,
+        ...movies,
+        ...discTv,
+        ...discMovies,
+        ...classicTv,
+        ...classicMovies,
+        ...oldTv,
+        ...oldMovies,
+        ...animeTv,
+        ...animeMovies,
+        ...animeOld,
+      ].sort(() => Math.random() - 0.5);
       for (const r of pool) {
         const trendType = r.title ? 'movie' : 'show';
         const trendTitle = r.name ?? r.title ?? '';
