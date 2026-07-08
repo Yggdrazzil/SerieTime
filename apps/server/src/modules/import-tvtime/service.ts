@@ -18,6 +18,7 @@ import {
   type MatchCandidate,
   type ParsedFile,
 } from '@serietime/core/server';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '../../db/client.js';
 import { env } from '../../config/env.js';
 import { toJson, fromJson } from '../../utils/json.js';
@@ -221,6 +222,10 @@ export async function analyzeImport(importId: string): Promise<ImportAnalysisSum
   let ratingsDetected = 0;
   let favoritesDetected = 0;
   const listNames = new Set<string>();
+  // Insertion GROUPÉE des mappings : sur un gros import (~1500 séries), 1500
+  // create() séquentiels prenaient ~80s → l'analyse dépassait le timeout nginx
+  // et l'app tournait dans le vide. createMany() en une passe = quelques secondes.
+  const mappingRows: Prisma.ImportMappingCreateManyInput[] = [];
 
   for (const media of mediaByKey.values()) {
     if (media.rating !== undefined) ratingsDetected++;
@@ -330,20 +335,19 @@ export async function analyzeImport(importId: string): Promise<ImportAnalysisSum
       tmdbId: decision === 'tmdb' ? tmdbSuggestionId : undefined,
     };
 
-    await prisma.importMapping.create({
-      data: {
-        importId,
-        sourceRawId: media.sourceRawId,
-        sourceUrl: media.sourceUrl,
-        sourceTitle: media.title,
-        sourceType: media.mediaType,
-        matchedMediaId: decision === 'existing' ? best?.candidate.mediaId : undefined,
-        matchStatus,
-        matchScore: score,
-        rawJson: toJson(raw),
-      },
+    mappingRows.push({
+      importId,
+      sourceRawId: media.sourceRawId,
+      sourceUrl: media.sourceUrl,
+      sourceTitle: media.title,
+      sourceType: media.mediaType,
+      matchedMediaId: decision === 'existing' ? best?.candidate.mediaId : undefined,
+      matchStatus,
+      matchScore: score,
+      rawJson: toJson(raw),
     });
   }
+  await prisma.importMapping.createMany({ data: mappingRows });
 
   const shows = [...mediaByKey.values()].filter((m) => m.mediaType === 'show');
   const movies = [...mediaByKey.values()].filter((m) => m.mediaType === 'movie');
