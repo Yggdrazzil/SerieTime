@@ -57,6 +57,29 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
 
 > Entrée type : `### AAAA-MM-JJ — Auteur` puis une liste courte de ce qui a changé.
 
+### 2026-07-08 (après-midi) — Claude (avec Benjamin) — Audit vagues 1 & 2
+Suite au `docs/AUDIT-2026-07-08.md`. Branche synchronisée avec le travail d'Étienne
+(police Rubik) au préalable.
+**Sécurité serveur** : rate limiting `@fastify/rate-limit` sur login (10/5 min) et
+register (10/10 min) ; mdp min 8, purge des sessions expirées, invalidation des autres
+sessions au changement de mdp ; borne anti zip-bomb (volume décompressé total + nb
+d'entrées) ; imports TV Time scopés par `userId` (migration `import_user_scope`) ;
+`backup/import` durci (catalogue partagé en create-only, tables perso via updateMany
+scopé, export sans `passwordHash`) ; avatars/couvertures bornés.
+**Robustesse mobile** : `LoadError` partagé (message + RÉESSAYER) sur profil, fiche
+série, épisodes, films, notifications, social, profil public — fini les spinners
+infinis / faux « vide ». Coche optimiste depuis « À VOIR ». « Partager » via Web Share
+API sur la web app. Notif → film ouvre la bonne fiche (`mediaType` en métadonnées).
+**Explorer** : viviers dédiés par catégorie (tendances + découverte + vivier animé
+genre 16/ja) et plafond équilibré ~22/catégorie → « Animés » passe de 3 à ~20 items.
+Barre catégories + ↻ collante ; cartes du flux cochées après ajout (lots précédents).
+**Réglages compte** : suppression de compte réelle (route `DELETE /api/auth/account` +
+modale de confirmation), changement de mdp, export JSON ; retrait des boutons morts.
+Profil : carte « temps films » ajoutée.
+**Infra** : rotation des logs Docker, cache Nginx 1 an sur `/_expo/`, cron healthcheck
+(relance si KO), CI proposée (`docs/proposed-ci-workflow.yml`).
+Typecheck mobile + serveur, 74 tests verts. Déployé et vérifié en prod.
+
 ### 2026-07-08 (matin) — Claude (avec Benjamin)
 Retours d'usage de la première vraie session + finitions web app :
 - **Explorer : pull-to-refresh** (`RefreshControl`) et **flux renouvelé à chaque tirage**
