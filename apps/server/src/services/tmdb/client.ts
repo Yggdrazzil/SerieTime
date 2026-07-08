@@ -62,6 +62,8 @@ export type TmdbSearchResult = {
   popularity?: number;
   vote_average?: number;
   genre_ids?: number[];
+  original_language?: string;
+  origin_country?: string[];
 };
 
 export async function tmdbSearch(

@@ -17,7 +17,20 @@ type SearchResult = {
   backdropPath: string | null;
   overview: string | null;
   inLibrary: boolean;
+  // Catégorie du flux Explorer (filtre côté app) — absent des résultats de recherche.
+  category?: 'serie' | 'film' | 'anime';
 };
+
+// Animé = animation (genre TMDb 16) d'origine japonaise.
+function feedCategory(
+  r: { genre_ids?: number[]; original_language?: string; origin_country?: string[] },
+  type: 'show' | 'movie',
+): 'serie' | 'film' | 'anime' {
+  const anime =
+    (r.genre_ids ?? []).includes(16) &&
+    (r.original_language === 'ja' || (r.origin_country ?? []).includes('JP'));
+  return anime ? 'anime' : type === 'show' ? 'serie' : 'film';
+}
 
 export async function searchRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', requireAuth);
@@ -194,6 +207,7 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
             tmdbId: String(r.id),
             tvdbId: null,
             type: recType,
+            category: feedCategory(r, recType),
             title: recTitle,
             year: recYear,
             posterPath: r.poster_path ?? null,
@@ -206,7 +220,7 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
       // Page de tendances tirée au hasard puis mélange : le pull-to-refresh renouvelle le flux.
       const page = 1 + Math.floor(Math.random() * 3);
       const [tv, movies] = await Promise.all([tmdbTrending('tv', page), tmdbTrending('movie', page)]);
-      const pool = [...tv, ...movies].sort(() => Math.random() - 0.5).slice(0, 12);
+      const pool = [...tv, ...movies].sort(() => Math.random() - 0.5).slice(0, 18);
       for (const r of pool) {
         const trendType = r.title ? 'movie' : 'show';
         const trendTitle = r.name ?? r.title ?? '';
@@ -219,6 +233,7 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
           tmdbId: String(r.id),
           tvdbId: null,
           type: trendType,
+          category: feedCategory(r, trendType),
           title: trendTitle,
           year: trendYear,
           posterPath: r.poster_path ?? null,

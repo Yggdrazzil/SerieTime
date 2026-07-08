@@ -14,6 +14,7 @@ type FeedItem = {
   tmdbId: string | null;
   tvdbId: string | null;
   type: 'show' | 'movie';
+  category?: 'serie' | 'film' | 'anime';
   title: string;
   year: number | null;
   posterPath: string | null;
@@ -21,6 +22,14 @@ type FeedItem = {
   overview: string | null;
   inLibrary: boolean;
 };
+
+type FeedCategory = 'tout' | 'serie' | 'film' | 'anime';
+const FEED_CATEGORIES: { key: FeedCategory; label: string }[] = [
+  { key: 'tout', label: 'TOUT' },
+  { key: 'serie', label: 'SÉRIES' },
+  { key: 'film', label: 'FILMS' },
+  { key: 'anime', label: 'ANIMÉS' },
+];
 
 type PublicUser = { id: string; displayName: string; avatarUrl: string | null; isFollowing?: boolean };
 
@@ -288,6 +297,7 @@ function Feed({
   const router = useRouter();
   const queryClient = useQueryClient();
   const [addingKey, setAddingKey] = useState<string | null>(null);
+  const [cat, setCat] = useState<FeedCategory>('tout');
 
   // Ajoute la recommandation à la bibliothèque puis ouvre sa fiche.
   const add = async (f: FeedItem, key: string) => {
@@ -305,7 +315,8 @@ function Feed({
   };
 
   if (loading) return <Loading />;
-  // Tirer vers le bas rafraîchit le flux (le serveur renvoie un tirage différent).
+  // Tirer vers le bas rafraîchit le flux (natif). Sur le web ce geste n'existe
+  // pas : le bouton ↻ fait la même chose.
   const refreshControl = <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />;
   if (!items || items.length === 0)
     return (
@@ -316,9 +327,30 @@ function Feed({
         />
       </ScrollView>
     );
+  const catOf = (f: FeedItem) => f.category ?? (f.type === 'show' ? 'serie' : 'film');
+  const filtered = cat === 'tout' ? items : items.filter((f) => catOf(f) === cat);
   return (
     <ScrollView contentContainerStyle={{ paddingVertical: 8, paddingBottom: 24 }} refreshControl={refreshControl}>
-      {items.map((f, i) => {
+      <View style={styles.feedHead}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }} style={{ flexGrow: 0, flexShrink: 1 }}>
+          {FEED_CATEGORIES.map((c) => (
+            <Pressable key={c.key} style={[styles.catChip, cat === c.key && styles.catChipSel]} onPress={() => setCat(c.key)}>
+              <Text style={[styles.catChipText, cat === c.key && styles.catChipTextSel]}>{c.label}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+        <Pressable style={styles.refreshBtn} onPress={onRefresh} disabled={refreshing} hitSlop={6}>
+          {refreshing ? (
+            <ActivityIndicator size="small" color={COLORS.black} />
+          ) : (
+            <Feather name="refresh-cw" size={17} color={COLORS.black} />
+          )}
+        </Pressable>
+      </View>
+      {filtered.length === 0 ? (
+        <EmptyState title="Rien dans cette catégorie" message="Actualise (bouton ↻) pour un nouveau tirage." />
+      ) : null}
+      {filtered.map((f, i) => {
         const key = `${f.type}-${f.tmdbId}`;
         const image = tmdbImage(f.backdropPath, 'w780') ?? tmdbImage(f.posterPath, 'w500');
         return (
@@ -354,6 +386,12 @@ function Feed({
 }
 
 const styles = StyleSheet.create({
+  feedHead: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingBottom: 10, gap: 10 },
+  catChip: { backgroundColor: COLORS.chipGrey, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 },
+  catChipSel: { backgroundColor: COLORS.yellow },
+  catChipText: { fontSize: 13, fontWeight: '700', color: COLORS.textMuted, letterSpacing: 0.4 },
+  catChipTextSel: { color: COLORS.black },
+  refreshBtn: { width: 36, height: 36, borderRadius: 18, borderWidth: 2, borderColor: COLORS.black, alignItems: 'center', justifyContent: 'center', marginLeft: 'auto' },
   searchbar: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, height: 70 },
   input: { flex: 1, fontSize: 19, borderBottomWidth: 1, borderBottomColor: COLORS.border, paddingVertical: 8 },
   cancel: { color: COLORS.blue, fontSize: 17 },
