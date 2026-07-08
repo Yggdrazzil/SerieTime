@@ -65,9 +65,10 @@ dynamiquement avec garde d'erreur, cf. expo-image-picker).
 
 Objectif assumé : **répliquer l'esthétique et le fonctionnement de TV Time**
 (références : `docs/screenshots/reference/`). Pas de liberté créative — en cas
-de doute, comparer à la capture. Police : Rubik (voir `FONTS` dans
-`mobile/lib/theme.ts`) ; toujours utiliser `fontFamily: FONTS.x`, jamais
-`fontWeight` (Android ne synthétise pas les graisses embarquées).
+de doute, comparer à la capture. Police : **Mulish** (sans-serif humaniste fine,
+proche du rendu net de TV Time ; voir `FONTS` dans `mobile/lib/theme.ts`) ;
+toujours utiliser `fontFamily: FONTS.x`, jamais `fontWeight` (Android ne
+synthétise pas les graisses embarquées).
 
 ## Suivi d'avancement (règle d'équipe)
 

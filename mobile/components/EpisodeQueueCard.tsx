@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router';
 import type { QueueItemDto } from '@/lib/types';
 import { episodeCode } from '@/lib/format';
 import { tmdbImage } from '@/lib/api';
-import { COLORS, RADIUS, SHADOW, FONTS } from '@/lib/theme';
+import { COLORS, SHADOW, FONTS } from '@/lib/theme';
 import { ShowPill, Badge, CheckCircle } from './ui';
 
 const BADGE_MAP: Record<string, { label: string; variant: 'black' | 'yellow' }> = {
@@ -35,7 +35,9 @@ export function EpisodeQueueCard({ item, onCheck }: { item: QueueItemDto; onChec
         {ep ? (
           <>
             <View style={styles.codeRow}>
-              <Text style={styles.code}>{episodeCode(ep.seasonNumber, ep.episodeNumber)}</Text>
+              <Text style={styles.code} numberOfLines={1}>
+                {episodeCode(ep.seasonNumber, ep.episodeNumber)}
+              </Text>
               {item.remainingCount > 0 ? <Text style={styles.plus}>+{item.remainingCount}</Text> : null}
             </View>
             <Text style={styles.epTitle} numberOfLines={1}>
@@ -56,7 +58,7 @@ export function EpisodeQueueCard({ item, onCheck }: { item: QueueItemDto; onChec
       </View>
       {ep ? (
         <View style={styles.checkWrap}>
-          <CheckCircle onPress={onCheck} />
+          <CheckCircle onPress={onCheck} size={44} />
         </View>
       ) : null}
     </Pressable>
@@ -64,17 +66,19 @@ export function EpisodeQueueCard({ item, onCheck }: { item: QueueItemDto; onChec
 }
 
 const styles = StyleSheet.create({
+  // Dimensions calquées sur TV Time (carte compacte : ~5 visibles à l'écran).
   card: {
     flexDirection: 'row', marginHorizontal: 12, marginBottom: 12, backgroundColor: COLORS.white,
-    borderRadius: RADIUS.card, minHeight: 122, overflow: 'hidden', ...SHADOW.card,
+    borderRadius: 14, minHeight: 112, overflow: 'hidden', ...SHADOW.card,
   },
-  thumb: { width: 104, backgroundColor: '#e5e5e5' },
+  thumb: { width: 96, backgroundColor: '#e5e5e5' },
   thumbEmpty: { alignItems: 'center', justifyContent: 'center' },
-  body: { flex: 1, justifyContent: 'center', paddingHorizontal: 14, paddingVertical: 12, gap: 4 },
+  body: { flex: 1, justifyContent: 'center', paddingHorizontal: 14, paddingVertical: 12, gap: 5 },
+  // Le code (S03 | E02) reste sur UNE ligne ; « +N » (restants) ne le pousse jamais.
   codeRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
-  code: { fontSize: 26, fontFamily: FONTS.extraBold },
-  plus: { fontSize: 15, fontFamily: FONTS.extraBold },
-  epTitle: { fontFamily: FONTS.regular, fontSize: 18 },
-  badges: { flexDirection: 'row', gap: 8, marginTop: 2 },
-  checkWrap: { justifyContent: 'center', paddingRight: 16 },
+  code: { fontSize: 22, fontFamily: FONTS.bold, flexShrink: 1 },
+  plus: { fontSize: 14, fontFamily: FONTS.bold, color: COLORS.textMuted, flexShrink: 0 },
+  epTitle: { fontFamily: FONTS.regular, fontSize: 16 },
+  badges: { flexDirection: 'row', gap: 6, marginTop: 2 },
+  checkWrap: { justifyContent: 'center', paddingRight: 14 },
 });

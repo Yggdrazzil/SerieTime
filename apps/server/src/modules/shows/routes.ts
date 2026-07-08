@@ -93,9 +93,11 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
       const nextEpisode = next ? show.episodes.find((e) => e.id === next.id) ?? null : null;
       const badges: QueueItemDto['badges'] = [];
       if (nextEpisode) {
-        if (nextEpisode.seasonNumber === 1 && nextEpisode.episodeNumber === 1) badges.push('PREMIERE');
-        if (nextEpisode.airDate && now.getTime() - nextEpisode.airDate.getTime() < 7 * 86_400_000)
-          badges.push('NOUVEAU');
+        // PREMIERE : 1er épisode d'une série OU d'une saison (façon TV Time).
+        if (nextEpisode.seasonNumber >= 1 && nextEpisode.episodeNumber === 1) badges.push('PREMIERE');
+        // NOUVEAU : épisode déjà diffusé depuis moins de 3 jours (fenêtre « découverte »).
+        const airedAgo = nextEpisode.airDate ? now.getTime() - nextEpisode.airDate.getTime() : null;
+        if (airedAgo !== null && airedAgo >= 0 && airedAgo < 3 * 86_400_000) badges.push('NOUVEAU');
         else {
           const lastAired = refs
             .filter((e) => e.seasonNumber > 0 && e.airDate && new Date(e.airDate) <= now)

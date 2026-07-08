@@ -1,15 +1,15 @@
 // Design tokens SerieTime (spec §10) — blanc, noir, jaune, mobile-first.
 
-// Police unique de l'app (native + web) : Rubik, la plus proche de la
-// géométrique arrondie de TV Time parmi les polices libres. Les styles
-// utilisent une famille par graisse (pas de fontWeight : Android ne
-// synthétise pas les graisses des polices embarquées).
+// Police unique de l'app (native + web) : Mulish — sans-serif humaniste fine,
+// choisie pour coller au rendu net et léger de TV Time (Rubik, plus ronde et
+// large, paraissait trop « grosse »). Les styles utilisent une famille par
+// graisse (pas de fontWeight : Android ne synthétise pas les graisses embarquées).
 export const FONTS = {
-  regular: 'Rubik_400Regular',
-  medium: 'Rubik_500Medium',
-  semiBold: 'Rubik_600SemiBold',
-  bold: 'Rubik_700Bold',
-  extraBold: 'Rubik_800ExtraBold',
+  regular: 'Mulish_400Regular',
+  medium: 'Mulish_500Medium',
+  semiBold: 'Mulish_600SemiBold',
+  bold: 'Mulish_700Bold',
+  extraBold: 'Mulish_800ExtraBold',
 } as const;
 export const COLORS = {
   bg: '#FFFFFF',

@@ -7,12 +7,12 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   useFonts,
-  Rubik_400Regular,
-  Rubik_500Medium,
-  Rubik_600SemiBold,
-  Rubik_700Bold,
-  Rubik_800ExtraBold,
-} from '@expo-google-fonts/rubik';
+  Mulish_400Regular,
+  Mulish_500Medium,
+  Mulish_600SemiBold,
+  Mulish_700Bold,
+  Mulish_800ExtraBold,
+} from '@expo-google-fonts/mulish';
 import { COLORS } from '@/lib/theme';
 
 const queryClient = new QueryClient({
@@ -22,11 +22,11 @@ const queryClient = new QueryClient({
 export default function RootLayout() {
   // Police de l'app (voir FONTS dans lib/theme.ts) — chargée avant tout rendu.
   const [fontsLoaded] = useFonts({
-    Rubik_400Regular,
-    Rubik_500Medium,
-    Rubik_600SemiBold,
-    Rubik_700Bold,
-    Rubik_800ExtraBold,
+    Mulish_400Regular,
+    Mulish_500Medium,
+    Mulish_600SemiBold,
+    Mulish_700Bold,
+    Mulish_800ExtraBold,
   });
   if (!fontsLoaded) {
     return (
