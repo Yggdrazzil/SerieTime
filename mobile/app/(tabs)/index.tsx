@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, Pressable } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Pressable, Image } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '@/lib/api';
+import { api, tmdbImage } from '@/lib/api';
 import type { QueueItemDto, UpcomingItemDto } from '@/lib/types';
 import { queueGroupLabel, episodeCode, timeHHMM } from '@/lib/format';
 import { COLORS, RADIUS, SHADOW } from '@/lib/theme';
@@ -96,11 +96,17 @@ function UpcomingCard({ item }: { item: UpcomingItemDto }) {
   const ep = item.episodes[0];
   if (!ep) return null;
   const isPremiere = ep.seasonNumber >= 1 && ep.episodeNumber === 1;
+  // Vignette : image de l'épisode si déjà publiée, sinon affiche de la série.
+  const thumbUri = tmdbImage(ep.stillPath, 'w300') ?? tmdbImage(item.media.posterPath, 'w342');
   return (
     <Pressable style={styles.upcard} onPress={() => router.push(`/show/${item.media.id}`)}>
-      <View style={styles.thumb}>
-        <Feather name="image" size={28} color="#9a9a9a" />
-      </View>
+      {thumbUri ? (
+        <Image source={{ uri: thumbUri }} style={styles.thumb} resizeMode="cover" />
+      ) : (
+        <View style={styles.thumb}>
+          <Feather name="image" size={28} color="#9a9a9a" />
+        </View>
+      )}
       <View style={styles.body}>
         <View style={styles.topRow}>
           <ShowPill label={item.media.title} onPress={() => router.push(`/show/${item.media.id}`)} />

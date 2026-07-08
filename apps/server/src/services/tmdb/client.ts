@@ -200,8 +200,12 @@ export async function tmdbRecommendations(type: 'tv' | 'movie', tmdbId: string):
   return data?.results ?? [];
 }
 
-export async function tmdbTrending(type: 'tv' | 'movie'): Promise<TmdbSearchResult[]> {
-  const data = await cachedFetch<{ results: TmdbSearchResult[] }>(`/trending/${type}/week`, {}, 1 * DAY);
+export async function tmdbTrending(type: 'tv' | 'movie', page = 1): Promise<TmdbSearchResult[]> {
+  const data = await cachedFetch<{ results: TmdbSearchResult[] }>(
+    `/trending/${type}/week`,
+    page > 1 ? { page: String(page) } : {},
+    1 * DAY,
+  );
   return data?.results ?? [];
 }
 

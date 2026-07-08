@@ -180,7 +180,9 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
       for (const status of watching) {
         if (!status.media.tmdbId) continue;
         const recs = await tmdbRecommendations(status.media.type === 'show' ? 'tv' : 'movie', status.media.tmdbId);
-        for (const r of recs.slice(0, 3)) {
+        // Échantillon aléatoire : le tirage change à chaque rafraîchissement du flux.
+        const picks = [...recs].sort(() => Math.random() - 0.5).slice(0, 3);
+        for (const r of picks) {
           const recType = status.media.type === 'show' ? 'show' : 'movie';
           const recTitle = r.name ?? r.title ?? '';
           const recYear = (r.first_air_date ?? r.release_date)
@@ -201,8 +203,11 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
           });
         }
       }
-      const [tv, movies] = await Promise.all([tmdbTrending('tv'), tmdbTrending('movie')]);
-      for (const r of [...tv.slice(0, 6), ...movies.slice(0, 6)]) {
+      // Page de tendances tirée au hasard puis mélange : le pull-to-refresh renouvelle le flux.
+      const page = 1 + Math.floor(Math.random() * 3);
+      const [tv, movies] = await Promise.all([tmdbTrending('tv', page), tmdbTrending('movie', page)]);
+      const pool = [...tv, ...movies].sort(() => Math.random() - 0.5).slice(0, 12);
+      for (const r of pool) {
         const trendType = r.title ? 'movie' : 'show';
         const trendTitle = r.name ?? r.title ?? '';
         const trendYear = (r.first_air_date ?? r.release_date)
@@ -223,12 +228,13 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
         });
       }
     }
-    // Déduplique en conservant l'ordre.
+    // Déduplique en conservant l'ordre — par id TMDb ET par titre normalisé
+    // (la même œuvre peut exister sous plusieurs ids selon la plateforme).
     const seen = new Set<string>();
     const feed = cards.filter((c) => {
-      const key = `${c.type}:${c.tmdbId}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
+      const keys = [`${c.type}:${c.tmdbId}`, `${c.type}:${norm(c.title)}`];
+      if (keys.some((k) => seen.has(k))) return false;
+      keys.forEach((k) => seen.add(k));
       return true;
     });
     return { feed };

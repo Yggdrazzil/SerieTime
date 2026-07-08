@@ -38,7 +38,13 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'serietime-app',
-      storage: createJSONStorage(() => AsyncStorage),
+      // Export web statique : pas de `window` pendant le rendu Node → stockage
+      // inerte le temps du SSR (le vrai AsyncStorage prend le relais au chargement).
+      storage: createJSONStorage(() =>
+        typeof window === 'undefined'
+          ? { getItem: async () => null, setItem: async () => {}, removeItem: async () => {} }
+          : AsyncStorage,
+      ),
       partialize: (s) => ({ serverUrl: s.serverUrl, token: s.token, user: s.user }),
       onRehydrateStorage: () => (state) => {
         useAppStore.setState({ hydrated: true });

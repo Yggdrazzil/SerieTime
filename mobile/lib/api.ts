@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { useAppStore } from './store';
 import { CONFIGURED_SERVER_URL } from './config';
 
@@ -28,11 +29,17 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
-  if (res.status === 401) {
-    useAppStore.getState().logout();
-    throw new ApiError(401, 'unauthorized');
-  }
   const data = await res.json().catch(() => null);
+  if (res.status === 401) {
+    // Session absente ou expirée (hors écrans d'authentification, où le 401 est
+    // une réponse normale) : déconnexion + retour à l'écran de connexion, au lieu
+    // de laisser des écrans vides « aucun résultat ».
+    if (!path.startsWith('/api/auth/')) {
+      useAppStore.getState().logout();
+      router.replace('/setup');
+    }
+    throw new ApiError(401, (data && data.error) || 'unauthorized');
+  }
   if (!res.ok) throw new ApiError(res.status, (data && data.error) || 'request_failed');
   return data as T;
 }

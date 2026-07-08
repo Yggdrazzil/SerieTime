@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, tmdbImage } from '@/lib/api';
 import type { EpisodeDto, MediaDto } from '@/lib/types';
-import { episodeCode } from '@/lib/format';
+import { episodeCode, shortDateFr } from '@/lib/format';
 import { COLORS, RADIUS, SHADOW } from '@/lib/theme';
 import { TopTabs, CheckCircle, Loading, EmptyState } from '@/components/ui';
 
@@ -24,7 +24,7 @@ export default function ShowDetail() {
   const qc = useQueryClient();
   const [tab, setTab] = useState('À PROPOS');
   const [menu, setMenu] = useState(false);
-  const [interest, setInterest] = useState<string | null>(null);
+  const [interest, setInterest] = useState<string[]>([]);
   const [justAdded, setJustAdded] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [personalize, setPersonalize] = useState(false);
@@ -127,7 +127,7 @@ export default function ShowDetail() {
           {tab === 'À PROPOS' ? (
             <AboutTab media={media} detail={detail.data} interest={interest} setInterest={setInterest} />
           ) : tab === 'ÉPISODES' ? (
-            <EpisodesTab showId={String(id)} onChange={refresh} />
+            <EpisodesTab showId={String(id)} posterPath={media.posterPath} onChange={refresh} />
           ) : (
             <CommentsTab mediaId={String(id)} />
           )}
@@ -458,7 +458,13 @@ function AboutTab({ media, detail, interest, setInterest }: any) {
       <View style={styles.section}>
         <Text style={styles.question}>QU'EST-CE QUI VOUS INTÉRESSE LE PLUS DANS CETTE SÉRIE ?</Text>
         {INTEREST.map((o) => (
-          <Pressable key={o} style={[styles.qbtn, interest === o && styles.qbtnSel]} onPress={() => setInterest(o)}>
+          <Pressable
+            key={o}
+            style={[styles.qbtn, interest.includes(o) && styles.qbtnSel]}
+            onPress={() =>
+              setInterest((sel: string[]) => (sel.includes(o) ? sel.filter((x) => x !== o) : [...sel, o]))
+            }
+          >
             <Text style={styles.qbtnText}>{o}</Text>
           </Pressable>
         ))}
@@ -507,10 +513,14 @@ function MovieBody({ media, detail, onToggle }: any) {
 }
 
 type SeasonData = { id: string; seasonNumber: number; title: string; watchedCount: number; totalCount: number; episodes: EpisodeDto[] };
+type EpisodesData = { seasons: SeasonData[]; nextEpisode: EpisodeDto | null };
 
-// Vignette d'épisode : image TheTVDB/TMDb si disponible, sinon pictogramme.
-function EpThumb({ stillPath }: { stillPath?: string | null }) {
-  const uri = tmdbImage(stillPath, 'w300');
+// Un épisode encore non diffusé (pas d'image de toute façon : rien n'a été diffusé).
+const isUpcoming = (iso?: string | null) => !!iso && new Date(iso).getTime() > Date.now();
+
+// Vignette d'épisode : image TheTVDB/TMDb si disponible, sinon affiche de la série, sinon pictogramme.
+function EpThumb({ stillPath, fallback }: { stillPath?: string | null; fallback?: string | null }) {
+  const uri = tmdbImage(stillPath, 'w300') ?? tmdbImage(fallback, 'w342');
   if (uri) return <Image source={{ uri }} style={styles.epThumb} resizeMode="cover" />;
   return (
     <View style={[styles.epThumb, { alignItems: 'center', justifyContent: 'center' }]}>
@@ -519,12 +529,12 @@ function EpThumb({ stillPath }: { stillPath?: string | null }) {
   );
 }
 
-function EpisodesTab({ showId, onChange }: { showId: string; onChange: () => void }) {
+function EpisodesTab({ showId, posterPath, onChange }: { showId: string; posterPath?: string | null; onChange: () => void }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState<Record<number, boolean>>({});
   const { data, isLoading } = useQuery({
     queryKey: ['show', showId, 'episodes'],
-    queryFn: () => api.get<{ seasons: SeasonData[]; nextEpisode: EpisodeDto | null }>(`/api/shows/${showId}/episodes`),
+    queryFn: () => api.get<EpisodesData>(`/api/shows/${showId}/episodes`),
   });
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ['show', showId, 'episodes'] });
@@ -533,10 +543,55 @@ function EpisodesTab({ showId, onChange }: { showId: string; onChange: () => voi
   };
   const toggleEp = useMutation({
     mutationFn: (ep: EpisodeDto) => api.post(`/api/episodes/${ep.id}/${ep.watched ? 'unwatched' : 'watched'}`),
+    // Mise à jour optimiste : la coche répond immédiatement, l'appel réseau suit
+    // (retour en arrière si le serveur refuse).
+    onMutate: async (ep: EpisodeDto) => {
+      await qc.cancelQueries({ queryKey: ['show', showId, 'episodes'] });
+      const prev = qc.getQueryData<EpisodesData>(['show', showId, 'episodes']);
+      if (prev) {
+        qc.setQueryData<EpisodesData>(['show', showId, 'episodes'], {
+          nextEpisode:
+            prev.nextEpisode && prev.nextEpisode.id === ep.id
+              ? { ...prev.nextEpisode, watched: !ep.watched }
+              : prev.nextEpisode,
+          seasons: prev.seasons.map((s) =>
+            s.seasonNumber !== ep.seasonNumber
+              ? s
+              : {
+                  ...s,
+                  watchedCount: Math.max(0, Math.min(s.totalCount, s.watchedCount + (ep.watched ? -1 : 1))),
+                  episodes: s.episodes.map((e) => (e.id === ep.id ? { ...e, watched: !e.watched } : e)),
+                },
+          ),
+        });
+      }
+      return { prev };
+    },
+    onError: (_err: unknown, _ep: EpisodeDto, ctx?: { prev?: EpisodesData }) => {
+      if (ctx?.prev) qc.setQueryData(['show', showId, 'episodes'], ctx.prev);
+    },
     onSettled: refresh,
   });
   const markAll = useMutation({
     mutationFn: (seasonNumber?: number) => api.post(`/api/shows/${showId}/mark-all-watched`, seasonNumber ? { seasonNumber } : {}),
+    onMutate: async (seasonNumber?: number) => {
+      await qc.cancelQueries({ queryKey: ['show', showId, 'episodes'] });
+      const prev = qc.getQueryData<EpisodesData>(['show', showId, 'episodes']);
+      if (prev) {
+        qc.setQueryData<EpisodesData>(['show', showId, 'episodes'], {
+          nextEpisode: prev.nextEpisode,
+          seasons: prev.seasons.map((s) =>
+            seasonNumber !== undefined && s.seasonNumber !== seasonNumber
+              ? s
+              : { ...s, watchedCount: s.totalCount, episodes: s.episodes.map((e) => ({ ...e, watched: true })) },
+          ),
+        });
+      }
+      return { prev };
+    },
+    onError: (_err: unknown, _sn: number | undefined, ctx?: { prev?: EpisodesData }) => {
+      if (ctx?.prev) qc.setQueryData(['show', showId, 'episodes'], ctx.prev);
+    },
     onSettled: refresh,
   });
 
@@ -550,7 +605,7 @@ function EpisodesTab({ showId, onChange }: { showId: string; onChange: () => voi
           <Text style={[styles.sectionTitle, { paddingHorizontal: 24 }]}>Démarrer le suivi</Text>
           <View style={{ padding: 12 }}>
             <View style={styles.eprow}>
-              <EpThumb stillPath={data.nextEpisode.stillPath} />
+              <EpThumb stillPath={data.nextEpisode.stillPath} fallback={posterPath} />
               <View style={{ flex: 1, padding: 12 }}>
                 <Text style={styles.epCode}>{episodeCode(data.nextEpisode.seasonNumber, data.nextEpisode.episodeNumber)}</Text>
                 <Text numberOfLines={1}>{data.nextEpisode.title}</Text>
@@ -580,8 +635,10 @@ function EpisodesTab({ showId, onChange }: { showId: string; onChange: () => voi
                   style={[styles.season, isOpen && styles.seasonOpen]}
                   onPress={() => setOpen((o) => ({ ...o, [s.seasonNumber]: !o[s.seasonNumber] }))}
                 >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text style={styles.seasonTitle}>{s.title}</Text>
+                  <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, marginRight: 8 }}>
+                    <Text style={[styles.seasonTitle, { flexShrink: 1 }]} numberOfLines={1}>
+                      {s.title}
+                    </Text>
                     <Feather name={isOpen ? 'chevron-up' : 'chevron-down'} size={22} color={COLORS.black} />
                   </View>
                   <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -592,10 +649,15 @@ function EpisodesTab({ showId, onChange }: { showId: string; onChange: () => voi
                 {isOpen
                   ? s.episodes.map((e) => (
                       <View key={e.id} style={styles.eprow}>
-                        <EpThumb stillPath={e.stillPath} />
+                        <EpThumb stillPath={e.stillPath} fallback={posterPath} />
                         <View style={{ flex: 1, padding: 10 }}>
                           <Text style={styles.epCode}>{episodeCode(e.seasonNumber, e.episodeNumber)}</Text>
-                          <Text numberOfLines={2}>{e.title}</Text>
+                          <Text numberOfLines={isUpcoming(e.airDate) ? 1 : 2}>{e.title}</Text>
+                          {isUpcoming(e.airDate) ? (
+                            <View style={styles.upBadge}>
+                              <Text style={styles.upBadgeText}>À VENIR · {shortDateFr(e.airDate).toUpperCase()}</Text>
+                            </View>
+                          ) : null}
                         </View>
                         <View style={{ justifyContent: 'center', paddingRight: 14 }}>
                           <CheckCircle size={44} checked={e.watched} onPress={() => toggleEp.mutate(e)} />
@@ -638,6 +700,8 @@ const styles = StyleSheet.create({
   epCode: { fontSize: 19, fontWeight: '800' },
   markAllBtn: { width: 40, height: 40, borderRadius: 20, borderWidth: 2, borderColor: COLORS.black, alignItems: 'center', justifyContent: 'center' },
   season: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: 76, paddingHorizontal: 20, backgroundColor: COLORS.white, borderRadius: 5, ...SHADOW.season },
+  upBadge: { alignSelf: 'flex-start', backgroundColor: COLORS.chipGrey, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 3, marginTop: 6 },
+  upBadgeText: { fontSize: 11, fontWeight: '700', color: COLORS.textMuted, letterSpacing: 0.4 },
   seasonOpen: { borderBottomWidth: 3, borderBottomColor: COLORS.yellow },
   seasonTitle: { fontSize: 24, fontWeight: '800' },
   seasonProg: { fontSize: 17, marginRight: 14 },

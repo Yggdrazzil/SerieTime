@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, ScrollView, StyleSheet, Pressable, Image, ActivityIndicator, Keyboard } from 'react-native';
+import { View, Text, TextInput, ScrollView, StyleSheet, Pressable, Image, ActivityIndicator, Keyboard, RefreshControl } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -32,7 +32,7 @@ export default function ExploreScreen() {
   const [tab, setTab] = useState<'media' | 'users'>('media');
   // Debounce : une requête quand l'utilisateur marque une pause, pas à chaque frappe.
   const debouncedQuery = useDebounced(query.trim(), 300);
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['explore', 'feed'],
     queryFn: () => api.get<{ feed: FeedItem[] }>('/api/explore/feed'),
     staleTime: 30 * 60_000,
@@ -73,7 +73,7 @@ export default function ExploreScreen() {
           {tab === 'media' ? <MediaResults query={debouncedQuery} rawQuery={query} /> : <UserResults query={debouncedQuery} />}
         </>
       ) : (
-        <Feed items={data?.feed} loading={isLoading} />
+        <Feed items={data?.feed} loading={isLoading} refreshing={isRefetching} onRefresh={refetch} />
       )}
     </View>
   );
@@ -274,7 +274,17 @@ function UserResults({ query }: { query: string }) {
   );
 }
 
-function Feed({ items, loading }: { items?: FeedItem[]; loading: boolean }) {
+function Feed({
+  items,
+  loading,
+  refreshing,
+  onRefresh,
+}: {
+  items?: FeedItem[];
+  loading: boolean;
+  refreshing: boolean;
+  onRefresh: () => void;
+}) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [addingKey, setAddingKey] = useState<string | null>(null);
@@ -295,15 +305,19 @@ function Feed({ items, loading }: { items?: FeedItem[]; loading: boolean }) {
   };
 
   if (loading) return <Loading />;
+  // Tirer vers le bas rafraîchit le flux (le serveur renvoie un tirage différent).
+  const refreshControl = <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />;
   if (!items || items.length === 0)
     return (
-      <EmptyState
-        title="Pas encore de recommandations"
-        message="Configurez une clé TMDb sur le serveur et suivez des séries pour alimenter votre flux."
-      />
+      <ScrollView contentContainerStyle={{ flexGrow: 1 }} refreshControl={refreshControl}>
+        <EmptyState
+          title="Pas encore de recommandations"
+          message="Configurez une clé TMDb sur le serveur et suivez des séries pour alimenter votre flux."
+        />
+      </ScrollView>
     );
   return (
-    <ScrollView contentContainerStyle={{ paddingVertical: 8, paddingBottom: 24 }}>
+    <ScrollView contentContainerStyle={{ paddingVertical: 8, paddingBottom: 24 }} refreshControl={refreshControl}>
       {items.map((f, i) => {
         const key = `${f.type}-${f.tmdbId}`;
         const image = tmdbImage(f.backdropPath, 'w780') ?? tmdbImage(f.posterPath, 'w500');
