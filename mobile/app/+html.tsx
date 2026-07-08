@@ -16,6 +16,10 @@ export default function Root({ children }: PropsWithChildren) {
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="SerieTime" />
         <meta name="theme-color" content="#FFD400" />
+        {/* Manifest PWA : sur Android, c'est lui qui transforme « ajouter à
+            l'écran d'accueil » en vraie app plein écran (et non un raccourci
+            navigateur). iOS s'appuie sur les metas apple-* ci-dessus. */}
+        <link rel="manifest" href="/manifest.json" />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
         <link rel="icon" href="/favicon.ico" />
         {/* Lissage de police : sans ça, la web app rend le texte plus épais /

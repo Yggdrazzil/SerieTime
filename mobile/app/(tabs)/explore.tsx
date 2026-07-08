@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, tmdbImage } from '@/lib/api';
 import { useDebounced } from '@/lib/useDebounced';
-import { COLORS, FONTS } from '@/lib/theme';
+import { COLORS, FONTS, SHADOW } from '@/lib/theme';
 import { EmptyState, Loading } from '@/components/ui';
 
 type FeedItem = {
@@ -584,19 +584,19 @@ function Feed({
   const cardImg = (f: FeedItem) => tmdbImage(f.backdropPath, 'w780') ?? tmdbImage(f.posterPath, 'w500');
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#0d0d12' }}>
+    <View style={{ flex: 1, backgroundColor: COLORS.pageMuted }}>
       <View style={styles.deckTop}>
-        <ModeBar mode={mode} setMode={setMode} dark />
+        <ModeBar mode={mode} setMode={setMode} />
         <View style={styles.deckHead}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }} style={{ flexGrow: 0, flexShrink: 1 }}>
             {FEED_CATEGORIES.map((c) => (
-              <Pressable key={c.key} style={[styles.catChip, styles.catChipDark, cat === c.key && styles.catChipSel]} onPress={() => setCat(c.key)}>
-                <Text style={[styles.catChipText, cat === c.key ? styles.catChipTextSel : { color: '#fff' }]}>{c.label}</Text>
+              <Pressable key={c.key} style={[styles.catChip, cat === c.key && styles.catChipSel]} onPress={() => setCat(c.key)}>
+                <Text style={[styles.catChipText, cat === c.key && styles.catChipTextSel]}>{c.label}</Text>
               </Pressable>
             ))}
           </ScrollView>
-          <Pressable style={styles.deckRefresh} onPress={() => { setIdx(0); onRefresh(); }} disabled={refreshing} hitSlop={6}>
-            {refreshing ? <ActivityIndicator size="small" color="#fff" /> : <Feather name="refresh-cw" size={17} color="#fff" />}
+          <Pressable style={styles.refreshBtn} onPress={() => { setIdx(0); onRefresh(); }} disabled={refreshing} hitSlop={6}>
+            {refreshing ? <ActivityIndicator size="small" color={COLORS.black} /> : <Feather name="refresh-cw" size={17} color={COLORS.black} />}
           </Pressable>
         </View>
       </View>
@@ -647,13 +647,12 @@ function Feed({
                 {current.overview ? (
                   <Text style={styles.deckOverview} numberOfLines={2}>{current.overview}</Text>
                 ) : null}
-                <Text style={styles.deckHint}>Touchez pour plus · ↑ suivante · ↓ déjà vu · → à voir · ← pas intéressé</Text>
               </View>
             </Animated.View>
           </>
         ) : (
           <View style={styles.deckEnd}>
-            <Feather name="check-circle" size={44} color="#fff" />
+            <Feather name="check-circle" size={44} color={COLORS.textMuted} />
             <Text style={styles.deckEndTitle}>Fin des suggestions</Text>
             <Text style={styles.deckEndMsg}>Actualise pour un nouveau tirage.</Text>
             <Pressable style={styles.deckEndBtn} onPress={() => { setIdx(0); onRefresh(); }}>
@@ -785,7 +784,7 @@ const styles = StyleSheet.create({
   modeChipDark: { backgroundColor: 'rgba(255,255,255,0.14)' },
   modeChipText: { fontSize: 13, fontFamily: FONTS.extraBold, letterSpacing: 0.4 },
   // --- Explorer façon TikTok/Tinder ---
-  deckTop: { backgroundColor: '#0d0d12', zIndex: 10 },
+  deckTop: { backgroundColor: COLORS.pageMuted, zIndex: 10 },
   catChipDark: { backgroundColor: 'rgba(255,255,255,0.14)' },
   deckHead: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingBottom: 8, gap: 10 },
   deckRefresh: { width: 36, height: 36, borderRadius: 18, borderWidth: 2, borderColor: '#fff', alignItems: 'center', justifyContent: 'center', marginLeft: 'auto', backgroundColor: 'rgba(0,0,0,0.35)' },
@@ -804,12 +803,12 @@ const styles = StyleSheet.create({
   deckOverview: { color: 'rgba(255,255,255,0.92)', fontFamily: FONTS.regular, fontSize: 15, lineHeight: 20, marginTop: 10 },
   deckHint: { color: 'rgba(255,255,255,0.55)', fontFamily: FONTS.regular, fontSize: 12, marginTop: 10 },
   deckEnd: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 30 },
-  deckEndTitle: { color: '#fff', fontSize: 22, fontFamily: FONTS.extraBold },
-  deckEndMsg: { color: 'rgba(255,255,255,0.7)', fontFamily: FONTS.regular, fontSize: 15, textAlign: 'center' },
+  deckEndTitle: { color: COLORS.black, fontSize: 22, fontFamily: FONTS.extraBold },
+  deckEndMsg: { color: COLORS.textMuted, fontFamily: FONTS.regular, fontSize: 15, textAlign: 'center' },
   deckEndBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: COLORS.yellow, borderRadius: 999, paddingHorizontal: 22, paddingVertical: 13, marginTop: 8 },
   deckEndBtnText: { fontFamily: FONTS.extraBold, fontSize: 13, letterSpacing: 0.5 },
   deckActions: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 26, paddingVertical: 14 },
-  actBtn: { alignItems: 'center', justifyContent: 'center', borderRadius: 999 },
+  actBtn: { alignItems: 'center', justifyContent: 'center', borderRadius: 999, ...SHADOW.card },
   actNope: { width: 62, height: 62, backgroundColor: '#fff', borderWidth: 2, borderColor: COLORS.red },
   actInfo: { width: 50, height: 50, backgroundColor: '#33333d' },
   actLike: { width: 62, height: 62, backgroundColor: COLORS.yellow },
