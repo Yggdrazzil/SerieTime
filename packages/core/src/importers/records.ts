@@ -149,7 +149,7 @@ const FIELD_ALIASES: Record<string, string[]> = {
   rating: ['rating', 'note', 'score', 'stars'],
   status: ['status', 'state', 'show_status', 'watch_status'],
   favorite: ['favorite', 'is_favorite', 'favourite', 'favorited', 'is_favorited'],
-  tvdbId: ['tvdb_id', 'tvdbid', 'thetvdb_id', 'series_id', 'tv_show_id', 'show_id'],
+  tvdbId: ['tvdb_id', 'tvdbid', 'thetvdb_id', 'series_id', 'tv_show_id', 'show_id', 's_id'],
   tvdbEpisodeId: ['episode_id', 'tvdb_episode_id'],
   tmdbId: ['tmdb_id', 'tmdbid', 'themoviedb_id', 'movie_id'],
   imdbId: ['imdb_id', 'imdbid'],
