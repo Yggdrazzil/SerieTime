@@ -34,10 +34,16 @@ export function CheckCircle({
   checked,
   onPress,
   size = 52,
+  checkedBg = COLORS.yellow,
+  checkedFg = COLORS.black,
 }: {
   checked?: boolean;
   onPress?: () => void;
   size?: number;
+  // Couleurs de l'état coché : par défaut jaune façon TV Time, mais les
+  // saisons terminées passent en vert (fond vert, coche blanche).
+  checkedBg?: string;
+  checkedFg?: string;
 }) {
   return (
     <Pressable
@@ -45,10 +51,10 @@ export function CheckCircle({
       hitSlop={8}
       style={[
         styles.check,
-        { width: size, height: size, borderRadius: size / 2, backgroundColor: checked ? COLORS.yellow : COLORS.checkBg },
+        { width: size, height: size, borderRadius: size / 2, backgroundColor: checked ? checkedBg : COLORS.checkBg },
       ]}
     >
-      <Feather name="check" size={size * 0.42} color={checked ? COLORS.black : '#9B9B9B'} />
+      <Feather name="check" size={size * 0.42} color={checked ? checkedFg : '#9B9B9B'} />
     </Pressable>
   );
 }

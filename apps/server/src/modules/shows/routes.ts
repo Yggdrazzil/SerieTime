@@ -458,6 +458,29 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
     return { ok: true, count: episodes.length };
   });
 
+  // Marquer tout comme non vu (série entière ou une saison). Comme pour
+  // « tout vu », les épisodes spéciaux (saison 0) sont exclus quand aucune
+  // saison précise n'est fournie : ils se cochent/décochent toujours à la main.
+  app.post('/api/shows/:id/mark-all-unwatched', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = z.object({ seasonNumber: z.number().int().optional() }).parse(request.body ?? {});
+    const media = await prisma.media.findFirst({ where: { id, type: 'show' }, include: { show: true } });
+    if (!media?.show) return reply.code(404).send({ error: 'not_found' });
+    const episodes = await prisma.episode.findMany({
+      where: { showId: media.show.id, seasonNumber: body.seasonNumber ?? { gt: 0 } },
+    });
+    for (const ep of episodes) {
+      await prisma.userEpisodeStatus.upsert({
+        where: { userId_episodeId: { userId: request.userId, episodeId: ep.id } },
+        create: { userId: request.userId, episodeId: ep.id, status: 'unwatched', watchedAt: null },
+        update: { status: 'unwatched', watchedAt: null },
+      });
+    }
+    await createWatchEvent(request.userId, id, 'marked_unwatched', { markAll: true, season: body.seasonNumber });
+    await recalculateShowStatus(request.userId, media.show.id, null);
+    return { ok: true, count: episodes.length };
+  });
+
   // Spec §32.7 : supprimer la série du suivi (pas le média global).
   app.delete('/api/shows/:id/tracking', async (request, reply) => {
     const { id } = request.params as { id: string };

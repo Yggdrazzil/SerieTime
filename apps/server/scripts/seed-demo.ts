@@ -65,6 +65,8 @@ async function main() {
     (await prisma.user.create({
       data: {
         displayName: 'Etienne',
+        email: 'etienne@serietime.local',
+        provider: 'password',
         passwordHash: await bcrypt.hash('demo1234', 10),
         countryCode: 'FR',
       },
@@ -87,7 +89,12 @@ async function main() {
   });
   const mushoku = await createShow({
     title: 'Mushoku Tensei: Jobless Reincarnation',
-    seasons: [{ n: 3, episodes: [{ e: 1, title: '燃えよ狂犬', air: 1 }, { e: 2, title: 'Épisode 2', air: 1 }] }],
+    seasons: [
+      { n: 0, episodes: [...Array(4).keys()].map((i) => ({ e: i + 1, title: `Spécial ${i + 1}`, air: -400 + i * 30 })) },
+      { n: 1, episodes: [...Array(23).keys()].map((i) => ({ e: i + 1, title: i === 22 ? 'Howl, Mad Dog' : `Épisode ${i + 1}`, air: -380 + i * 7 })) },
+      { n: 2, episodes: [...Array(24).keys()].map((i) => ({ e: i + 1, title: `Épisode ${i + 1}`, air: -200 + i * 7 })) },
+      { n: 3, episodes: [...Array(14).keys()].map((i) => ({ e: i + 1, title: i === 1 ? 'Howl, Mad Dog' : `Épisode ${i + 1}`, air: -30 + i * 7 })) },
+    ],
   });
   const acharnes = await createShow({
     title: 'Acharnés',
@@ -126,6 +133,25 @@ async function main() {
       where: { userId_episodeId: { userId: user.id, episodeId: ep.id } },
       create: { userId: user.id, episodeId: ep.id, status: 'watched', watchedAt: at(-13 + ep.episodeNumber) },
       update: {},
+    });
+  }
+
+  // Mushoku Tensei (cf PJ5) : saisons 1 & 2 terminées (barre verte), saison 3
+  // en cours (barre jaune) et épisodes spéciaux non vus, en bas de la liste.
+  const mushokuWatched = await prisma.episode.findMany({
+    where: {
+      show: { mediaId: mushoku.id },
+      OR: [
+        { seasonNumber: { in: [1, 2] } },
+        { seasonNumber: 3, episodeNumber: 1 },
+      ],
+    },
+  });
+  for (const ep of mushokuWatched) {
+    await prisma.userEpisodeStatus.upsert({
+      where: { userId_episodeId: { userId: user.id, episodeId: ep.id } },
+      create: { userId: user.id, episodeId: ep.id, status: 'watched', watchedAt: at(-40) },
+      update: { status: 'watched', watchedAt: at(-40) },
     });
   }
 

@@ -1,14 +1,14 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, Pressable, Modal, TextInput, ActivityIndicator, Image, Share, Platform } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, ScrollView, StyleSheet, Pressable, Modal, TextInput, ActivityIndicator, Image, Share } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, tmdbImage } from '@/lib/api';
 import type { EpisodeDto, MediaDto } from '@/lib/types';
-import { episodeCode, shortDateFr } from '@/lib/format';
+import { episodeCode } from '@/lib/format';
 import { COLORS, RADIUS, SHADOW, FONTS } from '@/lib/theme';
-import { TopTabs, CheckCircle, Loading, LoadError, EmptyState } from '@/components/ui';
+import { TopTabs, CheckCircle, Loading, EmptyState } from '@/components/ui';
 
 const INTEREST = ['LES ACTEURS', 'LA PRÉMISSE', 'LES CRÉATEURS', 'LA CHAÎNE/LA PLATEFORME', "LA FRANCHISE OU L'UNIVERS", 'AUTRE'];
 const STATUS_LABELS: Record<string, string> = {
@@ -24,7 +24,7 @@ export default function ShowDetail() {
   const qc = useQueryClient();
   const [tab, setTab] = useState('À PROPOS');
   const [menu, setMenu] = useState(false);
-  const [interest, setInterest] = useState<string[]>([]);
+  const [interest, setInterest] = useState<string | null>(null);
   const [justAdded, setJustAdded] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [personalize, setPersonalize] = useState(false);
@@ -76,24 +76,10 @@ export default function ShowDetail() {
     onSettled: refresh,
   });
   const share = () => {
-    const message = `Regarde « ${detail.data?.media?.title} » — suivi avec SerieTime 📺`;
-    const url = typeof window !== 'undefined' ? window.location.href : undefined;
-    // Web app (plateforme principale) : Share natif RN n'existe pas → Web Share
-    // API si dispo (Safari iOS / Chrome Android), sinon copie dans le presse-papier.
-    if (Platform.OS === 'web') {
-      const nav = typeof navigator !== 'undefined' ? (navigator as Navigator & { share?: (d: object) => Promise<void> }) : undefined;
-      if (nav?.share) {
-        nav.share({ title: 'SerieTime', text: message, url }).catch(() => undefined);
-      } else if (nav?.clipboard) {
-        nav.clipboard.writeText(`${message}${url ? ` ${url}` : ''}`).then(() => showToast('Lien copié'), () => undefined);
-      }
-      return;
-    }
-    Share.share({ message }).catch(() => undefined);
+    Share.share({ message: `Regarde « ${detail.data?.media?.title} » — suivi avec SerieTime 📺` }).catch(() => undefined);
   };
 
-  if (detail.isLoading) return <Loading />;
-  if (!detail.data) return <LoadError onRetry={detail.refetch} busy={detail.isRefetching} />;
+  if (detail.isLoading || !detail.data) return <Loading />;
   const media: MediaDto = detail.data.media;
   const isFollowed = media.userStatus != null;
 
@@ -141,7 +127,7 @@ export default function ShowDetail() {
           {tab === 'À PROPOS' ? (
             <AboutTab media={media} detail={detail.data} interest={interest} setInterest={setInterest} />
           ) : tab === 'ÉPISODES' ? (
-            <EpisodesTab showId={String(id)} posterPath={media.posterPath} onChange={refresh} />
+            <EpisodesTab showId={String(id)} onChange={refresh} />
           ) : (
             <CommentsTab mediaId={String(id)} />
           )}
@@ -472,13 +458,7 @@ function AboutTab({ media, detail, interest, setInterest }: any) {
       <View style={styles.section}>
         <Text style={styles.question}>QU'EST-CE QUI VOUS INTÉRESSE LE PLUS DANS CETTE SÉRIE ?</Text>
         {INTEREST.map((o) => (
-          <Pressable
-            key={o}
-            style={[styles.qbtn, interest.includes(o) && styles.qbtnSel]}
-            onPress={() =>
-              setInterest((sel: string[]) => (sel.includes(o) ? sel.filter((x) => x !== o) : [...sel, o]))
-            }
-          >
+          <Pressable key={o} style={[styles.qbtn, interest === o && styles.qbtnSel]} onPress={() => setInterest(o)}>
             <Text style={styles.qbtnText}>{o}</Text>
           </Pressable>
         ))}
@@ -527,14 +507,10 @@ function MovieBody({ media, detail, onToggle }: any) {
 }
 
 type SeasonData = { id: string; seasonNumber: number; title: string; watchedCount: number; totalCount: number; episodes: EpisodeDto[] };
-type EpisodesData = { seasons: SeasonData[]; nextEpisode: EpisodeDto | null };
 
-// Un épisode encore non diffusé (pas d'image de toute façon : rien n'a été diffusé).
-const isUpcoming = (iso?: string | null) => !!iso && new Date(iso).getTime() > Date.now();
-
-// Vignette d'épisode : image TheTVDB/TMDb si disponible, sinon affiche de la série, sinon pictogramme.
-function EpThumb({ stillPath, fallback }: { stillPath?: string | null; fallback?: string | null }) {
-  const uri = tmdbImage(stillPath, 'w300') ?? tmdbImage(fallback, 'w342');
+// Vignette d'épisode : image TheTVDB/TMDb si disponible, sinon pictogramme.
+function EpThumb({ stillPath }: { stillPath?: string | null }) {
+  const uri = tmdbImage(stillPath, 'w300');
   if (uri) return <Image source={{ uri }} style={styles.epThumb} resizeMode="cover" />;
   return (
     <View style={[styles.epThumb, { alignItems: 'center', justifyContent: 'center' }]}>
@@ -543,12 +519,19 @@ function EpThumb({ stillPath, fallback }: { stillPath?: string | null; fallback?
   );
 }
 
-function EpisodesTab({ showId, posterPath, onChange }: { showId: string; posterPath?: string | null; onChange: () => void }) {
+function EpisodesTab({ showId, onChange }: { showId: string; onChange: () => void }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState<Record<number, boolean>>({});
-  const { data, isLoading, isError, refetch, isRefetching } = useQuery({
+  // Snackbar « Marquer tout comme non vu » (2ᵉ appui sur la coche maîtresse).
+  const [confirmUnmark, setConfirmUnmark] = useState(false);
+  useEffect(() => {
+    if (!confirmUnmark) return;
+    const t = setTimeout(() => setConfirmUnmark(false), 4000);
+    return () => clearTimeout(t);
+  }, [confirmUnmark]);
+  const { data, isLoading } = useQuery({
     queryKey: ['show', showId, 'episodes'],
-    queryFn: () => api.get<EpisodesData>(`/api/shows/${showId}/episodes`),
+    queryFn: () => api.get<{ seasons: SeasonData[]; nextEpisode: EpisodeDto | null }>(`/api/shows/${showId}/episodes`),
   });
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ['show', showId, 'episodes'] });
@@ -557,135 +540,138 @@ function EpisodesTab({ showId, posterPath, onChange }: { showId: string; posterP
   };
   const toggleEp = useMutation({
     mutationFn: (ep: EpisodeDto) => api.post(`/api/episodes/${ep.id}/${ep.watched ? 'unwatched' : 'watched'}`),
-    // Mise à jour optimiste : la coche répond immédiatement, l'appel réseau suit
-    // (retour en arrière si le serveur refuse).
-    onMutate: async (ep: EpisodeDto) => {
-      await qc.cancelQueries({ queryKey: ['show', showId, 'episodes'] });
-      const prev = qc.getQueryData<EpisodesData>(['show', showId, 'episodes']);
-      if (prev) {
-        qc.setQueryData<EpisodesData>(['show', showId, 'episodes'], {
-          nextEpisode:
-            prev.nextEpisode && prev.nextEpisode.id === ep.id
-              ? { ...prev.nextEpisode, watched: !ep.watched }
-              : prev.nextEpisode,
-          seasons: prev.seasons.map((s) =>
-            s.seasonNumber !== ep.seasonNumber
-              ? s
-              : {
-                  ...s,
-                  watchedCount: Math.max(0, Math.min(s.totalCount, s.watchedCount + (ep.watched ? -1 : 1))),
-                  episodes: s.episodes.map((e) => (e.id === ep.id ? { ...e, watched: !e.watched } : e)),
-                },
-          ),
-        });
-      }
-      return { prev };
-    },
-    onError: (_err: unknown, _ep: EpisodeDto, ctx?: { prev?: EpisodesData }) => {
-      if (ctx?.prev) qc.setQueryData(['show', showId, 'episodes'], ctx.prev);
-    },
     onSettled: refresh,
   });
   const markAll = useMutation({
     mutationFn: (seasonNumber?: number) => api.post(`/api/shows/${showId}/mark-all-watched`, seasonNumber ? { seasonNumber } : {}),
-    onMutate: async (seasonNumber?: number) => {
-      await qc.cancelQueries({ queryKey: ['show', showId, 'episodes'] });
-      const prev = qc.getQueryData<EpisodesData>(['show', showId, 'episodes']);
-      if (prev) {
-        qc.setQueryData<EpisodesData>(['show', showId, 'episodes'], {
-          nextEpisode: prev.nextEpisode,
-          seasons: prev.seasons.map((s) =>
-            seasonNumber !== undefined && s.seasonNumber !== seasonNumber
-              ? s
-              : { ...s, watchedCount: s.totalCount, episodes: s.episodes.map((e) => ({ ...e, watched: true })) },
-          ),
-        });
-      }
-      return { prev };
-    },
-    onError: (_err: unknown, _sn: number | undefined, ctx?: { prev?: EpisodesData }) => {
-      if (ctx?.prev) qc.setQueryData(['show', showId, 'episodes'], ctx.prev);
-    },
+    onSettled: refresh,
+  });
+  const markAllUnwatched = useMutation({
+    mutationFn: (seasonNumber?: number) => api.post(`/api/shows/${showId}/mark-all-unwatched`, seasonNumber ? { seasonNumber } : {}),
     onSettled: refresh,
   });
 
-  if (isLoading) return <Loading />;
-  if (!data) return <LoadError onRetry={refetch} busy={isRefetching} />;
+  if (isLoading || !data) return <Loading />;
   if (data.seasons.length === 0) return <EmptyState title="Aucun épisode" />;
 
+  // Épisodes spéciaux (saison 0) toujours en bas de la liste (façon TV Time).
+  const isSpecial = (s: SeasonData) => s.seasonNumber === 0;
+  const seasons = [...data.seasons].sort((a, b) => {
+    if (isSpecial(a) !== isSpecial(b)) return isSpecial(a) ? 1 : -1;
+    return a.seasonNumber - b.seasonNumber;
+  });
+
+  // « À jour » (comme TV Time) = tous les épisodes réguliers DÉJÀ DIFFUSÉS sont
+  // vus (les épisodes non diffusés et les spéciaux n'entrent pas en compte).
+  // data.nextEpisode = prochain épisode régulier diffusé non vu : null ⇒ à jour.
+  const anyWatched = seasons.some((s) => s.watchedCount > 0);
+  const caughtUp = anyWatched && !data.nextEpisode;
+
+  const onMasterPress = () => {
+    if (caughtUp) setConfirmUnmark(true);
+    else markAll.mutate(undefined);
+  };
+  const doUnmarkAll = () => {
+    setConfirmUnmark(false);
+    markAllUnwatched.mutate(undefined);
+  };
+
   return (
-    <ScrollView style={{ backgroundColor: COLORS.pageMuted }} contentContainerStyle={{ paddingBottom: 40 }}>
-      {data.nextEpisode ? (
-        <View style={{ paddingTop: 20, borderBottomWidth: 1, borderBottomColor: COLORS.borderLight, backgroundColor: COLORS.white }}>
-          <Text style={[styles.sectionTitle, { paddingHorizontal: 24 }]}>Démarrer le suivi</Text>
-          <View style={{ padding: 12 }}>
-            <View style={styles.eprow}>
-              <EpThumb stillPath={data.nextEpisode.stillPath} fallback={posterPath} />
-              <View style={{ flex: 1, padding: 12 }}>
-                <Text style={styles.epCode}>{episodeCode(data.nextEpisode.seasonNumber, data.nextEpisode.episodeNumber)}</Text>
-                <Text numberOfLines={1}>{data.nextEpisode.title}</Text>
-              </View>
-              <View style={{ justifyContent: 'center', paddingRight: 14 }}>
-                <CheckCircle checked={data.nextEpisode.watched} onPress={() => toggleEp.mutate(data.nextEpisode!)} />
+    <View style={{ flex: 1 }}>
+      <ScrollView style={{ backgroundColor: COLORS.pageMuted }} contentContainerStyle={{ paddingBottom: 40 }}>
+        {data.nextEpisode ? (
+          <View style={{ paddingTop: 20, borderBottomWidth: 1, borderBottomColor: COLORS.borderLight, backgroundColor: COLORS.white }}>
+            <Text style={[styles.sectionTitle, { paddingHorizontal: 24 }]}>{anyWatched ? 'Continuer le suivi' : 'Démarrer le suivi'}</Text>
+            <View style={{ padding: 12 }}>
+              <View style={styles.eprow}>
+                <EpThumb stillPath={data.nextEpisode.stillPath} />
+                <View style={{ flex: 1, padding: 12 }}>
+                  <Text style={styles.epCode}>{episodeCode(data.nextEpisode.seasonNumber, data.nextEpisode.episodeNumber)}</Text>
+                  <Text numberOfLines={1}>{data.nextEpisode.title}</Text>
+                </View>
+                <View style={{ justifyContent: 'center', paddingRight: 14 }}>
+                  <CheckCircle checked={data.nextEpisode.watched} onPress={() => toggleEp.mutate(data.nextEpisode!)} />
+                </View>
               </View>
             </View>
           </View>
-        </View>
-      ) : null}
+        ) : null}
 
-      <View style={{ paddingTop: 20 }}>
-        <View style={[styles.sectionHeadRow, { marginBottom: 0 }]}>
-          <Text style={styles.sectionTitle}>Tous les épisodes</Text>
-          <Pressable style={styles.markAllBtn} onPress={() => markAll.mutate(undefined)}>
-            <Feather name="check" size={18} color={COLORS.black} />
-          </Pressable>
-        </View>
-        <View style={{ padding: 12 }}>
-          {data.seasons.map((s) => {
-            const isOpen = open[s.seasonNumber];
-            const done = s.totalCount > 0 && s.watchedCount === s.totalCount;
-            return (
-              <View key={s.id} style={{ marginBottom: 12 }}>
-                <Pressable
-                  style={[styles.season, isOpen && styles.seasonOpen]}
-                  onPress={() => setOpen((o) => ({ ...o, [s.seasonNumber]: !o[s.seasonNumber] }))}
-                >
-                  <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, marginRight: 8 }}>
-                    <Text style={[styles.seasonTitle, { flexShrink: 1 }]} numberOfLines={1}>
-                      {s.title}
-                    </Text>
-                    <Feather name={isOpen ? 'chevron-up' : 'chevron-down'} size={22} color={COLORS.black} />
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <Text style={styles.seasonProg}>{s.watchedCount}/{s.totalCount}</Text>
-                    <CheckCircle size={44} checked={done} onPress={() => markAll.mutate(s.seasonNumber)} />
-                  </View>
-                </Pressable>
-                {isOpen
-                  ? s.episodes.map((e) => (
-                      <View key={e.id} style={styles.eprow}>
-                        <EpThumb stillPath={e.stillPath} fallback={posterPath} />
-                        <View style={{ flex: 1, padding: 10 }}>
-                          <Text style={styles.epCode}>{episodeCode(e.seasonNumber, e.episodeNumber)}</Text>
-                          <Text numberOfLines={isUpcoming(e.airDate) ? 1 : 2}>{e.title}</Text>
-                          {isUpcoming(e.airDate) ? (
-                            <View style={styles.upBadge}>
-                              <Text style={styles.upBadgeText}>À VENIR · {shortDateFr(e.airDate).toUpperCase()}</Text>
-                            </View>
-                          ) : null}
-                        </View>
-                        <View style={{ justifyContent: 'center', paddingRight: 14 }}>
-                          <CheckCircle size={44} checked={e.watched} onPress={() => toggleEp.mutate(e)} />
-                        </View>
+        <View style={{ paddingTop: 20 }}>
+          <View style={[styles.sectionHeadRow, { marginBottom: 0 }]}>
+            <Text style={styles.sectionTitle}>Tous les épisodes</Text>
+            <Pressable style={styles.markAllBtn} onPress={onMasterPress} accessibilityLabel="Tout marquer">
+              <Feather name="check" size={18} color={COLORS.black} />
+            </Pressable>
+          </View>
+          <View style={{ padding: 12 }}>
+            {seasons.map((s) => {
+              const isOpen = open[s.seasonNumber];
+              const done = s.totalCount > 0 && s.watchedCount === s.totalCount;
+              const started = s.watchedCount > 0;
+              const pct = s.totalCount > 0 ? Math.min(100, (s.watchedCount / s.totalCount) * 100) : 0;
+              const label = isSpecial(s) ? 'Épisodes spéciaux' : s.title;
+              return (
+                <View key={s.id} style={{ marginBottom: 12 }}>
+                  <Pressable
+                    style={styles.season}
+                    onPress={() => setOpen((o) => ({ ...o, [s.seasonNumber]: !o[s.seasonNumber] }))}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                      <Text style={styles.seasonTitle} numberOfLines={1}>{label}</Text>
+                      <Feather name={isOpen ? 'chevron-up' : 'chevron-down'} size={22} color={COLORS.black} />
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Text style={styles.seasonProg}>{s.watchedCount}/{s.totalCount}</Text>
+                      <CheckCircle
+                        size={44}
+                        checked={done}
+                        checkedBg={COLORS.green}
+                        checkedFg="#fff"
+                        onPress={() => (done ? markAllUnwatched.mutate(s.seasonNumber) : markAll.mutate(s.seasonNumber))}
+                      />
+                    </View>
+                    {/* Barre de progression : jaune en cours, verte terminée. */}
+                    {started ? (
+                      <View style={[styles.progressTrack, { backgroundColor: done ? COLORS.green : COLORS.yellowSoft }]}>
+                        <View
+                          style={[
+                            styles.progressFill,
+                            { width: `${pct}%`, backgroundColor: done ? COLORS.green : COLORS.yellow },
+                          ]}
+                        />
                       </View>
-                    ))
-                  : null}
-              </View>
-            );
-          })}
+                    ) : null}
+                  </Pressable>
+                  {isOpen
+                    ? s.episodes.map((e) => (
+                        <View key={e.id} style={styles.eprow}>
+                          <EpThumb stillPath={e.stillPath} />
+                          <View style={{ flex: 1, padding: 10 }}>
+                            <Text style={styles.epCode}>{episodeCode(e.seasonNumber, e.episodeNumber)}</Text>
+                            <Text numberOfLines={2}>{e.title}</Text>
+                          </View>
+                          <View style={{ justifyContent: 'center', paddingRight: 14 }}>
+                            <CheckCircle size={44} checked={e.watched} onPress={() => toggleEp.mutate(e)} />
+                          </View>
+                        </View>
+                      ))
+                    : null}
+                </View>
+              );
+            })}
+          </View>
         </View>
-      </View>
-    </ScrollView>
+      </ScrollView>
+
+      {/* Confirmation « Marquer tout comme non vu » (cf TV Time). */}
+      {confirmUnmark ? (
+        <Pressable style={styles.unmarkBar} onPress={doUnmarkAll}>
+          <Feather name="eye-off" size={22} color={COLORS.black} />
+          <Text style={styles.unmarkText}>Marquer tout comme non vu</Text>
+        </Pressable>
+      ) : null}
+    </View>
   );
 }
 
@@ -715,11 +701,12 @@ const styles = StyleSheet.create({
   epCode: { fontSize: 19, fontFamily: FONTS.extraBold },
   markAllBtn: { width: 40, height: 40, borderRadius: 20, borderWidth: 2, borderColor: COLORS.black, alignItems: 'center', justifyContent: 'center' },
   season: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: 76, paddingHorizontal: 20, backgroundColor: COLORS.white, borderRadius: 5, ...SHADOW.season },
-  upBadge: { alignSelf: 'flex-start', backgroundColor: COLORS.chipGrey, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 3, marginTop: 6 },
-  upBadgeText: { fontSize: 11, fontWeight: '700', color: COLORS.textMuted, letterSpacing: 0.4 },
-  seasonOpen: { borderBottomWidth: 3, borderBottomColor: COLORS.yellow },
-  seasonTitle: { fontSize: 24, fontFamily: FONTS.extraBold },
+  seasonTitle: { fontSize: 24, fontFamily: FONTS.extraBold, flexShrink: 1 },
   seasonProg: { fontFamily: FONTS.regular, fontSize: 17, marginRight: 14 },
+  progressTrack: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 5, borderBottomLeftRadius: 5, borderBottomRightRadius: 5, overflow: 'hidden' },
+  progressFill: { position: 'absolute', left: 0, bottom: 0, top: 0, borderBottomLeftRadius: 5 },
+  unmarkBar: { position: 'absolute', left: 12, right: 12, bottom: 20, backgroundColor: COLORS.white, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 20, paddingVertical: 18, ...SHADOW.card },
+  unmarkText: { fontSize: 17, fontFamily: FONTS.semiBold, color: COLORS.black },
   overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: COLORS.overlay },
   sheet: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: COLORS.white, borderTopLeftRadius: 5, borderTopRightRadius: 5, paddingBottom: 20 },
   statusRow: { backgroundColor: COLORS.chipGrey, borderBottomWidth: 3, borderBottomColor: COLORS.yellow, height: 62, justifyContent: 'center', paddingHorizontal: 24 },

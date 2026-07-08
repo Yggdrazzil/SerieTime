@@ -6,7 +6,7 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
-Dernière mise à jour : **2026-07-08** (Claude & Benjamin)
+Dernière mise à jour : **2026-07-08** (Claude & Benjamin) — liste des saisons TV Time (spéciaux en bas, barres de progression, « tout marquer/démarquer »)
 
 ---
 
@@ -19,7 +19,7 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
 
 - **Branche de référence : `main`** (à cloner / puller). Le développement passe
   par des branches courtes fusionnées via pull request.
-- Tests : `pnpm test` (73 tests au 2026-07-07 : 25 core + 48 serveur).
+- Tests : `pnpm test` (77 tests au 2026-07-08 : 25 core + 52 serveur).
 - Lancement local : voir `README.md` (serveur `pnpm dev:server`, mobile `npx expo start -c`).
 
 ## État par domaine
@@ -123,6 +123,25 @@ Retours d'usage de la première vraie session + finitions web app :
   `SERIETIME_SERVER_URL` au moment de l'export, `app.json` reste vierge (le dev local
   d'Étienne garde l'écran « URL du serveur ») ; `docker-compose.prod.yml` versionné.
 - Typecheck mobile + serveur verts, 74 tests verts.
+
+### 2026-07-08 — Claude (3)
+- **Liste des saisons (onglet Épisodes) alignée sur TV Time** :
+  - Les **épisodes spéciaux (saison 0) passent en bas** de la liste (avant en haut).
+  - **Barres de progression par saison** en bas de chaque carte : **jaune** quand
+    le visionnage est en cours, **vert** quand la saison est terminée (coche verte
+    à coche blanche) ; masquée tant qu'aucun épisode n'est vu.
+  - **Coche « Tous les épisodes »** : 1er appui = tout marquer vu **sauf les
+    spéciaux** ; quand on est **à jour** (tous les épisodes réguliers *diffusés*
+    vus), un nouvel appui affiche la barre **« Marquer tout comme non vu »**
+    (icône œil barré) qui décoche tout (hors spéciaux). Les spéciaux se cochent
+    toujours **à la main**.
+  - Une série est considérée **« à jour » même sans les spéciaux** (déjà le cas
+    côté serveur : `seasonNumber > 0` dans le calcul de statut ; nouveau route
+    `POST /api/shows/:id/mark-all-unwatched`, symétrique de `mark-all-watched`).
+  - Tests : nouveau fichier `specials.test.ts` (tout marquer/démarquer ignore la
+    saison 0, série « terminée » sans les spéciaux). **77 tests** (25 core + 52 serveur).
+  - Seed de démo enrichi (Mushoku Tensei : 3 saisons + spéciaux, S1/S2 terminées,
+    S3 en cours) pour vérifier visuellement barres et tri.
 
 ### 2026-07-08 — Claude (2)
 - **Police Rubik** partout (native + web) : la plus proche de la géométrique
