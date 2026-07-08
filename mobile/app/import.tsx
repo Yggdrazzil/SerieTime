@@ -86,30 +86,67 @@ export default function ImportScreen() {
     }
   };
 
+  // Suit la progression d'un import en tâche de fond (réutilisé par le lancement
+  // ET par la reprise quand on rouvre l'écran).
+  const startPolling = (id: string) => {
+    if (poll.current) clearInterval(poll.current);
+    poll.current = setInterval(async () => {
+      try {
+        const s = await api.get<{ status: string; summary: Summary | null }>(`/api/import/tvtime/${id}`);
+        if (s.summary) setSummary(s.summary);
+        if (s.status === 'imported' || s.status === 'failed') {
+          if (poll.current) clearInterval(poll.current);
+          setStep(s.status === 'imported' ? 'done' : 'idle');
+          if (s.status === 'failed') setError("L'import a échoué. Réessaie.");
+        }
+      } catch {
+        /* on retentera au prochain tick */
+      }
+    }, 1500);
+  };
+
   const startImport = async () => {
     if (!importId) return;
     setError(null);
     setStep('importing');
     try {
       await api.post(`/api/import/tvtime/${importId}/confirm`);
-      // Suivi de la progression en tâche de fond.
-      poll.current = setInterval(async () => {
-        try {
-          const s = await api.get<{ status: string; summary: Summary | null }>(`/api/import/tvtime/${importId}`);
-          if (s.summary) setSummary(s.summary);
-          if (s.status === 'imported' || s.status === 'failed') {
-            if (poll.current) clearInterval(poll.current);
-            setStep(s.status === 'imported' ? 'done' : 'idle');
-            if (s.status === 'failed') setError("L'import a échoué. Réessaie.");
-          }
-        } catch {
-          /* on retentera au prochain tick */
-        }
-      }, 1500);
+      startPolling(importId);
     } catch (e) {
       fail(e);
     }
   };
+
+  // Reprise : si un import est déjà en cours (ou analysé en attente), on le
+  // retrouve au lieu de repartir de l'écran de départ quand on rouvre la page.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { imports } = await api.get<{ imports: { importId: string; status: string }[] }>('/api/import/tvtime');
+        const latest = imports?.[0];
+        if (!latest || cancelled) return;
+        if (latest.status === 'importing' || latest.status === 'analyzed') {
+          const d = await api.get<{ summary: Summary | null }>(`/api/import/tvtime/${latest.importId}`);
+          if (cancelled) return;
+          setImportId(latest.importId);
+          if (d.summary) setSummary(d.summary);
+          if (latest.status === 'importing') {
+            setStep('importing');
+            startPolling(latest.importId);
+          } else {
+            setStep('analyzed');
+          }
+        }
+      } catch {
+        /* aucun import à reprendre */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const prog = summary?.progress;
   const pct = prog && prog.total > 0 ? Math.round((prog.done / prog.total) * 100) : 0;
