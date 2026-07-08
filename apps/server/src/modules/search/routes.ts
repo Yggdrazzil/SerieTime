@@ -148,13 +148,21 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
     return { results, sources };
   });
 
-  // Spec §20.3 : flux personnel de recommandations.
+  // Spec §20.3 : flux personnel de recommandations, affiné selon les goûts.
   app.get('/api/explore/feed', async (request) => {
-    const watching = await prisma.userMediaStatus.findMany({
-      where: { userId: request.userId, status: { in: ['watching', 'completed'] } },
+    // Graines de goût : ce que l'utilisateur a AIMÉ. Les favoris comptent le plus,
+    // puis « à voir »/en cours/déjà vu (les swipes du mode Découvrir alimentent ça :
+    // ♥ à voir = watchlist, ↓ déjà vu = completed). Plus il y en a, plus le flux
+    // devient personnel.
+    const tasteSeeds = await prisma.userMediaStatus.findMany({
+      where: {
+        userId: request.userId,
+        isHidden: false,
+        OR: [{ isFavorite: true }, { status: { in: ['watching', 'completed', 'watchlist'] } }],
+      },
       include: { media: true },
-      orderBy: { lastWatchedAt: 'desc' },
-      take: 5,
+      orderBy: [{ isFavorite: 'desc' }, { lastWatchedAt: 'desc' }],
+      take: 8,
     });
     const mediaKeyFields = { tmdbId: true, type: true, title: true, originalTitle: true, year: true } as const;
     const disliked = await prisma.userMediaStatus.findMany({
@@ -190,11 +198,12 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
     const cards: SearchResult[] = [];
     if (tmdbEnabled()) {
       const { tmdbRecommendations } = await import('../../services/tmdb/index.js');
-      for (const status of watching) {
+      for (const status of tasteSeeds) {
         if (!status.media.tmdbId) continue;
         const recs = await tmdbRecommendations(status.media.type === 'show' ? 'tv' : 'movie', status.media.tmdbId);
-        // Échantillon aléatoire : le tirage change à chaque rafraîchissement du flux.
-        const picks = [...recs].sort(() => Math.random() - 0.5).slice(0, 3);
+        // Échantillon aléatoire (le tirage change à chaque rafraîchissement) ; les
+        // favoris pèsent plus lourd (plus de suggestions issues d'eux).
+        const picks = [...recs].sort(() => Math.random() - 0.5).slice(0, status.isFavorite ? 5 : 3);
         for (const r of picks) {
           const recType = status.media.type === 'show' ? 'show' : 'movie';
           const recTitle = r.name ?? r.title ?? '';
