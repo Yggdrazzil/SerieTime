@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, tmdbImage } from '@/lib/api';
 import type { QueueItemDto, UpcomingItemDto } from '@/lib/types';
-import { queueGroupLabel, episodeCode, timeHHMM } from '@/lib/format';
+import { queueGroupLabel, episodeCode, airTimeLabel } from '@/lib/format';
 import { COLORS, RADIUS, SHADOW, FONTS } from '@/lib/theme';
 import { PillHeader, TopTabs, EmptyState, Loading, LoadError, ShowPill, Badge, CheckCircle } from '@/components/ui';
 import { EpisodeQueueCard } from '@/components/EpisodeQueueCard';
@@ -126,13 +126,18 @@ function UpcomingCard({ item }: { item: UpcomingItemDto }) {
       )}
       <View style={styles.body}>
         <View style={styles.topRow}>
-          <ShowPill label={item.media.title} onPress={() => router.push(`/show/${item.media.id}`)} />
-          {ep.airDate ? (
-            <View style={{ alignItems: 'flex-end' }}>
-              <Text style={styles.time}>{timeHHMM(ep.airDate)}</Text>
-              <Text style={styles.ch}>{ep.network ?? ''}</Text>
-            </View>
-          ) : null}
+          <View style={{ flexShrink: 1 }}>
+            <ShowPill label={item.media.title} onPress={() => router.push(`/show/${item.media.id}`)} />
+          </View>
+          {(() => {
+            const air = airTimeLabel(ep.airDate);
+            return air || ep.network ? (
+              <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>
+                {air ? <Text style={styles.time}>{air}</Text> : null}
+                {ep.network ? <Text style={styles.ch}>{ep.network}</Text> : null}
+              </View>
+            ) : null;
+          })()}
         </View>
         <Text style={styles.code}>{episodeCode(ep.seasonNumber, ep.episodeNumber)}</Text>
         <Text style={styles.epTitle} numberOfLines={1}>
