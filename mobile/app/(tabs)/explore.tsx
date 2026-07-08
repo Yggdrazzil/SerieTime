@@ -297,11 +297,26 @@ function Feed({
   const router = useRouter();
   const queryClient = useQueryClient();
   const [addingKey, setAddingKey] = useState<string | null>(null);
+  const [openingKey, setOpeningKey] = useState<string | null>(null);
   const [cat, setCat] = useState<FeedCategory>('tout');
   // Éléments ajoutés depuis ce tirage : la carte passe en ✓ (persiste au retour de la fiche).
   const [followed, setFollowed] = useState<Record<string, boolean>>({});
 
-  // Ajoute la recommandation à la bibliothèque puis ouvre sa fiche.
+  // Tap sur la carte : ouvre la fiche SANS suivre (consultation), comme dans la
+  // recherche. La fiche locale est résolue (follow: false) puis affichée.
+  const open = async (f: FeedItem, key: string) => {
+    if (openingKey || addingKey || !f.tmdbId) return;
+    setOpeningKey(key);
+    try {
+      const path = f.type === 'movie' ? '/api/movies/add-from-tmdb' : '/api/shows/add-from-tmdb';
+      const res = await api.post<{ mediaId: string }>(path, { tmdbId: f.tmdbId, follow: false });
+      router.push(`/show/${res.mediaId}${f.type === 'movie' ? '?type=movie' : ''}`);
+    } finally {
+      setOpeningKey(null);
+    }
+  };
+
+  // Bouton + : ajoute la recommandation à la bibliothèque puis ouvre sa fiche.
   const add = async (f: FeedItem, key: string) => {
     if (addingKey || !f.tmdbId) return;
     setAddingKey(key);
@@ -363,9 +378,14 @@ function Feed({
         const image = tmdbImage(f.backdropPath, 'w780') ?? tmdbImage(f.posterPath, 'w500');
         return (
           <View key={key} style={styles.hero}>
-            <View style={styles.heroImg}>
+            <Pressable style={styles.heroImg} onPress={() => open(f, key)}>
               {image ? <Image source={{ uri: image }} style={StyleSheet.absoluteFill} resizeMode="cover" /> : null}
               <View style={styles.heroShade} />
+              {openingKey === key ? (
+                <View style={StyleSheet.absoluteFill} pointerEvents="none">
+                  <ActivityIndicator style={{ flex: 1 }} color="#fff" />
+                </View>
+              ) : null}
               {followed[key] || f.inLibrary ? (
                 <View style={styles.plus}>
                   <Feather name="check" size={26} color={COLORS.yellow} />
@@ -386,7 +406,7 @@ function Feed({
                 </View>
                 <Text style={styles.heroMeta}>{f.year ?? ''}</Text>
               </View>
-            </View>
+            </Pressable>
             {f.overview ? (
               <Text style={[styles.heroDesc, { backgroundColor: PASTELS[i % PASTELS.length] }]} numberOfLines={2}>
                 {f.overview}

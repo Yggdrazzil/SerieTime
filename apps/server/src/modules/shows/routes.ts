@@ -73,10 +73,11 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
       const remaining = remainingAiredCount(refs, now);
 
       let group: QueueItemDto['group'];
-      // « Regarder plus tard » (watchlist) : suivi mais volontairement absent
-      // des files À voir / À venir (spec TV Time).
-      if (status.status === 'watchlist') continue;
-      if (status.status === 'abandoned') group = 'abandonne';
+      // « Regarder plus tard » (watchlist) : affiché dans « À voir » avec les
+      // séries, dans le groupe « Pas commencé » (comme une série suivie mais pas
+      // encore démarrée). Reste exclu de « À venir » (voir /upcoming).
+      if (status.status === 'watchlist') group = 'pas_commence';
+      else if (status.status === 'abandoned') group = 'abandonne';
       else if (status.status === 'not_started') group = 'pas_commence';
       else if (status.status === 'watching' || status.status === 'paused') {
         if (remaining === 0) continue; // à jour → pas dans la file
