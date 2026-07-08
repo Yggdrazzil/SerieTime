@@ -9,6 +9,7 @@ import { createWatchEvent, markEpisodeWatched, recalculateShowStatus } from '../
 import {
   syncCreditsFromTmdb,
   syncProvidersFromTmdb,
+  orderProvidersForMedia,
   syncShowEpisodesFromTmdb,
   tmdbVideos,
   tmdbRecommendations,
@@ -291,7 +292,7 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
             nextEpisodeAirDate: media.show.nextEpisodeAirDate?.toISOString() ?? null,
           }
         : null,
-      providers: providers.map((p) => ({
+      providers: orderProvidersForMedia(providers, media).map((p) => ({
         name: p.providerName,
         logoPath: p.providerLogoPath,
         offerType: p.offerType,

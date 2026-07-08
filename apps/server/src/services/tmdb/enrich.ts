@@ -222,6 +222,40 @@ export async function syncProvidersFromTmdb(mediaId: string): Promise<void> {
   }
 }
 
+// Plateformes de simulcast anime disponibles en France (les plus à jour pour
+// les nouveaux épisodes). Pour un anime, on les remonte en tête ; sinon on garde
+// l'ordre TMDb (priorité commerciale, où Netflix passe souvent devant).
+const ANIME_FIRST_PROVIDERS = ['crunchyroll', 'animation digital network', 'adn', 'wakanim'];
+
+export function isAnimeMedia(media: {
+  genres?: string | null;
+  originalLanguage?: string | null;
+  originCountry?: string | null;
+}): boolean {
+  return (
+    (media.genres ?? '').toLowerCase().includes('animation') &&
+    (media.originalLanguage === 'ja' || (media.originCountry ?? '').includes('JP'))
+  );
+}
+
+// Ordre d'affichage des plateformes (déjà limitées à la France en amont) :
+// abonnement d'abord, puis gratuit/pub, puis location/achat. Pour un anime, les
+// plateformes de simulcast FR (Crunchyroll, ADN) passent devant Netflix & co.
+export function orderProvidersForMedia<T extends { providerName: string; offerType: string }>(
+  providers: T[],
+  media: { genres?: string | null; originalLanguage?: string | null; originCountry?: string | null },
+): T[] {
+  const anime = isAnimeMedia(media);
+  const rank = (p: T): number => {
+    if (anime) {
+      const idx = ANIME_FIRST_PROVIDERS.findIndex((n) => p.providerName.toLowerCase().includes(n));
+      if (idx !== -1) return idx - 100;
+    }
+    return p.offerType === 'flatrate' ? 0 : p.offerType === 'free' || p.offerType === 'ads' ? 1 : 2;
+  };
+  return [...providers].sort((a, b) => rank(a) - rank(b));
+}
+
 export async function syncCreditsFromTmdb(mediaId: string): Promise<void> {
   const media = await prisma.media.findUnique({ where: { id: mediaId } });
   if (!media?.tmdbId) return;

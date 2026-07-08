@@ -8,6 +8,7 @@ import {
   ensureMediaFromTmdb,
   syncCreditsFromTmdb,
   syncProvidersFromTmdb,
+  orderProvidersForMedia,
   tmdbVideos,
 } from '../../services/tmdb/index.js';
 
@@ -88,7 +89,7 @@ export async function movieRoutes(app: FastifyInstance): Promise<void> {
     }
     return {
       media: serializeMedia(media, media.statuses[0] ?? null),
-      providers: providers.map((p) => ({
+      providers: orderProvidersForMedia(providers, media).map((p) => ({
         name: p.providerName,
         logoPath: p.providerLogoPath,
         offerType: p.offerType,
