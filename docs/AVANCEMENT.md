@@ -48,6 +48,15 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
 
 ## Prochaines étapes (par priorité)
 
+0. **Retours Benjamin (08/07 aprem)** :
+   - **Barre de progression** sur les séries/animés (façon TV Time : mince barre
+     épisodes vus / total sous les cartes « À voir » et sur le profil). Données
+     watchedCount/totalCount à exposer côté serveur.
+   - **Explorer façon TikTok/Tinder** : suggestions en plein écran, image du média,
+     description en surimpression au tap, scroll vertical pour changer de suggestion,
+     swipe droite = « À voir » (watchlist), swipe gauche = « Pas intéressé »
+     (`/api/disliked`, `isHidden` — déjà en place). Gros chantier UI (gestes en web
+     app), backend prêt.
 1. Option « Ne plus suivre » / gestion fine depuis les listes du profil (l'API existe : `DELETE /api/shows/:id/tracking`).
 4. Notifications push (quand on passera au dev build Expo).
 5. SSO Google/Facebook (ids OAuth à créer, dev build requis).
