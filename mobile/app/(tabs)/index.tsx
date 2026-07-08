@@ -1,13 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { View, Text, ScrollView, StyleSheet, Pressable, Image, ActivityIndicator } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, tmdbImage } from '@/lib/api';
-import type { QueueItemDto, UpcomingItemDto } from '@/lib/types';
+import type { EpisodeDto, MediaDto, QueueItemDto, UpcomingItemDto } from '@/lib/types';
 import { queueGroupLabel, episodeCode, airTimeLabel } from '@/lib/format';
-import { COLORS, RADIUS, SHADOW, FONTS } from '@/lib/theme';
+import { COLORS, SHADOW, FONTS } from '@/lib/theme';
 import { PillHeader, TopTabs, EmptyState, Loading, LoadError, ShowPill, Badge, CheckCircle } from '@/components/ui';
 import { EpisodeQueueCard } from '@/components/EpisodeQueueCard';
 
@@ -24,11 +24,29 @@ export default function ShowsScreen() {
   );
 }
 
+type HistoryItem = { media: MediaDto; episode: EpisodeDto; watchedAt: string | null };
+
 function QueueView() {
   const qc = useQueryClient();
+  // Historique masqué au-dessus de la liste : on positionne le scroll initial
+  // juste en dessous, il se découvre en faisant défiler vers le haut (TV Time).
+  const scrollRef = useRef<ScrollView>(null);
+  const didInitialScroll = useRef(false);
   const { data, isLoading, isError, refetch, isRefetching } = useQuery({
     queryKey: ['shows', 'queue'],
     queryFn: () => api.get<{ items: QueueItemDto[] }>('/api/shows/queue'),
+  });
+  const history = useQuery({
+    queryKey: ['shows', 'history'],
+    queryFn: () => api.get<{ items: HistoryItem[] }>('/api/shows/history'),
+  });
+  // Décocher depuis l'historique : l'épisode redevient « à voir ».
+  const unmark = useMutation({
+    mutationFn: (episodeId: string) => api.post(`/api/episodes/${episodeId}/unwatched`),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['shows'] });
+      qc.invalidateQueries({ queryKey: ['profile'] });
+    },
   });
   // Marquer l'épisode « à voir » comme vu : mise à jour optimiste — la carte
   // disparaît (ou avance) immédiatement, l'appel réseau suit (rollback si échec).
@@ -55,7 +73,10 @@ function QueueView() {
 
   if (isLoading) return <Loading />;
   if (isError && !data) return <LoadError onRetry={refetch} busy={isRefetching} />;
-  if (!data || data.items.length === 0)
+  // Du plus ancien au plus récent : le dernier épisode coché juste au-dessus
+  // de la section « À voir » (cf. TV Time).
+  const historyItems = [...(history.data?.items ?? [])].reverse();
+  if ((!data || data.items.length === 0) && historyItems.length === 0)
     return (
       <EmptyState
         title="Rien à voir pour le moment"
@@ -64,10 +85,33 @@ function QueueView() {
     );
 
   const groups = new Map<string, QueueItemDto[]>();
-  data.items.forEach((it) => groups.set(it.group, [...(groups.get(it.group) ?? []), it]));
+  (data?.items ?? []).forEach((it) => groups.set(it.group, [...(groups.get(it.group) ?? []), it]));
 
   return (
-    <ScrollView contentContainerStyle={{ paddingBottom: 16 }}>
+    <ScrollView ref={scrollRef} contentContainerStyle={{ paddingBottom: 16 }}>
+      {historyItems.length > 0 ? (
+        <View
+          onLayout={(e) => {
+            // Une fois l'historique mesuré, on cale le scroll juste en dessous
+            // pour ouvrir l'écran sur « À voir » (l'historique reste au-dessus).
+            const h = e.nativeEvent.layout.height;
+            if (!didInitialScroll.current && h > 0) {
+              didInitialScroll.current = true;
+              scrollRef.current?.scrollTo({ y: h, animated: false });
+            }
+          }}
+        >
+          <PillHeader label="Historique de visionnage" />
+          {historyItems.map((it) => (
+            <EpisodeQueueCard
+              key={`h-${it.episode.id}`}
+              item={{ group: 'a_voir', media: it.media, nextEpisode: it.episode, remainingCount: 0, badges: [] }}
+              watched
+              onCheck={() => unmark.mutate(it.episode.id)}
+            />
+          ))}
+        </View>
+      ) : null}
       {[...groups.entries()].map(([group, items]) => (
         <View key={group}>
           <PillHeader label={queueGroupLabel(group)} />
@@ -156,17 +200,18 @@ function UpcomingCard({ item }: { item: UpcomingItemDto }) {
   );
 }
 
+// Cotes TV Time, identiques à EpisodeQueueCard (code 20, titre 13, rayon 10).
 const styles = StyleSheet.create({
   upcard: {
     flexDirection: 'row', marginHorizontal: 12, marginBottom: 12, backgroundColor: COLORS.white,
-    borderRadius: RADIUS.card, minHeight: 122, overflow: 'hidden', ...SHADOW.card,
+    borderRadius: 10, minHeight: 104, overflow: 'hidden', ...SHADOW.card,
   },
   thumb: { width: 96, backgroundColor: '#e5e5e5', alignItems: 'center', justifyContent: 'center' },
-  body: { flex: 1, justifyContent: 'center', paddingHorizontal: 14, paddingVertical: 12, gap: 4 },
+  body: { flex: 1, justifyContent: 'center', paddingHorizontal: 14, paddingVertical: 13, gap: 7 },
   topRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 8, alignItems: 'flex-start' },
-  time: { fontSize: 14, fontFamily: FONTS.bold },
-  ch: { fontSize: 12, fontFamily: FONTS.bold, textTransform: 'uppercase' },
-  code: { fontSize: 26, fontFamily: FONTS.extraBold },
-  epTitle: { fontFamily: FONTS.regular, fontSize: 18 },
-  multi: { color: COLORS.blue, fontFamily: FONTS.regular, fontSize: 15, marginTop: 6 },
+  time: { fontSize: 12.5, fontFamily: FONTS.bold },
+  ch: { fontSize: 10.5, fontFamily: FONTS.bold, textTransform: 'uppercase' },
+  code: { fontSize: 20, fontFamily: FONTS.bold },
+  epTitle: { fontFamily: FONTS.regular, fontSize: 13 },
+  multi: { color: COLORS.blue, fontFamily: FONTS.regular, fontSize: 13, marginTop: 4 },
 });

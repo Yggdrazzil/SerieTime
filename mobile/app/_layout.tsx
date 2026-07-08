@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, Text, TextInput } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -18,6 +18,13 @@ import { COLORS } from '@/lib/theme';
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 60_000, retry: 1 } },
 });
+
+// Rendu identique pour tous (règle « copie fidèle de TV Time ») : le réglage
+// système « taille de police » ne doit pas gonfler nos textes — TV Time
+// l'ignore aussi, et c'était une des causes du texte « trop gros » constaté.
+type ScalableText = typeof Text & { defaultProps?: { allowFontScaling?: boolean } };
+(Text as ScalableText).defaultProps = { ...(Text as ScalableText).defaultProps, allowFontScaling: false };
+(TextInput as ScalableText).defaultProps = { ...(TextInput as ScalableText).defaultProps, allowFontScaling: false };
 
 export default function RootLayout() {
   // Police de l'app (voir FONTS dans lib/theme.ts) — chargée avant tout rendu.

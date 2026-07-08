@@ -123,6 +123,29 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
     return { items };
   });
 
+  // Historique de visionnage (façon TV Time) : derniers épisodes cochés,
+  // affiché au-dessus de la file « À voir » quand on fait défiler vers le haut.
+  app.get('/api/shows/history', async (request) => {
+    const rows = await prisma.userEpisodeStatus.findMany({
+      where: { userId: request.userId, status: 'watched', watchedAt: { not: null } },
+      orderBy: { watchedAt: 'desc' },
+      take: 10,
+      include: { episode: { include: { show: { include: { media: true } } } } },
+    });
+    return {
+      items: rows.map((r) => ({
+        media: serializeMedia(r.episode.show.media, null),
+        episode: serializeEpisode(
+          r.episode,
+          r.episode.show,
+          r.episode.show.media.localizedTitle ?? r.episode.show.media.title,
+          r,
+        ),
+        watchedAt: r.watchedAt?.toISOString() ?? null,
+      })),
+    };
+  });
+
   // Spec §18 : épisodes à venir groupés par date.
   app.get('/api/shows/upcoming', async (request) => {
     const userId = request.userId;

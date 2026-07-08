@@ -66,6 +66,27 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
 
 > Entrée type : `### AAAA-MM-JJ — Auteur` puis une liste courte de ce qui a changé.
 
+### 2026-07-08 — Claude (6)
+- **Onglet Séries : « Historique de visionnage » façon TV Time** — la liste
+  « À voir » s'ouvre normalement, et **faire défiler vers le haut révèle les
+  derniers épisodes cochés** (cartes fondues, coches vertes ; décocher remet
+  l'épisode dans « À voir »). Nouvelle route `GET /api/shows/history`
+  (10 derniers `watchedAt`), scroll initial calé sous le bloc historique
+  (`onLayout` + `scrollTo`). Test serveur ajouté (**78 tests** : 25 + 53).
+- **Re-clic sur l'onglet actif = actualisation** (barre de navigation du bas,
+  façon TV Time) : `TabBar` invalide toutes les requêtes TanStack Query quand
+  on re-clique sur l'onglet où l'on se trouve déjà.
+- **Cotes « pixel perfect » sur mesures TV Time** (comparaison au px des
+  captures, même téléphone) : onglets hauts 56→**42dp** (police 16→14,
+  soulignement 4→3) ; **barre de navigation basse 70→56dp** (icônes 26→23,
+  libellés 11→10.5) ; pastille de section (police 12→11, hauteur ~19dp) ;
+  pastille de série (police 12→10.5, bord 2→1.5) ; badges (police 12→10) ;
+  cartes À voir/À venir : code 22→**20**, titre 16→**13**, coche 44→**38dp**,
+  rayon 14→10, hauteur ~104dp (vérifié au navigateur : carte 104, onglets 42,
+  nav 55). **Échelle de police système verrouillée** comme TV Time
+  (`allowFontScaling:false` natif, `text-size-adjust:none` web) — le réglage
+  Android « grande police » gonflait nos textes, pas ceux de TV Time.
+
 ### 2026-07-08 — Claude (5)
 - **Police de l'app : Rubik → Mulish** (partout, web + natif). Rubik, ronde et
   large, rendait le texte « trop gros / grossier » vs TV Time même en bold et à

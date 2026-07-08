@@ -106,4 +106,15 @@ describe('Épisodes spéciaux (façon TV Time)', () => {
     // Le spécial coché à la main reste vu.
     expect(seasons.find((s) => s.seasonNumber === 0)!.watchedCount).toBe(1);
   });
+
+  it("l'historique de visionnage renvoie les derniers épisodes cochés", async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/shows/history', headers: auth() });
+    expect(res.statusCode).toBe(200);
+    const items = res.json().items as { media: { title: string }; episode: { watched: boolean }; watchedAt: string }[];
+    // Seul le spécial coché à la main est encore « vu » après le démarquage global.
+    expect(items).toHaveLength(1);
+    expect(items[0]!.media.title).toBe('Tokyo Ghoul');
+    expect(items[0]!.episode.watched).toBe(true);
+    expect(items[0]!.watchedAt).toBeTruthy();
+  });
 });

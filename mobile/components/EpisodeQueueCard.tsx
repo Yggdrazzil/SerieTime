@@ -14,7 +14,17 @@ const BADGE_MAP: Record<string, { label: string; variant: 'black' | 'yellow' }> 
   PLUS_RECENT: { label: 'PLUS RÉCENT', variant: 'black' },
 };
 
-export function EpisodeQueueCard({ item, onCheck }: { item: QueueItemDto; onCheck: () => void }) {
+// `watched` : variante « Historique de visionnage » (façon TV Time) — carte
+// fondue (opacité réduite) avec coche verte ; le clic sur la coche décoche.
+export function EpisodeQueueCard({
+  item,
+  onCheck,
+  watched,
+}: {
+  item: QueueItemDto;
+  onCheck: () => void;
+  watched?: boolean;
+}) {
   const router = useRouter();
   const ep = item.nextEpisode;
   const openShow = () => router.push(`/show/${item.media.id}`);
@@ -22,12 +32,12 @@ export function EpisodeQueueCard({ item, onCheck }: { item: QueueItemDto; onChec
   const thumbUri = tmdbImage(ep?.stillPath, 'w300') ?? tmdbImage(item.media.posterPath, 'w342');
 
   return (
-    <Pressable style={styles.card} onPress={openShow}>
+    <Pressable style={[styles.card, watched && styles.cardWatched]} onPress={openShow}>
       {thumbUri ? (
         <Image source={{ uri: thumbUri }} style={styles.thumb} resizeMode="cover" />
       ) : (
         <View style={[styles.thumb, styles.thumbEmpty]}>
-          <Feather name="image" size={28} color="#9a9a9a" />
+          <Feather name="image" size={26} color="#9a9a9a" />
         </View>
       )}
       <View style={styles.body}>
@@ -47,7 +57,7 @@ export function EpisodeQueueCard({ item, onCheck }: { item: QueueItemDto; onChec
         ) : (
           <Text style={styles.epTitle}>Aucun épisode à voir</Text>
         )}
-        {item.badges.length > 0 ? (
+        {!watched && item.badges.length > 0 ? (
           <View style={styles.badges}>
             {item.badges.map((b) => {
               const badge = BADGE_MAP[b];
@@ -58,7 +68,13 @@ export function EpisodeQueueCard({ item, onCheck }: { item: QueueItemDto; onChec
       </View>
       {ep ? (
         <View style={styles.checkWrap}>
-          <CheckCircle onPress={onCheck} size={44} />
+          <CheckCircle
+            onPress={onCheck}
+            size={38}
+            checked={watched}
+            checkedBg={COLORS.green}
+            checkedFg="#fff"
+          />
         </View>
       ) : null}
     </Pressable>
@@ -66,19 +82,21 @@ export function EpisodeQueueCard({ item, onCheck }: { item: QueueItemDto; onChec
 }
 
 const styles = StyleSheet.create({
-  // Dimensions calquées sur TV Time (carte compacte : ~5 visibles à l'écran).
+  // Cotes calquées sur TV Time (captures 393dp) : vignette 96, coche 38,
+  // code 20, titre 13, carte ~130dp avec badge, rayon 10, ~5 cartes visibles.
   card: {
     flexDirection: 'row', marginHorizontal: 12, marginBottom: 12, backgroundColor: COLORS.white,
-    borderRadius: 14, minHeight: 112, overflow: 'hidden', ...SHADOW.card,
+    borderRadius: 10, minHeight: 104, overflow: 'hidden', ...SHADOW.card,
   },
+  cardWatched: { opacity: 0.45 },
   thumb: { width: 96, backgroundColor: '#e5e5e5' },
   thumbEmpty: { alignItems: 'center', justifyContent: 'center' },
-  body: { flex: 1, justifyContent: 'center', paddingHorizontal: 14, paddingVertical: 12, gap: 5 },
+  body: { flex: 1, justifyContent: 'center', paddingHorizontal: 14, paddingVertical: 13, gap: 7 },
   // Le code (S03 | E02) reste sur UNE ligne ; « +N » (restants) ne le pousse jamais.
   codeRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
-  code: { fontSize: 22, fontFamily: FONTS.bold, flexShrink: 1 },
-  plus: { fontSize: 14, fontFamily: FONTS.bold, color: COLORS.textMuted, flexShrink: 0 },
-  epTitle: { fontFamily: FONTS.regular, fontSize: 16 },
-  badges: { flexDirection: 'row', gap: 6, marginTop: 2 },
+  code: { fontSize: 20, fontFamily: FONTS.bold, flexShrink: 1 },
+  plus: { fontSize: 13, fontFamily: FONTS.bold, color: COLORS.textMuted, flexShrink: 0 },
+  epTitle: { fontFamily: FONTS.regular, fontSize: 13 },
+  badges: { flexDirection: 'row', gap: 6 },
   checkWrap: { justifyContent: 'center', paddingRight: 14 },
 });
