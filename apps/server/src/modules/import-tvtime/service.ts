@@ -412,6 +412,21 @@ async function ensureMediaForMapping(raw: MappingRaw, matchedMediaId: string | n
 
   if (normalized.mediaType === 'unknown') return null;
 
+  // Garde anti-doublon : réutilise un média existant portant le même id externe
+  // (tvdb/tmdb) avant d'en créer un. Sans ça, un show déjà présent (créé par le
+  // flux TMDb/l'explorateur, ou lors d'un ré-import) était dupliqué. On préfère
+  // le média le mieux renseigné (tmdbId + affiche non nuls trient en premier).
+  const externalOr: Prisma.MediaWhereInput[] = [];
+  if (normalized.tvdbId) externalOr.push({ tvdbId: normalized.tvdbId });
+  if (normalized.tmdbId) externalOr.push({ tmdbId: normalized.tmdbId });
+  if (externalOr.length > 0) {
+    const existing = await prisma.media.findFirst({
+      where: { type: normalized.mediaType, OR: externalOr },
+      orderBy: [{ tmdbId: 'desc' }, { posterPath: 'desc' }],
+    });
+    if (existing) return existing.id;
+  }
+
   // Création locale depuis les données importées (fonctionne hors ligne / sans clé TMDb).
   const media = await prisma.media.create({
     data: {
