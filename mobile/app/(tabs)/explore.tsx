@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, ScrollView, StyleSheet, Pressable, Image, ActivityIndicator, Keyboard, RefreshControl } from 'react-native';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { View, Text, TextInput, ScrollView, StyleSheet, Pressable, Image, ActivityIndicator, Keyboard, RefreshControl, Animated, PanResponder, Dimensions } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -283,6 +283,41 @@ function UserResults({ query }: { query: string }) {
   );
 }
 
+const { width: WIN_W } = Dimensions.get('window');
+const SWIPE_X = Math.min(140, WIN_W * 0.28); // seuil swipe horizontal
+const SWIPE_Y = 90; // seuil swipe vertical
+
+// Infos détaillées récupérées à l'ouverture du panneau (genres, casting, etc.).
+type DetailInfo = {
+  media?: { genres?: string | null; year?: number | null; overview?: string | null };
+  show?: { network?: string | null; platform?: string | null } | null;
+  cast?: { name: string }[];
+  providers?: { name: string }[];
+  creators?: string[];
+};
+
+type FeedMode = 'browse' | 'discover';
+
+// Rangée de bascule PARCOURIR (liste classique) / DÉCOUVRIR (plein écran TikTok).
+function ModeBar({ mode, setMode, dark }: { mode: FeedMode; setMode: (m: FeedMode) => void; dark?: boolean }) {
+  return (
+    <View style={styles.modeBar}>
+      {([['browse', 'PARCOURIR', 'list'], ['discover', 'DÉCOUVRIR', 'zap']] as const).map(([m, label, icon]) => {
+        const on = mode === m;
+        return (
+          <Pressable key={m} style={[styles.modeChip, on && styles.modeChipOn, dark && !on && styles.modeChipDark]} onPress={() => setMode(m)}>
+            <Feather name={icon} size={14} color={on ? COLORS.black : dark ? '#fff' : COLORS.textMuted} />
+            <Text style={[styles.modeChipText, { color: on ? COLORS.black : dark ? '#fff' : COLORS.textMuted }]}>{label}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+// Explorer : PARCOURIR (liste classique) ou DÉCOUVRIR (plein écran façon
+// TikTok/Tinder — swipe ↑ suivante, → À voir, ← Pas intéressé, tap = panneau
+// détails avec actions dont « Déjà vu »). Chaque geste a son équivalent bouton.
 function Feed({
   items,
   loading,
@@ -296,126 +331,409 @@ function Feed({
 }) {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const [addingKey, setAddingKey] = useState<string | null>(null);
-  const [openingKey, setOpeningKey] = useState<string | null>(null);
+  const [mode, setMode] = useState<FeedMode>('browse');
   const [cat, setCat] = useState<FeedCategory>('tout');
-  // Éléments ajoutés depuis ce tirage : la carte passe en ✓ (persiste au retour de la fiche).
+  const [idx, setIdx] = useState(0);
+  const [detail, setDetail] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [openingKey, setOpeningKey] = useState<string | null>(null);
+  const [addingKey, setAddingKey] = useState<string | null>(null);
   const [followed, setFollowed] = useState<Record<string, boolean>>({});
+  const [info, setInfo] = useState<DetailInfo | null>(null);
+  const [infoLoading, setInfoLoading] = useState(false);
+  const pos = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
 
-  // Tap sur la carte : ouvre la fiche SANS suivre (consultation), comme dans la
-  // recherche. La fiche locale est résolue (follow: false) puis affichée.
-  const open = async (f: FeedItem, key: string) => {
+  const catOf = (f: FeedItem) => f.category ?? (f.type === 'show' ? 'serie' : 'film');
+  const deck = useMemo(
+    () => (cat === 'tout' ? items ?? [] : (items ?? []).filter((f) => catOf(f) === cat)),
+    [items, cat],
+  );
+  // Nouveau tirage ou changement de catégorie : on repart de la 1re carte.
+  useEffect(() => {
+    setIdx(0);
+    setDetail(false);
+    pos.setValue({ x: 0, y: 0 });
+  }, [cat, items, pos]);
+
+  const current = deck[idx];
+  const upcoming = deck[idx + 1];
+
+  // À l'ouverture du panneau détails : récupère les infos complètes de la carte
+  // courante (genres, casting, chaîne, où regarder). Chargement paresseux.
+  useEffect(() => {
+    if (!detail || !current?.tmdbId) return;
+    let cancelled = false;
+    setInfo(null);
+    setInfoLoading(true);
+    (async () => {
+      try {
+        const path = current.type === 'movie' ? '/api/movies/add-from-tmdb' : '/api/shows/add-from-tmdb';
+        const { mediaId } = await api.post<{ mediaId: string }>(path, { tmdbId: current.tmdbId, follow: false });
+        const d = await api.get<DetailInfo>(current.type === 'movie' ? `/api/movies/${mediaId}` : `/api/shows/${mediaId}`);
+        if (!cancelled) setInfo(d);
+      } catch {
+        if (!cancelled) setInfo(null);
+      } finally {
+        if (!cancelled) setInfoLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [detail, current?.tmdbId, current?.type]);
+
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ['shows'] });
+    queryClient.invalidateQueries({ queryKey: ['movies'] });
+    queryClient.invalidateQueries({ queryKey: ['profile'] });
+  };
+  const resolve = async (f: FeedItem) => {
+    const path = f.type === 'movie' ? '/api/movies/add-from-tmdb' : '/api/shows/add-from-tmdb';
+    const res = await api.post<{ mediaId: string }>(path, { tmdbId: f.tmdbId, follow: false });
+    return res.mediaId;
+  };
+  const openFiche = async (f: FeedItem) => {
+    if (busy || !f.tmdbId) return;
+    setBusy(true);
+    try {
+      const id = await resolve(f);
+      router.push(`/show/${id}${f.type === 'movie' ? '?type=movie' : ''}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const doAVoir = async (f: FeedItem) => {
+    if (!f.tmdbId) return;
+    try {
+      const id = await resolve(f);
+      await api.post(f.type === 'movie' ? `/api/movies/${id}/watchlist` : `/api/shows/${id}/watchlater`);
+      invalidate();
+    } catch {
+      /* best-effort */
+    }
+  };
+  const doPasInteresse = async (f: FeedItem) => {
+    if (!f.tmdbId) return;
+    try {
+      const id = await resolve(f);
+      await api.post(`/api/disliked/${id}`, { hidden: true });
+    } catch {
+      /* best-effort */
+    }
+  };
+  const doDejaVu = async (f: FeedItem) => {
+    if (!f.tmdbId) return;
+    try {
+      const id = await resolve(f);
+      await api.post(f.type === 'movie' ? `/api/movies/${id}/watched` : `/api/shows/${id}/mark-all-watched`, {});
+      invalidate();
+    } catch {
+      /* best-effort */
+    }
+  };
+
+  // --- Mode PARCOURIR : liste classique (tap = fiche, + = ajouter) ---
+  const browseOpen = async (f: FeedItem, key: string) => {
     if (openingKey || addingKey || !f.tmdbId) return;
     setOpeningKey(key);
     try {
-      const path = f.type === 'movie' ? '/api/movies/add-from-tmdb' : '/api/shows/add-from-tmdb';
-      const res = await api.post<{ mediaId: string }>(path, { tmdbId: f.tmdbId, follow: false });
-      router.push(`/show/${res.mediaId}${f.type === 'movie' ? '?type=movie' : ''}`);
+      const id = await resolve(f);
+      router.push(`/show/${id}${f.type === 'movie' ? '?type=movie' : ''}`);
     } finally {
       setOpeningKey(null);
     }
   };
-
-  // Bouton + : ajoute la recommandation à la bibliothèque puis ouvre sa fiche.
-  const add = async (f: FeedItem, key: string) => {
+  const browseAdd = async (f: FeedItem, key: string) => {
     if (addingKey || !f.tmdbId) return;
     setAddingKey(key);
     try {
       const path = f.type === 'movie' ? '/api/movies/add-from-tmdb' : '/api/shows/add-from-tmdb';
       const res = await api.post<{ mediaId: string }>(path, { tmdbId: f.tmdbId });
       setFollowed((prev) => ({ ...prev, [key]: true }));
-      queryClient.invalidateQueries({ queryKey: ['shows'] });
-      queryClient.invalidateQueries({ queryKey: ['movies'] });
+      invalidate();
       router.push(`/show/${res.mediaId}${f.type === 'movie' ? '?type=movie' : ''}`);
     } finally {
       setAddingKey(null);
     }
   };
 
+  const advance = () => {
+    setDetail(false);
+    pos.setValue({ x: 0, y: 0 });
+    setIdx((i) => i + 1);
+  };
+  const springBack = () => Animated.spring(pos, { toValue: { x: 0, y: 0 }, useNativeDriver: false, friction: 6 }).start();
+  const fling = (toX: number, action: (f: FeedItem) => void) => {
+    const f = current;
+    if (!f) return;
+    Animated.timing(pos, { toValue: { x: toX, y: 0 }, duration: 220, useNativeDriver: false }).start(() => {
+      action(f);
+      advance();
+    });
+  };
+  // Glisser vers le haut = suggestion suivante (sans action).
+  const swipeUp = () =>
+    Animated.timing(pos, { toValue: { x: 0, y: -900 }, duration: 200, useNativeDriver: false }).start(() => advance());
+  // Glisser vers le bas = « Déjà vu » (marque comme vu) puis suivante.
+  const swipeDown = () => {
+    const f = current;
+    if (!f) return springBack();
+    Animated.timing(pos, { toValue: { x: 0, y: 900 }, duration: 220, useNativeDriver: false }).start(() => {
+      doDejaVu(f);
+      advance();
+    });
+  };
+
+  const pan = PanResponder.create({
+    // Capte aussi le simple toucher (sans mouvement) : sinon `onPanResponderRelease`
+    // ne se déclenche jamais et le tap « détails » ne s'ouvre pas.
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 6 || Math.abs(g.dy) > 6,
+    onPanResponderMove: Animated.event([null, { dx: pos.x, dy: pos.y }], { useNativeDriver: false }),
+    onPanResponderRelease: (_, g) => {
+      if (Math.abs(g.dx) < 6 && Math.abs(g.dy) < 6) {
+        setDetail(true); // tap = ouvre le panneau détails (façon TikTok)
+        return springBack();
+      }
+      if (Math.abs(g.dx) > SWIPE_X && Math.abs(g.dx) > Math.abs(g.dy)) {
+        if (g.dx > 0) fling(WIN_W * 1.5, doAVoir);
+        else fling(-WIN_W * 1.5, doPasInteresse);
+      } else if (g.dy < -SWIPE_Y) swipeUp();
+      else if (g.dy > SWIPE_Y) swipeDown();
+      else springBack();
+    },
+  });
+
   if (loading) return <Loading />;
-  // Tirer vers le bas rafraîchit le flux (natif). Sur le web ce geste n'existe
-  // pas : le bouton ↻ fait la même chose.
-  const refreshControl = <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />;
   if (!items || items.length === 0)
     return (
-      <ScrollView contentContainerStyle={{ flexGrow: 1 }} refreshControl={refreshControl}>
+      <ScrollView contentContainerStyle={{ flexGrow: 1 }} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
         <EmptyState
           title="Pas encore de recommandations"
           message="Configurez une clé TMDb sur le serveur et suivez des séries pour alimenter votre flux."
         />
       </ScrollView>
     );
-  const catOf = (f: FeedItem) => f.category ?? (f.type === 'show' ? 'serie' : 'film');
-  const filtered = cat === 'tout' ? items : items.filter((f) => catOf(f) === cat);
-  return (
-    <ScrollView
-      contentContainerStyle={{ paddingBottom: 24 }}
-      refreshControl={refreshControl}
-      // La rangée catégories + ↻ reste visible pendant le défilement.
-      stickyHeaderIndices={[0]}
-    >
-      <View style={styles.feedHead}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }} style={{ flexGrow: 0, flexShrink: 1 }}>
-          {FEED_CATEGORIES.map((c) => (
-            <Pressable key={c.key} style={[styles.catChip, cat === c.key && styles.catChipSel]} onPress={() => setCat(c.key)}>
-              <Text style={[styles.catChipText, cat === c.key && styles.catChipTextSel]}>{c.label}</Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-        <Pressable style={styles.refreshBtn} onPress={onRefresh} disabled={refreshing} hitSlop={6}>
-          {refreshing ? (
-            <ActivityIndicator size="small" color={COLORS.black} />
-          ) : (
-            <Feather name="refresh-cw" size={17} color={COLORS.black} />
-          )}
-        </Pressable>
-      </View>
-      {filtered.length === 0 ? (
-        <EmptyState title="Rien dans cette catégorie" message="Actualise (bouton ↻) pour un nouveau tirage." />
-      ) : null}
-      {filtered.map((f, i) => {
-        const key = `${f.type}-${f.tmdbId}`;
-        const image = tmdbImage(f.backdropPath, 'w780') ?? tmdbImage(f.posterPath, 'w500');
-        return (
-          <View key={key} style={styles.hero}>
-            <Pressable style={styles.heroImg} onPress={() => open(f, key)}>
-              {image ? <Image source={{ uri: image }} style={StyleSheet.absoluteFill} resizeMode="cover" /> : null}
-              <View style={styles.heroShade} />
-              {openingKey === key ? (
-                <View style={StyleSheet.absoluteFill} pointerEvents="none">
-                  <ActivityIndicator style={{ flex: 1 }} color="#fff" />
-                </View>
-              ) : null}
-              {followed[key] || f.inLibrary ? (
-                <View style={styles.plus}>
-                  <Feather name="check" size={26} color={COLORS.yellow} />
-                </View>
-              ) : (
-                <Pressable style={styles.plus} onPress={() => add(f, key)}>
-                  {addingKey === key ? (
-                    <ActivityIndicator color={COLORS.yellow} />
-                  ) : (
-                    <Feather name="plus" size={26} color={COLORS.yellow} />
-                  )}
+
+  // ===== Mode PARCOURIR : liste classique =====
+  if (mode === 'browse') {
+    const filtered = cat === 'tout' ? items : items.filter((f) => catOf(f) === cat);
+    return (
+      <ScrollView
+        style={{ backgroundColor: COLORS.white }}
+        contentContainerStyle={{ paddingBottom: 24 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        stickyHeaderIndices={[0]}
+      >
+        <View style={{ backgroundColor: COLORS.white }}>
+          <ModeBar mode={mode} setMode={setMode} />
+          <View style={styles.feedHead}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }} style={{ flexGrow: 0, flexShrink: 1 }}>
+              {FEED_CATEGORIES.map((c) => (
+                <Pressable key={c.key} style={[styles.catChip, cat === c.key && styles.catChipSel]} onPress={() => setCat(c.key)}>
+                  <Text style={[styles.catChipText, cat === c.key && styles.catChipTextSel]}>{c.label}</Text>
                 </Pressable>
-              )}
-              <View style={styles.heroCap}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Feather name={f.type === 'show' ? 'tv' : 'film'} size={22} color="#fff" />
-                  <Text style={styles.heroTitle}>{f.title}</Text>
-                </View>
-                <Text style={styles.heroMeta}>{f.year ?? ''}</Text>
-              </View>
+              ))}
+            </ScrollView>
+            <Pressable style={styles.refreshBtn} onPress={onRefresh} disabled={refreshing} hitSlop={6}>
+              {refreshing ? <ActivityIndicator size="small" color={COLORS.black} /> : <Feather name="refresh-cw" size={17} color={COLORS.black} />}
             </Pressable>
-            {f.overview ? (
-              <Text style={[styles.heroDesc, { backgroundColor: PASTELS[i % PASTELS.length] }]} numberOfLines={2}>
-                {f.overview}
-              </Text>
-            ) : null}
           </View>
-        );
-      })}
-    </ScrollView>
+        </View>
+        {filtered.length === 0 ? <EmptyState title="Rien dans cette catégorie" message="Actualise pour un nouveau tirage." /> : null}
+        {filtered.map((f, i) => {
+          const key = `${f.type}-${f.tmdbId}`;
+          const image = tmdbImage(f.backdropPath, 'w780') ?? tmdbImage(f.posterPath, 'w500');
+          return (
+            <View key={key} style={styles.hero}>
+              <Pressable style={styles.heroImg} onPress={() => browseOpen(f, key)}>
+                {image ? <Image source={{ uri: image }} style={StyleSheet.absoluteFill} resizeMode="cover" /> : null}
+                <View style={styles.heroShade} />
+                {openingKey === key ? (
+                  <View style={StyleSheet.absoluteFill} pointerEvents="none"><ActivityIndicator style={{ flex: 1 }} color="#fff" /></View>
+                ) : null}
+                {followed[key] || f.inLibrary ? (
+                  <View style={styles.plus}><Feather name="check" size={26} color={COLORS.yellow} /></View>
+                ) : (
+                  <Pressable style={styles.plus} onPress={() => browseAdd(f, key)}>
+                    {addingKey === key ? <ActivityIndicator color={COLORS.yellow} /> : <Feather name="plus" size={26} color={COLORS.yellow} />}
+                  </Pressable>
+                )}
+                <View style={styles.heroCap}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Feather name={f.type === 'show' ? 'tv' : 'film'} size={22} color="#fff" />
+                    <Text style={styles.heroTitle} numberOfLines={1}>{f.title}</Text>
+                  </View>
+                  <Text style={styles.heroMeta}>{f.year ?? ''}</Text>
+                </View>
+              </Pressable>
+              {f.overview ? (
+                <Text style={[styles.heroDesc, { backgroundColor: PASTELS[i % PASTELS.length] }]} numberOfLines={2}>{f.overview}</Text>
+              ) : null}
+            </View>
+          );
+        })}
+      </ScrollView>
+    );
+  }
+
+  const rotate = pos.x.interpolate({ inputRange: [-WIN_W, 0, WIN_W], outputRange: ['-9deg', '0deg', '9deg'] });
+  const likeOp = pos.x.interpolate({ inputRange: [0, SWIPE_X], outputRange: [0, 1], extrapolate: 'clamp' });
+  const nopeOp = pos.x.interpolate({ inputRange: [-SWIPE_X, 0], outputRange: [1, 0], extrapolate: 'clamp' });
+  const dejaOp = pos.y.interpolate({ inputRange: [0, SWIPE_Y], outputRange: [0, 1], extrapolate: 'clamp' });
+  const cardImg = (f: FeedItem) => tmdbImage(f.backdropPath, 'w780') ?? tmdbImage(f.posterPath, 'w500');
+
+  return (
+    <View style={{ flex: 1, backgroundColor: '#0d0d12' }}>
+      <View style={styles.deckTop}>
+        <ModeBar mode={mode} setMode={setMode} dark />
+        <View style={styles.deckHead}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }} style={{ flexGrow: 0, flexShrink: 1 }}>
+            {FEED_CATEGORIES.map((c) => (
+              <Pressable key={c.key} style={[styles.catChip, styles.catChipDark, cat === c.key && styles.catChipSel]} onPress={() => setCat(c.key)}>
+                <Text style={[styles.catChipText, cat === c.key ? styles.catChipTextSel : { color: '#fff' }]}>{c.label}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+          <Pressable style={styles.deckRefresh} onPress={() => { setIdx(0); onRefresh(); }} disabled={refreshing} hitSlop={6}>
+            {refreshing ? <ActivityIndicator size="small" color="#fff" /> : <Feather name="refresh-cw" size={17} color="#fff" />}
+          </Pressable>
+        </View>
+      </View>
+
+      <View style={{ flex: 1 }}>
+        {current ? (
+          <>
+            {/* carte suivante en dessous (effet de pile) */}
+            {upcoming ? (
+              <View style={[styles.deckCard, { transform: [{ scale: 0.96 }] }]} pointerEvents="none">
+                {cardImg(upcoming) ? <Image source={{ uri: cardImg(upcoming)! }} style={StyleSheet.absoluteFill} resizeMode="cover" /> : null}
+                <View style={styles.deckShade} />
+              </View>
+            ) : null}
+
+            {/* carte courante, déplaçable */}
+            <Animated.View
+              style={[styles.deckCard, { transform: [{ translateX: pos.x }, { translateY: pos.y }, { rotate }] }]}
+              {...pan.panHandlers}
+            >
+              {cardImg(current) ? (
+                <Image source={{ uri: cardImg(current)! }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+              ) : (
+                <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
+                  <Feather name="image" size={48} color="#555" />
+                </View>
+              )}
+              <View style={styles.deckShade} />
+
+              <Animated.View style={[styles.tagLike, { opacity: likeOp }]}>
+                <Text style={styles.tagLikeText}>À VOIR</Text>
+              </Animated.View>
+              <Animated.View style={[styles.tagNope, { opacity: nopeOp }]}>
+                <Text style={styles.tagNopeText}>PAS INTÉRESSÉ</Text>
+              </Animated.View>
+              <Animated.View style={[styles.tagDeja, { opacity: dejaOp }]}>
+                <Text style={styles.tagDejaText}>DÉJÀ VU</Text>
+              </Animated.View>
+
+              <View style={styles.deckInfo}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Feather name={current.type === 'show' ? 'tv' : 'film'} size={20} color="#fff" />
+                  <Text style={styles.deckTitle} numberOfLines={2}>{current.title}</Text>
+                </View>
+                <Text style={styles.deckMeta}>
+                  {[current.year, current.category === 'anime' ? 'Animé' : current.type === 'show' ? 'Série' : 'Film'].filter(Boolean).join(' · ')}
+                </Text>
+                {current.overview ? (
+                  <Text style={styles.deckOverview} numberOfLines={2}>{current.overview}</Text>
+                ) : null}
+                <Text style={styles.deckHint}>Touchez pour plus · ↑ suivante · ↓ déjà vu · → à voir · ← pas intéressé</Text>
+              </View>
+            </Animated.View>
+          </>
+        ) : (
+          <View style={styles.deckEnd}>
+            <Feather name="check-circle" size={44} color="#fff" />
+            <Text style={styles.deckEndTitle}>Fin des suggestions</Text>
+            <Text style={styles.deckEndMsg}>Actualise pour un nouveau tirage.</Text>
+            <Pressable style={styles.deckEndBtn} onPress={() => { setIdx(0); onRefresh(); }}>
+              <Feather name="refresh-cw" size={16} color={COLORS.black} />
+              <Text style={styles.deckEndBtnText}>NOUVELLES SUGGESTIONS</Text>
+            </Pressable>
+          </View>
+        )}
+      </View>
+
+      {/* Boutons (équivalents des swipes) */}
+      {current ? (
+        <View style={styles.deckActions}>
+          <Pressable style={[styles.actBtn, styles.actNope]} onPress={() => fling(-WIN_W * 1.5, doPasInteresse)} hitSlop={8}>
+            <Feather name="x" size={30} color={COLORS.red} />
+          </Pressable>
+          <Pressable style={[styles.actBtn, styles.actInfo]} onPress={() => openFiche(current)} hitSlop={8}>
+            {busy ? <ActivityIndicator color="#fff" /> : <Feather name="info" size={24} color="#fff" />}
+          </Pressable>
+          <Pressable style={[styles.actBtn, styles.actLike]} onPress={() => fling(WIN_W * 1.5, doAVoir)} hitSlop={8}>
+            <Feather name="heart" size={28} color={COLORS.black} />
+          </Pressable>
+        </View>
+      ) : null}
+
+      {/* Panneau détails (tap) : posé sur l'image comme TikTok (image visible au-dessus) */}
+      {detail && current ? (
+        <View style={styles.detailSheet}>
+          <Pressable style={styles.detailGrip} onPress={() => setDetail(false)} hitSlop={10}>
+            <Feather name="chevron-down" size={26} color="#fff" />
+          </Pressable>
+          <ScrollView contentContainerStyle={{ paddingHorizontal: 22, paddingTop: 4, paddingBottom: 18 }} showsVerticalScrollIndicator={false}>
+            <Text style={styles.detailTitle}>{current.title}</Text>
+            <Text style={styles.detailMeta}>
+              {[current.year, current.category === 'anime' ? 'Animé' : current.type === 'show' ? 'Série' : 'Film'].filter(Boolean).join(' · ')}
+            </Text>
+            <Text style={styles.detailDesc}>{current.overview || 'Pas de description disponible.'}</Text>
+
+            {infoLoading ? (
+              <ActivityIndicator style={{ marginTop: 16, alignSelf: 'flex-start' }} color="#fff" />
+            ) : info ? (
+              <View style={{ marginTop: 14, gap: 8 }}>
+                <InfoLine label="Genres" value={info.media?.genres ?? undefined} />
+                <InfoLine label={current.type === 'movie' ? 'Réalisation' : 'Création'} value={info.creators?.join(', ')} />
+                <InfoLine label="Diffusion" value={info.show?.network ?? info.show?.platform ?? undefined} />
+                <InfoLine label="Casting" value={info.cast?.slice(0, 6).map((c) => c.name).join(', ')} />
+                <InfoLine label="Où regarder" value={info.providers?.map((p) => p.name).join(', ')} />
+              </View>
+            ) : null}
+          </ScrollView>
+          <View style={styles.detailActions}>
+            <DetailAction icon="heart" label="À voir" tint={COLORS.yellow} onPress={() => { doAVoir(current); advance(); }} />
+            <DetailAction icon="eye" label="Déjà vu" tint="#4caf50" onPress={() => { doDejaVu(current); advance(); }} />
+            <DetailAction icon="x" label="Pas intéressé" tint={COLORS.red} onPress={() => { doPasInteresse(current); advance(); }} />
+            <DetailAction icon="external-link" label="Fiche" tint="#fff" onPress={() => openFiche(current)} busy={busy} />
+          </View>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function InfoLine({ label, value }: { label: string; value?: string }) {
+  if (!value) return null;
+  return (
+    <Text style={styles.infoLine}>
+      <Text style={styles.infoLabel}>{label} : </Text>
+      {value}
+    </Text>
+  );
+}
+
+function DetailAction({ icon, label, tint, onPress, busy }: { icon: keyof typeof Feather.glyphMap; label: string; tint: string; onPress: () => void; busy?: boolean }) {
+  return (
+    <Pressable style={styles.detailAct} onPress={onPress} hitSlop={6}>
+      <View style={[styles.detailActIcon, { borderColor: tint }]}>
+        {busy ? <ActivityIndicator size="small" color={tint} /> : <Feather name={icon} size={22} color={tint} />}
+      </View>
+      <Text style={styles.detailActLabel}>{label}</Text>
+    </Pressable>
   );
 }
 
@@ -460,4 +778,51 @@ const styles = StyleSheet.create({
   heroTitle: { color: '#fff', fontSize: 22, fontFamily: FONTS.extraBold, flexShrink: 1 },
   heroMeta: { color: 'rgba(255,255,255,0.9)', fontFamily: FONTS.regular, fontSize: 14, marginTop: 2 },
   heroDesc: { padding: 16, fontFamily: FONTS.regular, fontSize: 16, lineHeight: 22 },
+  // --- Bascule de mode Parcourir / Découvrir ---
+  modeBar: { flexDirection: 'row', gap: 8, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 4 },
+  modeChip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 7, backgroundColor: COLORS.chipGrey },
+  modeChipOn: { backgroundColor: COLORS.yellow },
+  modeChipDark: { backgroundColor: 'rgba(255,255,255,0.14)' },
+  modeChipText: { fontSize: 13, fontFamily: FONTS.extraBold, letterSpacing: 0.4 },
+  // --- Explorer façon TikTok/Tinder ---
+  deckTop: { backgroundColor: '#0d0d12', zIndex: 10 },
+  catChipDark: { backgroundColor: 'rgba(255,255,255,0.14)' },
+  deckHead: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingBottom: 8, gap: 10 },
+  deckRefresh: { width: 36, height: 36, borderRadius: 18, borderWidth: 2, borderColor: '#fff', alignItems: 'center', justifyContent: 'center', marginLeft: 'auto', backgroundColor: 'rgba(0,0,0,0.35)' },
+  deckCard: { ...StyleSheet.absoluteFillObject, margin: 10, borderRadius: 18, overflow: 'hidden', backgroundColor: '#1a1a22', justifyContent: 'flex-end' },
+  deckShade: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.28)' },
+  tagLike: { position: 'absolute', top: 60, left: 24, borderWidth: 4, borderColor: COLORS.green, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 6, transform: [{ rotate: '-14deg' }] },
+  tagLikeText: { color: COLORS.green, fontFamily: FONTS.extraBold, fontSize: 28, letterSpacing: 1 },
+  tagNope: { position: 'absolute', top: 60, right: 24, borderWidth: 4, borderColor: COLORS.red, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 6, transform: [{ rotate: '14deg' }] },
+  tagNopeText: { color: COLORS.red, fontFamily: FONTS.extraBold, fontSize: 24, letterSpacing: 1 },
+  tagDeja: { position: 'absolute', top: 120, alignSelf: 'center', borderWidth: 4, borderColor: '#4caf50', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 6 },
+  tagDejaText: { color: '#4caf50', fontFamily: FONTS.extraBold, fontSize: 26, letterSpacing: 1 },
+  deckInfo: { padding: 20, paddingBottom: 26 },
+  deckTitle: { color: '#fff', fontSize: 26, fontFamily: FONTS.extraBold, flexShrink: 1 },
+  deckMeta: { color: 'rgba(255,255,255,0.85)', fontFamily: FONTS.bold, fontSize: 14, marginTop: 4 },
+  deckDesc: { color: 'rgba(255,255,255,0.92)', fontFamily: FONTS.regular, fontSize: 15, lineHeight: 21, marginTop: 12 },
+  deckOverview: { color: 'rgba(255,255,255,0.92)', fontFamily: FONTS.regular, fontSize: 15, lineHeight: 20, marginTop: 10 },
+  deckHint: { color: 'rgba(255,255,255,0.55)', fontFamily: FONTS.regular, fontSize: 12, marginTop: 10 },
+  deckEnd: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 30 },
+  deckEndTitle: { color: '#fff', fontSize: 22, fontFamily: FONTS.extraBold },
+  deckEndMsg: { color: 'rgba(255,255,255,0.7)', fontFamily: FONTS.regular, fontSize: 15, textAlign: 'center' },
+  deckEndBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: COLORS.yellow, borderRadius: 999, paddingHorizontal: 22, paddingVertical: 13, marginTop: 8 },
+  deckEndBtnText: { fontFamily: FONTS.extraBold, fontSize: 13, letterSpacing: 0.5 },
+  deckActions: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 26, paddingVertical: 14 },
+  actBtn: { alignItems: 'center', justifyContent: 'center', borderRadius: 999 },
+  actNope: { width: 62, height: 62, backgroundColor: '#fff', borderWidth: 2, borderColor: COLORS.red },
+  actInfo: { width: 50, height: 50, backgroundColor: '#33333d' },
+  actLike: { width: 62, height: 62, backgroundColor: COLORS.yellow },
+  // --- Panneau détails (tap) : posé sur l'image, façon TikTok ---
+  detailSheet: { position: 'absolute', left: 0, right: 0, top: '30%', bottom: 0, backgroundColor: 'rgba(8,8,12,0.94)', borderTopLeftRadius: 22, borderTopRightRadius: 22, zIndex: 20 },
+  detailGrip: { alignSelf: 'center', paddingTop: 8, paddingBottom: 6 },
+  detailTitle: { color: '#fff', fontSize: 25, fontFamily: FONTS.extraBold },
+  detailMeta: { color: 'rgba(255,255,255,0.8)', fontFamily: FONTS.bold, fontSize: 14, marginTop: 5 },
+  detailDesc: { color: 'rgba(255,255,255,0.92)', fontFamily: FONTS.regular, fontSize: 15, lineHeight: 22, marginTop: 14 },
+  infoLine: { color: 'rgba(255,255,255,0.9)', fontFamily: FONTS.regular, fontSize: 14, lineHeight: 20 },
+  infoLabel: { color: COLORS.yellow, fontFamily: FONTS.bold },
+  detailActions: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'flex-start', paddingHorizontal: 12, paddingVertical: 16, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)' },
+  detailAct: { alignItems: 'center', gap: 6, width: 78 },
+  detailActIcon: { width: 54, height: 54, borderRadius: 27, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  detailActLabel: { color: '#fff', fontFamily: FONTS.bold, fontSize: 12, textAlign: 'center' },
 });
