@@ -59,7 +59,7 @@ export default function EditProfile() {
 
   const pickAvatar = async () => {
     try {
-      // Chargé à la demande : ne peut pas impacter le démarrage de l'app.
+      // Chargés à la demande : ne peuvent pas impacter le démarrage de l'app.
       const ImagePicker = await import('expo-image-picker');
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) {
@@ -70,11 +70,21 @@ export default function EditProfile() {
         mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.6,
+        quality: 1,
+        base64: false,
+      });
+      const asset = res.canceled ? null : res.assets[0];
+      if (!asset?.uri) return;
+      // Une photo brute peut peser plusieurs Mo en base64 (échec silencieux 413
+      // côté serveur) : on la réduit à 512 px avant envoi (~50-150 Ko).
+      const { manipulateAsync, SaveFormat } = await import('expo-image-manipulator');
+      const small = await manipulateAsync(asset.uri, [{ resize: { width: 512 } }], {
+        compress: 0.7,
+        format: SaveFormat.JPEG,
         base64: true,
       });
-      if (res.canceled || !res.assets[0]?.base64) return;
-      setAvatarUrl(`data:image/jpeg;base64,${res.assets[0].base64}`);
+      if (!small.base64) return;
+      setAvatarUrl(`data:image/jpeg;base64,${small.base64}`);
     } catch {
       Alert.alert('Indisponible', 'Le sélecteur de photos n’a pas pu s’ouvrir.');
     }
@@ -93,6 +103,14 @@ export default function EditProfile() {
       });
       await qc.invalidateQueries({ queryKey: ['profile'] });
       router.back();
+    } catch (e) {
+      // Jamais d'échec silencieux : l'utilisateur doit savoir que rien n'est enregistré.
+      Alert.alert(
+        'Échec de la sauvegarde',
+        e instanceof Error && e.message === 'unauthorized'
+          ? 'Session expirée — reconnectez-vous.'
+          : 'Le profil n’a pas pu être enregistré. Vérifiez la connexion au serveur et réessayez.',
+      );
     } finally {
       setSaving(false);
     }

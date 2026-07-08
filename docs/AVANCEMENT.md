@@ -6,7 +6,7 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
-Dernière mise à jour : **2026-07-07** (Claude)
+Dernière mise à jour : **2026-07-08** (Claude)
 
 ---
 
@@ -57,6 +57,18 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
 ## Journal des modifications
 
 > Entrée type : `### AAAA-MM-JJ — Auteur` puis une liste courte de ce qui a changé.
+
+### 2026-07-08 — Claude
+- **Sauvegarde du profil fiabilisée** : la photo de profil est compressée côté
+  app (512 px ≈ 100 Ko via expo-image-manipulator) — les photos brutes en
+  base64 pouvaient dépasser la limite serveur (413) et échouer **en silence** ;
+  un message d'erreur s'affiche désormais en cas d'échec.
+- **Passe design TV Time (profil)** : compteurs sociaux dans l'en-tête
+  (abonnements / abonnés / commentaires, tap → écran social), cœur en pastille
+  rouge avant « Séries/Films préférés », carte Listes en collage d'affiches
+  avec titre en surimpression et points de pagination, suppression des bords
+  gris autour des affiches (bug du composant Poster), coins plus arrondis
+  (cartes 8, affiches 6), vignette de la file À voir élargie.
 
 ### 2026-07-07 — Claude
 - **Édition de profil** (écran `/profile/edit`) : photo de profil (upload via

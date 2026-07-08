@@ -44,7 +44,7 @@ export async function profileRoutes(app: FastifyInstance): Promise<void> {
   // Profil complet pour l'écran /profile.
   app.get('/api/profile', async (request) => {
     const user = await prisma.user.findUniqueOrThrow({ where: { id: request.userId } });
-    const [stats, lists, shows, favoriteShows, movies, favoriteMovies] = await Promise.all([
+    const [stats, lists, shows, favoriteShows, movies, favoriteMovies, followingCount, followersCount, commentsCount] = await Promise.all([
       computeStats(request.userId),
       prisma.mediaList.findMany({
         where: { userId: request.userId },
@@ -73,8 +73,13 @@ export async function profileRoutes(app: FastifyInstance): Promise<void> {
         include: { media: true },
         take: 12,
       }),
+      // Compteurs sociaux de l'en-tête (façon TV Time : abonnements / abonnés / commentaires).
+      prisma.follow.count({ where: { followerId: request.userId } }),
+      prisma.follow.count({ where: { followingId: request.userId } }),
+      prisma.comment.count({ where: { userId: request.userId } }),
     ]);
     return {
+      social: { followingCount, followersCount, commentsCount },
       user: {
         id: user.id,
         displayName: user.displayName,

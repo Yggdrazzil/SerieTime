@@ -57,14 +57,15 @@ export function Poster({ title, uri, onPress, width }: { title: string; uri: str
   return (
     <Pressable style={[styles.poster, width ? { width } : { flex: 1 }]} onPress={onPress}>
       {uri ? (
-        <Image source={{ uri }} style={styles.posterImg} resizeMode="cover" />
+        // L'image couvre TOUT le cadre (pas de padding -> pas de bord gris, comme TV Time).
+        <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
       ) : (
-        <>
+        <View style={styles.posterEmpty}>
           <Feather name="image" size={26} color="#b4b4b4" />
           <Text style={styles.posterTitle} numberOfLines={3}>
             {title}
           </Text>
-        </>
+        </View>
       )}
     </Pressable>
   );
@@ -128,10 +129,9 @@ export const styles = StyleSheet.create({
   badgeText: { fontSize: 12, fontWeight: '800', letterSpacing: 0.4 },
   check: { alignItems: 'center', justifyContent: 'center' },
   poster: {
-    aspectRatio: 2 / 3, backgroundColor: '#e5e5e5', borderRadius: RADIUS.poster,
-    alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6, gap: 6, overflow: 'hidden',
+    aspectRatio: 2 / 3, backgroundColor: '#e5e5e5', borderRadius: RADIUS.poster, overflow: 'hidden',
   },
-  posterImg: { width: '100%', height: '100%' },
+  posterEmpty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6, gap: 6 },
   posterTitle: { fontSize: 12, fontWeight: '700', color: '#777', textAlign: 'center' },
   empty: { alignItems: 'center', paddingVertical: 60, paddingHorizontal: 30 },
   emptyTitle: { fontSize: 20, fontWeight: '800', textAlign: 'center' },

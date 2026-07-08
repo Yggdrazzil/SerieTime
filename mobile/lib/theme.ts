@@ -23,9 +23,10 @@ export const COLORS = {
   provider: '#00A8E1',
 } as const;
 
+// Rayons calqués sur TV Time (cartes et affiches nettement arrondies).
 export const RADIUS = {
-  card: 5,
-  poster: 3,
+  card: 8,
+  poster: 6,
   pill: 999,
 };
 

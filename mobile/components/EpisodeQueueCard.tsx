@@ -68,7 +68,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', marginHorizontal: 12, marginBottom: 12, backgroundColor: COLORS.white,
     borderRadius: RADIUS.card, minHeight: 122, overflow: 'hidden', ...SHADOW.card,
   },
-  thumb: { width: 96, backgroundColor: '#e5e5e5' },
+  thumb: { width: 104, backgroundColor: '#e5e5e5' },
   thumbEmpty: { alignItems: 'center', justifyContent: 'center' },
   body: { flex: 1, justifyContent: 'center', paddingHorizontal: 14, paddingVertical: 12, gap: 4 },
   codeRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },

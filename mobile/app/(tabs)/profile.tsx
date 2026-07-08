@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, ScrollView, StyleSheet, Pressable, Image } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Pressable, Image, Dimensions } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -22,6 +22,7 @@ export type ProfileUser = {
 
 type ProfileResponse = {
   user: ProfileUser;
+  social?: { followingCount: number; followersCount: number; commentsCount: number };
   stats: ProfileStatsDto;
   lists: { id: string; title: string; posterPaths: string[] }[];
   shows: MediaDto[];
@@ -65,9 +66,6 @@ export default function ProfileScreen() {
             </View>
           ) : null}
         </Pressable>
-        <Pressable style={[styles.friends, { top: insets.top + 8 }]} onPress={() => router.push('/social')}>
-          <Feather name="users" size={22} color="#fff" />
-        </Pressable>
         <Pressable style={[styles.dots, { top: insets.top + 8 }]} onPress={() => router.push('/settings')}>
           <Feather name="more-horizontal" size={26} color="#fff" />
         </Pressable>
@@ -88,10 +86,24 @@ export default function ProfileScreen() {
         </View>
       </View>
 
+      {/* Compteurs sociaux (façon TV Time) — un tap ouvre l'écran social. */}
       <View style={styles.counters}>
-        <Counter n={stats.showsCount} label="Séries" />
-        <Counter n={stats.moviesCount} label="Films" border />
-        <Counter n={stats.ratingsCount} label={stats.ratingsCount > 1 ? 'Notes' : 'Note'} border />
+        <Counter
+          n={data.social?.followingCount ?? 0}
+          label={(data.social?.followingCount ?? 0) > 1 ? 'abonnements' : 'abonnement'}
+          onPress={() => router.push('/social')}
+        />
+        <Counter
+          n={data.social?.followersCount ?? 0}
+          label={(data.social?.followersCount ?? 0) > 1 ? 'abonnés' : 'abonné'}
+          border
+          onPress={() => router.push('/social')}
+        />
+        <Counter
+          n={data.social?.commentsCount ?? 0}
+          label={(data.social?.commentsCount ?? 0) > 1 ? 'commentaires' : 'commentaire'}
+          border
+        />
       </View>
 
       <Section title="Statistiques">
@@ -104,9 +116,18 @@ export default function ProfileScreen() {
 
       {data.lists.length > 0 ? (
         <Section title="Listes">
-          <View style={styles.listcard}>
-            <Text style={styles.listTitle}>{data.lists[0].title}</Text>
-          </View>
+          <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false}>
+            {data.lists.map((l) => (
+              <ListCollageCard key={l.id} title={l.title} posterPaths={l.posterPaths} />
+            ))}
+          </ScrollView>
+          {data.lists.length > 1 ? (
+            <View style={styles.dotsRow}>
+              {data.lists.map((l, i) => (
+                <View key={l.id} style={[styles.dot, i === 0 && styles.dotActive]} />
+              ))}
+            </View>
+          ) : null}
         </Section>
       ) : null}
 
@@ -118,11 +139,32 @@ export default function ProfileScreen() {
   );
 }
 
-function Counter({ n, label, border }: { n: number; label: string; border?: boolean }) {
+function Counter({ n, label, border, onPress }: { n: number; label: string; border?: boolean; onPress?: () => void }) {
   return (
-    <View style={[styles.counter, border && styles.counterBorder]}>
+    <Pressable style={[styles.counter, border && styles.counterBorder]} onPress={onPress}>
       <Text style={styles.counterN}>{n}</Text>
       <Text style={styles.counterL}>{label}</Text>
+    </Pressable>
+  );
+}
+
+// Carte « Listes » façon TV Time : collage des affiches + titre en surimpression.
+function ListCollageCard({ title, posterPaths }: { title: string; posterPaths: string[] }) {
+  const { width } = Dimensions.get('window');
+  const cardWidth = width - 48;
+  return (
+    <View style={[styles.listcard, { width: cardWidth, marginHorizontal: 24 }]}>
+      <View style={StyleSheet.absoluteFill}>
+        <View style={{ flex: 1, flexDirection: 'row' }}>
+          {(posterPaths.length ? posterPaths.slice(0, 4) : [null]).map((p, i) => (
+            <View key={i} style={{ flex: 1, backgroundColor: '#2e2e38' }}>
+              {p ? <Image source={{ uri: tmdbImage(p, 'w342') ?? p }} style={{ width: '100%', height: '100%' }} resizeMode="cover" /> : null}
+            </View>
+          ))}
+        </View>
+      </View>
+      <View style={styles.listShade} />
+      <Text style={styles.listTitle}>{title}</Text>
     </View>
   );
 }
@@ -175,9 +217,14 @@ function PosterRow({
   return (
     <View style={{ paddingVertical: 16 }}>
       <View style={styles.sectHead}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          {heart ? (
+            // Pastille rouge + cœur blanc AVANT le titre, comme TV Time.
+            <View style={styles.heartBadge}>
+              <Feather name="heart" size={15} color="#fff" />
+            </View>
+          ) : null}
           <Text style={styles.sectTitle}>{title}</Text>
-          {heart ? <Feather name="heart" size={20} color={COLORS.red} /> : null}
         </View>
         <Feather name="chevron-right" size={24} color={COLORS.black} />
       </View>
@@ -210,7 +257,6 @@ const styles = StyleSheet.create({
   head: { height: 210, backgroundColor: '#20202a', justifyContent: 'flex-end', overflow: 'hidden' },
   coverShade: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.35)' },
   bell: { position: 'absolute', left: 16, width: 46, height: 46, borderRadius: 23, backgroundColor: COLORS.yellow, alignItems: 'center', justifyContent: 'center' },
-  friends: { position: 'absolute', right: 56, width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   badge: { position: 'absolute', top: 2, right: 2, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: COLORS.red, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
   badgeText: { color: '#fff', fontSize: 11, fontWeight: '800' },
   dots: { position: 'absolute', right: 12, width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
@@ -237,6 +283,11 @@ const styles = StyleSheet.create({
   statVals: { flexDirection: 'row', justifyContent: 'space-around', padding: 16 },
   statV: { fontSize: 27, fontWeight: '800' },
   statL: { fontSize: 12, fontWeight: '700', letterSpacing: 0.4 },
-  listcard: { marginHorizontal: 24, height: 155, borderRadius: 5, backgroundColor: '#2e2e38', justifyContent: 'flex-end', padding: 16 },
+  listcard: { height: 155, borderRadius: 8, backgroundColor: '#2e2e38', justifyContent: 'flex-end', padding: 16, overflow: 'hidden' },
+  listShade: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.25)' },
   listTitle: { color: '#fff', fontSize: 22, fontWeight: '800' },
+  dotsRow: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 12 },
+  dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#cfcfcf' },
+  dotActive: { backgroundColor: COLORS.yellow },
+  heartBadge: { width: 28, height: 28, borderRadius: 14, backgroundColor: COLORS.red, alignItems: 'center', justifyContent: 'center' },
 });
