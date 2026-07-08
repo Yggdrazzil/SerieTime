@@ -49,6 +49,7 @@ export default function ProfileScreen() {
   if (!data) return <LoadError onRetry={refetch} busy={isRefetching} />;
   const { user, stats } = data;
   const st = watchTime(stats.showMinutes);
+  const mt = watchTime(stats.movieMinutes);
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: COLORS.white }} contentContainerStyle={{ paddingBottom: 24 }}>
@@ -111,6 +112,7 @@ export default function ProfileScreen() {
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 24, gap: 12 }}>
           <StatCard icon="tv" title="Temps passé devant des séries" values={[[st.months, 'MOIS'], [st.days, 'JOURS'], [st.hours, 'HEURES']]} />
           <StatCard icon="tv" title="Épisodes vus" values={[[stats.episodesWatched, 'ÉPISODES']]} />
+          <StatCard icon="film" title="Temps passé devant des films" values={[[mt.months, 'MOIS'], [mt.days, 'JOURS'], [mt.hours, 'HEURES']]} />
           <StatCard icon="film" title="Films regardés" values={[[stats.moviesWatched, 'FILMS']]} />
         </ScrollView>
       </Section>

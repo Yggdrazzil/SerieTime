@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, Pressable } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Pressable, Modal, TextInput, ActivityIndicator } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
 import { useAppStore } from '@/lib/store';
 import { COLORS, FONTS } from '@/lib/theme';
 import { PageHeader } from '@/components/PageHeader';
@@ -33,6 +33,28 @@ export default function Settings() {
 function AccountTab() {
   const router = useRouter();
   const { user, logout } = useAppStore();
+  const [pwOpen, setPwOpen] = useState(false);
+  const [delOpen, setDelOpen] = useState(false);
+
+  // Exporter : télécharge un JSON de toutes ses données (web) / partage (natif).
+  const exportData = async () => {
+    try {
+      const data = await api.get<Record<string, unknown>>('/api/backup/export');
+      const json = JSON.stringify(data, null, 2);
+      if (typeof document !== 'undefined') {
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'serietime-sauvegarde.json';
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    } catch {
+      /* silencieux : bouton best-effort */
+    }
+  };
+
   return (
     <View>
       <SectionTitle>Identification</SectionTitle>
@@ -41,25 +63,107 @@ function AccountTab() {
         <Field label="Adresse e-mail" value={user?.email || '—'} blue />
         <Field label="Identifiant utilisateur" value={user?.id ?? ''} />
       </View>
-      <Row label="Modifier le mot de passe" />
+      <Row label="Modifier le mot de passe" onPress={() => setPwOpen(true)} />
       <Divider />
       <SectionTitle>Import & sauvegarde</SectionTitle>
       <Row label="Importer mes données TV Time" onPress={() => router.push('/import')} />
-      <Row label="Exporter mes données SerieTime" />
-      <Row label="Sauvegarde locale" />
-      <Divider />
-      <SectionTitle>Services d'abonnement</SectionTitle>
-      <Row label="Modifier vos services d'abonnement" />
+      <Row label="Exporter mes données SerieTime" onPress={exportData} />
       <Divider />
       <View style={{ alignItems: 'center', gap: 24, paddingVertical: 32 }}>
         <Pressable onPress={logout}>
           <Text style={styles.logout}>SE DÉCONNECTER</Text>
         </Pressable>
-        <Pressable>
+        <Pressable onPress={() => setDelOpen(true)}>
           <Text style={[styles.logout, { color: COLORS.red }]}>SUPPRIMER LE COMPTE</Text>
         </Pressable>
       </View>
+
+      {pwOpen ? <PasswordModal onClose={() => setPwOpen(false)} /> : null}
+      {delOpen ? <DeleteAccountModal onClose={() => setDelOpen(false)} onDeleted={logout} /> : null}
     </View>
+  );
+}
+
+function PasswordModal({ onClose }: { onClose: () => void }) {
+  const [current, setCurrent] = useState('');
+  const [next, setNext] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+  const mut = useMutation({
+    mutationFn: () => api.post('/api/auth/password', { currentPassword: current, newPassword: next }),
+    onSuccess: () => {
+      setDone(true);
+      setTimeout(onClose, 1200);
+    },
+    onError: (e: unknown) =>
+      setError(
+        e instanceof ApiError && e.code === 'invalid_credentials'
+          ? 'Mot de passe actuel incorrect.'
+          : e instanceof ApiError && e.code === 'validation_error'
+            ? 'Nouveau mot de passe : 8 caractères minimum.'
+            : 'Impossible de modifier le mot de passe.',
+      ),
+  });
+  const canSubmit = current.length > 0 && next.length >= 8 && !mut.isPending;
+  return (
+    <Sheet title="Modifier le mot de passe" onClose={onClose}>
+      {done ? (
+        <Text style={styles.okMsg}>Mot de passe modifié ✓</Text>
+      ) : (
+        <>
+          <Text style={styles.mLabel}>Mot de passe actuel</Text>
+          <TextInput style={styles.mInput} secureTextEntry value={current} onChangeText={setCurrent} autoCapitalize="none" />
+          <Text style={styles.mLabel}>Nouveau mot de passe</Text>
+          <TextInput style={styles.mInput} secureTextEntry value={next} onChangeText={setNext} autoCapitalize="none" placeholder="8 caractères minimum" placeholderTextColor={COLORS.textSoft} />
+          {error ? <Text style={styles.errMsg}>{error}</Text> : null}
+          <Pressable style={[styles.mBtn, !canSubmit && { opacity: 0.4 }]} disabled={!canSubmit} onPress={() => { setError(null); mut.mutate(); }}>
+            {mut.isPending ? <ActivityIndicator color={COLORS.black} /> : <Text style={styles.mBtnText}>ENREGISTRER</Text>}
+          </Pressable>
+        </>
+      )}
+    </Sheet>
+  );
+}
+
+function DeleteAccountModal({ onClose, onDeleted }: { onClose: () => void; onDeleted: () => void }) {
+  const [confirm, setConfirm] = useState('');
+  const mut = useMutation({
+    mutationFn: () => api.del('/api/auth/account'),
+    onSuccess: onDeleted, // déconnexion → retour à l'écran de connexion
+  });
+  return (
+    <Sheet title="Supprimer le compte" onClose={onClose}>
+      <Text style={styles.warn}>
+        Cette action est définitive : ton compte, ta bibliothèque, ta progression et tes commentaires seront
+        supprimés. Tape SUPPRIMER pour confirmer.
+      </Text>
+      <TextInput style={styles.mInput} value={confirm} onChangeText={setConfirm} autoCapitalize="characters" placeholder="SUPPRIMER" placeholderTextColor={COLORS.textSoft} />
+      <Pressable
+        style={[styles.mBtn, { backgroundColor: COLORS.red }, confirm !== 'SUPPRIMER' && { opacity: 0.4 }]}
+        disabled={confirm !== 'SUPPRIMER' || mut.isPending}
+        onPress={() => mut.mutate()}
+      >
+        {mut.isPending ? <ActivityIndicator color="#fff" /> : <Text style={[styles.mBtnText, { color: '#fff' }]}>SUPPRIMER DÉFINITIVEMENT</Text>}
+      </Pressable>
+    </Sheet>
+  );
+}
+
+function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  return (
+    <Modal transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={styles.overlay} onPress={onClose}>
+        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
+          <View style={styles.sheetHead}>
+            <Text style={styles.sheetTitle}>{title}</Text>
+            <Pressable onPress={onClose} hitSlop={10}>
+              <Feather name="x" size={24} color={COLORS.black} />
+            </Pressable>
+          </View>
+          {children}
+        </Pressable>
+      </Pressable>
+    </Modal>
   );
 }
 
@@ -166,5 +270,16 @@ const styles = StyleSheet.create({
   logout: { fontSize: 15, fontFamily: FONTS.extraBold, letterSpacing: 0.6 },
   cacheBtn: { borderWidth: 2, borderColor: COLORS.black, borderRadius: 999, paddingVertical: 14, alignItems: 'center' },
   cacheText: { fontSize: 14, fontFamily: FONTS.extraBold, letterSpacing: 0.6 },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', paddingHorizontal: 24 },
+  sheet: { backgroundColor: COLORS.white, borderRadius: 16, padding: 20 },
+  sheetHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  sheetTitle: { fontSize: 20, fontFamily: FONTS.extraBold },
+  mLabel: { fontSize: 14, fontFamily: FONTS.bold, marginTop: 14 },
+  mInput: { borderBottomWidth: 1, borderBottomColor: COLORS.border, fontSize: 18, fontFamily: FONTS.regular, paddingVertical: 10, marginTop: 6 },
+  mBtn: { backgroundColor: COLORS.yellow, borderRadius: 999, paddingVertical: 14, alignItems: 'center', marginTop: 22 },
+  mBtnText: { fontSize: 14, fontFamily: FONTS.extraBold, letterSpacing: 0.6 },
+  okMsg: { fontSize: 16, fontFamily: FONTS.bold, color: COLORS.green, textAlign: 'center', paddingVertical: 20 },
+  errMsg: { color: COLORS.red, fontSize: 14, fontFamily: FONTS.regular, marginTop: 12 },
+  warn: { fontSize: 15, fontFamily: FONTS.regular, color: COLORS.textMuted, lineHeight: 21, marginBottom: 8 },
   version: { textAlign: 'center', paddingVertical: 24, fontSize: 13, fontFamily: FONTS.bold, color: COLORS.textMuted, letterSpacing: 1 },
 });

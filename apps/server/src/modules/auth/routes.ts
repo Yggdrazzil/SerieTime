@@ -228,4 +228,26 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     await prisma.session.deleteMany({ where: { userId: user.id, token: { not: currentToken } } });
     return { ok: true };
   });
+
+  // Suppression définitive du compte et de toutes ses données (RGPD).
+  // Le catalogue partagé (séries/films/épisodes) n'est PAS touché.
+  app.delete('/api/auth/account', { preHandler: requireAuth }, async (request) => {
+    const userId = request.userId;
+    await prisma.$transaction([
+      prisma.commentReaction.deleteMany({ where: { userId } }),
+      prisma.comment.deleteMany({ where: { userId } }),
+      prisma.rating.deleteMany({ where: { userId } }),
+      prisma.watchEvent.deleteMany({ where: { userId } }),
+      prisma.userEpisodeStatus.deleteMany({ where: { userId } }),
+      prisma.userMediaStatus.deleteMany({ where: { userId } }),
+      prisma.listItem.deleteMany({ where: { list: { userId } } }),
+      prisma.mediaList.deleteMany({ where: { userId } }),
+      prisma.follow.deleteMany({ where: { OR: [{ followerId: userId }, { followingId: userId }] } }),
+      prisma.notification.deleteMany({ where: { userId } }),
+      prisma.import.deleteMany({ where: { userId } }),
+      prisma.session.deleteMany({ where: { userId } }),
+      prisma.user.delete({ where: { id: userId } }),
+    ]);
+    return { ok: true };
+  });
 }
