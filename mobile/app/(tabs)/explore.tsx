@@ -298,6 +298,8 @@ function Feed({
   const queryClient = useQueryClient();
   const [addingKey, setAddingKey] = useState<string | null>(null);
   const [cat, setCat] = useState<FeedCategory>('tout');
+  // Éléments ajoutés depuis ce tirage : la carte passe en ✓ (persiste au retour de la fiche).
+  const [followed, setFollowed] = useState<Record<string, boolean>>({});
 
   // Ajoute la recommandation à la bibliothèque puis ouvre sa fiche.
   const add = async (f: FeedItem, key: string) => {
@@ -306,6 +308,7 @@ function Feed({
     try {
       const path = f.type === 'movie' ? '/api/movies/add-from-tmdb' : '/api/shows/add-from-tmdb';
       const res = await api.post<{ mediaId: string }>(path, { tmdbId: f.tmdbId });
+      setFollowed((prev) => ({ ...prev, [key]: true }));
       queryClient.invalidateQueries({ queryKey: ['shows'] });
       queryClient.invalidateQueries({ queryKey: ['movies'] });
       router.push(`/show/${res.mediaId}${f.type === 'movie' ? '?type=movie' : ''}`);
@@ -330,7 +333,12 @@ function Feed({
   const catOf = (f: FeedItem) => f.category ?? (f.type === 'show' ? 'serie' : 'film');
   const filtered = cat === 'tout' ? items : items.filter((f) => catOf(f) === cat);
   return (
-    <ScrollView contentContainerStyle={{ paddingVertical: 8, paddingBottom: 24 }} refreshControl={refreshControl}>
+    <ScrollView
+      contentContainerStyle={{ paddingBottom: 24 }}
+      refreshControl={refreshControl}
+      // La rangée catégories + ↻ reste visible pendant le défilement.
+      stickyHeaderIndices={[0]}
+    >
       <View style={styles.feedHead}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }} style={{ flexGrow: 0, flexShrink: 1 }}>
           {FEED_CATEGORIES.map((c) => (
@@ -358,13 +366,19 @@ function Feed({
             <View style={styles.heroImg}>
               {image ? <Image source={{ uri: image }} style={StyleSheet.absoluteFill} resizeMode="cover" /> : null}
               <View style={styles.heroShade} />
-              <Pressable style={styles.plus} onPress={() => add(f, key)}>
-                {addingKey === key ? (
-                  <ActivityIndicator color={COLORS.yellow} />
-                ) : (
-                  <Feather name="plus" size={26} color={COLORS.yellow} />
-                )}
-              </Pressable>
+              {followed[key] || f.inLibrary ? (
+                <View style={styles.plus}>
+                  <Feather name="check" size={26} color={COLORS.yellow} />
+                </View>
+              ) : (
+                <Pressable style={styles.plus} onPress={() => add(f, key)}>
+                  {addingKey === key ? (
+                    <ActivityIndicator color={COLORS.yellow} />
+                  ) : (
+                    <Feather name="plus" size={26} color={COLORS.yellow} />
+                  )}
+                </Pressable>
+              )}
               <View style={styles.heroCap}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <Feather name={f.type === 'show' ? 'tv' : 'film'} size={22} color="#fff" />
@@ -386,7 +400,7 @@ function Feed({
 }
 
 const styles = StyleSheet.create({
-  feedHead: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingBottom: 10, gap: 10 },
+  feedHead: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, gap: 10, backgroundColor: COLORS.white },
   catChip: { backgroundColor: COLORS.chipGrey, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 },
   catChipSel: { backgroundColor: COLORS.yellow },
   catChipText: { fontSize: 13, fontWeight: '700', color: COLORS.textMuted, letterSpacing: 0.4 },
