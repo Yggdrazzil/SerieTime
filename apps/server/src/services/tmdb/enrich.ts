@@ -89,6 +89,24 @@ export async function ensureMediaFromTmdb(type: 'show' | 'movie', tmdbId: string
       },
     },
   });
+  // Épisodes : pour un ANIMÉ, TheTVDB découpe correctement les saisons (S1/S2…)
+  // et suit les nouvelles diffusions, alors que TMDb fusionne souvent les saisons
+  // d'animés. On préfère donc TheTVDB quand l'ID est connu, et on marque la source
+  // (sourcePriority='tvdb') pour rester cohérent aux rafraîchissements suivants.
+  const isAnime =
+    (media.genres ?? '').toLowerCase().includes('animation') &&
+    (media.originalLanguage === 'ja' || (media.originCountry ?? '').includes('JP'));
+  if (isAnime && media.tvdbId) {
+    const { tvdbEnabled, syncEpisodesFromTvdb } = await import('../tvdb/index.js');
+    if (tvdbEnabled()) {
+      await syncEpisodesFromTvdb(media.id).catch(() => undefined);
+      const count = await prisma.episode.count({ where: { show: { mediaId: media.id } } });
+      if (count > 0) {
+        await prisma.media.update({ where: { id: media.id }, data: { sourcePriority: 'tvdb' } });
+        return media;
+      }
+    }
+  }
   await syncShowEpisodesFromTmdb(media.id);
   return media;
 }

@@ -209,7 +209,14 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
 
     // Refresh métadonnées si stale (cadences spec §16.4 gérées par ApiCache).
     if (media.tmdbId && (!media.lastSyncedAt || Date.now() - media.lastSyncedAt.getTime() > 3 * 86_400_000)) {
-      await syncShowEpisodesFromTmdb(media.id).catch(() => undefined);
+      // Les animés dont les épisodes viennent de TheTVDB (saisons correctes) sont
+      // rafraîchis depuis TheTVDB pour ne pas réintroduire les saisons fusionnées TMDb.
+      if (media.sourcePriority === 'tvdb' && media.tvdbId) {
+        const { syncEpisodesFromTvdb } = await import('../../services/tvdb/index.js');
+        await syncEpisodesFromTvdb(media.id).catch(() => undefined);
+      } else {
+        await syncShowEpisodesFromTmdb(media.id).catch(() => undefined);
+      }
       media = await getShowWithUserData(request.userId, id);
       if (!media) return reply.code(404).send({ error: 'not_found' });
     }
