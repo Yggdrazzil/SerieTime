@@ -18,6 +18,17 @@ export function timeHHMM(iso: string | null | undefined): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
+// Heure de diffusion à afficher, uniquement si elle est RÉELLE. Beaucoup
+// d'épisodes n'ont qu'une date (pas d'heure) : ils sont stockés à minuit UTC,
+// ce qui afficherait « 02:00 » à Paris. Dans ce cas on ne montre rien.
+export function airTimeLabel(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  if (d.getUTCHours() === 0 && d.getUTCMinutes() === 0) return ''; // date seule = heure inconnue
+  return timeHHMM(iso);
+}
+
 export function watchTime(minutes: number): { months: number; days: number; hours: number } {
   const totalHours = Math.floor(minutes / 60);
   const months = Math.floor(totalHours / (24 * 30));
