@@ -7,6 +7,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, tmdbImage } from '@/lib/api';
 import { COLORS, FONTS } from '@/lib/theme';
 import { Loading, LoadError } from '@/components/ui';
+import { AppearItem, Pop, PressableScale } from '@/components/anim';
 
 type RecentShow = { id: string; title: string; posterPath: string | null; type: string };
 type UserProfile = {
@@ -52,6 +53,7 @@ export default function UserProfileScreen() {
   if (!data) return <LoadError onRetry={refetch} busy={isRefetching} />;
 
   return (
+    <Pop>
     <ScrollView style={{ flex: 1, backgroundColor: COLORS.white }} contentContainerStyle={{ paddingBottom: 24 }}>
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <Pressable onPress={() => router.back()} hitSlop={12} style={styles.back}>
@@ -102,21 +104,20 @@ export default function UserProfileScreen() {
             <View style={{ marginTop: 20 }}>
               <Text style={styles.sectionTitle}>Séries récentes</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: 12 }}>
-                {data.recentShows.map((s) => {
+                {data.recentShows.map((s, i) => {
                   const poster = tmdbImage(s.posterPath, 'w342');
                   return (
-                    <Pressable
-                      key={s.id}
-                      onPress={() => router.push(`/show/${s.id}${s.type === 'movie' ? '?type=movie' : ''}`)}
-                    >
-                      {poster ? (
-                        <Image source={{ uri: poster }} style={styles.poster} resizeMode="cover" />
-                      ) : (
-                        <View style={[styles.poster, styles.posterEmpty]}>
-                          <Feather name="image" size={22} color="#b4b4b4" />
-                        </View>
-                      )}
-                    </Pressable>
+                    <AppearItem key={s.id} index={i}>
+                      <PressableScale onPress={() => router.push(`/show/${s.id}${s.type === 'movie' ? '?type=movie' : ''}`)}>
+                        {poster ? (
+                          <Image source={{ uri: poster }} style={styles.poster} resizeMode="cover" />
+                        ) : (
+                          <View style={[styles.poster, styles.posterEmpty]}>
+                            <Feather name="image" size={22} color="#b4b4b4" />
+                          </View>
+                        )}
+                      </PressableScale>
+                    </AppearItem>
                   );
                 })}
               </ScrollView>
@@ -125,6 +126,7 @@ export default function UserProfileScreen() {
         </>
       )}
     </ScrollView>
+    </Pop>
   );
 }
 

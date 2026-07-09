@@ -7,6 +7,7 @@ import { api, tmdbImage } from '@/lib/api';
 import type { MediaDto } from '@/lib/types';
 import { COLORS } from '@/lib/theme';
 import { PillHeader, TopTabs, EmptyState, Loading, LoadError, Poster } from '@/components/ui';
+import { AppearItem, FadeSwitch } from '@/components/anim';
 import { useTabResetSeq } from '@/lib/tabReset';
 
 type MoviesResponse = { toWatch: MediaDto[]; upcoming: { media: MediaDto; releaseDate: string }[] };
@@ -28,10 +29,11 @@ function MoviesScreenInner() {
 
   const grid = (items: MediaDto[]) => (
     <View style={styles.grid}>
-      {items.map((m) => (
-        <View key={m.id} style={styles.cell}>
+      {items.map((m, i) => (
+        // Cascade d'apparition des affiches (délai plafonné dans AppearItem).
+        <AppearItem key={m.id} index={i} style={styles.cell}>
           <Poster title={m.title} uri={tmdbImage(m.posterPath)} onPress={() => router.push(`/show/${m.id}?type=movie`)} />
-        </View>
+        </AppearItem>
       ))}
     </View>
   );
@@ -46,6 +48,7 @@ function MoviesScreenInner() {
       ) : isError && !data ? (
         <LoadError onRetry={refetch} busy={isRefetching} />
       ) : (
+        <FadeSwitch trigger={tab}>
         <ScrollView contentContainerStyle={{ paddingBottom: 20 }}>
           {tab === 'À VOIR' ? (
             <>
@@ -65,6 +68,7 @@ function MoviesScreenInner() {
             </>
           )}
         </ScrollView>
+        </FadeSwitch>
       )}
     </View>
   );

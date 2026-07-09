@@ -7,6 +7,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, tmdbImage } from '@/lib/api';
 import { COLORS, FONTS } from '@/lib/theme';
 import { EmptyState, Loading, LoadError } from '@/components/ui';
+import { AppearItem } from '@/components/anim';
 
 type Notif = {
   id: string;
@@ -61,11 +62,11 @@ export default function Notifications() {
         <EmptyState title="Aucune notification" message="L’activité de vos amis apparaîtra ici." />
       ) : (
         <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
-          {data!.notifications.map((n) => {
+          {data!.notifications.map((n, i) => {
             const poster = tmdbImage(n.imageUrl, 'w185');
             return (
+              <AppearItem key={n.id} index={i}>
               <Pressable
-                key={n.id}
                 style={[styles.row, !n.isRead && styles.unread]}
                 onPress={() =>
                   n.meta.mediaId &&
@@ -85,6 +86,7 @@ export default function Notifications() {
                 </View>
                 {poster ? <Image source={{ uri: poster }} style={styles.poster} resizeMode="cover" /> : null}
               </Pressable>
+              </AppearItem>
             );
           })}
         </ScrollView>

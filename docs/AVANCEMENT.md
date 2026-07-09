@@ -6,7 +6,7 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
-Dernière mise à jour : **2026-07-08** (Claude & Benjamin) — liste des saisons TV Time (spéciaux en bas, barres de progression, « tout marquer/démarquer »)
+Dernière mise à jour : **2026-07-09** (Claude) — vague d'animations 4 : recherche/Explorer, réglages, social, notifications, films, profils
 
 ---
 
@@ -65,6 +65,28 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
 ## Journal des modifications
 
 > Entrée type : `### AAAA-MM-JJ — Auteur` puis une liste courte de ce qui a changé.
+
+### 2026-07-09 — Claude
+- **Vague d'animations 4** — les écrans restants sont animés (toujours API
+  `Animated`, « réduire les animations » respecté, web + natif) :
+  - Nouveau composant `PopIn` (`mobile/components/anim.tsx`) : apparition
+    « ressort » des petits éléments (coche ajoutée, pastille de notifications).
+  - **Recherche / Explorer** : fondu à l'entrée/sortie du mode recherche et entre
+    les onglets SÉRIES ET FILMS / UTILISATEURS ; résultats et cartes PARCOURIR en
+    cascade (`AppearItem`) ; `+` → `✓` avec rebond (`PopIn`) ; cartes hero avec
+    enfoncement au tap (`PressableScale`) ; panneau détails DÉCOUVRIR qui
+    monte/redescend en douceur (`SlideUpBar`).
+  - **Réglages** : bascule d'onglets en fondu (`FadeSwitch`) ; interrupteurs dont
+    le bouton glisse et la piste change de couleur ; coche des radios qui pop ;
+    modales (mot de passe, suppression) avec entrée ressort.
+  - **Écran social (Amis)** : bascule Fil d'actualité / Trouver des amis en fondu,
+    lignes du fil et résultats en cascade, retour tactile au tap sur une activité.
+  - **Notifications** : apparition en cascade des lignes.
+  - **Films** : bascule À VOIR / À VENIR en fondu + cascade des affiches (aligné
+    sur l'onglet Séries).
+  - **Profil** : pastille de non-lus qui pop, cartes de statistiques en cascade.
+  - **Profil public** (`/user/[id]`) : entrée en fondu (`Pop`), affiches récentes
+    en cascade + enfoncement au tap.
 
 ### 2026-07-08 — Claude (11)
 - **Vague d'animations 3** :

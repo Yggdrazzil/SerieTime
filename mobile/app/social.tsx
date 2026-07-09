@@ -8,6 +8,7 @@ import { api, tmdbImage } from '@/lib/api';
 import { useDebounced } from '@/lib/useDebounced';
 import { COLORS, FONTS } from '@/lib/theme';
 import { EmptyState, Loading, LoadError } from '@/components/ui';
+import { AppearItem, FadeSwitch, PressableScale } from '@/components/anim';
 
 type PublicUser = { id: string; displayName: string; avatarUrl: string | null; isFollowing?: boolean };
 type FeedItem = {
@@ -49,7 +50,7 @@ export default function Social() {
         <Tab label="Trouver des amis" active={tab === 'friends'} onPress={() => setTab('friends')} />
       </View>
 
-      {tab === 'feed' ? <FeedTab /> : <FriendsTab />}
+      <FadeSwitch trigger={tab}>{tab === 'feed' ? <FeedTab /> : <FriendsTab />}</FadeSwitch>
     </View>
   );
 }
@@ -80,12 +81,13 @@ function FeedTab() {
     );
   return (
     <ScrollView contentContainerStyle={{ paddingVertical: 8, paddingBottom: 24 }}>
-      {items.map((it) => {
+      {items.map((it, i) => {
         const poster = tmdbImage(it.media.posterPath, 'w185');
         return (
-          <Pressable
-            key={`${it.kind}-${it.id}`}
+          <AppearItem key={`${it.kind}-${it.id}`} index={i}>
+          <PressableScale
             style={styles.feedRow}
+            scaleTo={0.98}
             onPress={() => router.push(`/show/${it.media.id}${it.media.type === 'movie' ? '?type=movie' : ''}`)}
           >
             <Pressable style={styles.avatar} onPress={() => router.push(`/user/${it.user.id}`)}>
@@ -113,7 +115,8 @@ function FeedTab() {
                 <Feather name="image" size={16} color="#b4b4b4" />
               </View>
             )}
-          </Pressable>
+          </PressableScale>
+          </AppearItem>
         );
       })}
     </ScrollView>
@@ -175,10 +178,10 @@ function FriendsTab() {
         <EmptyState title="Aucun utilisateur" message={`Rien trouvé pour « ${q} ».`} />
       ) : (
         <ScrollView contentContainerStyle={{ paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
-          {search.data!.users.map((u) => {
+          {search.data!.users.map((u, i) => {
             const following = overrides[u.id] ?? u.isFollowing ?? false;
             return (
-              <View key={u.id} style={styles.userRow}>
+              <AppearItem key={u.id} index={i} style={styles.userRow}>
                 <Pressable
                   style={styles.userTap}
                   onPress={() => router.push(`/user/${u.id}`)}
@@ -203,7 +206,7 @@ function FriendsTab() {
                     </Text>
                   )}
                 </Pressable>
-              </View>
+              </AppearItem>
             );
           })}
         </ScrollView>

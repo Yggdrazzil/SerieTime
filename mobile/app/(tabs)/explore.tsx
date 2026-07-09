@@ -8,6 +8,7 @@ import { api, tmdbImage } from '@/lib/api';
 import { useDebounced } from '@/lib/useDebounced';
 import { COLORS, FONTS } from '@/lib/theme';
 import { EmptyState, Loading } from '@/components/ui';
+import { AppearItem, FadeSwitch, PopIn, PressableScale, SlideUpBar } from '@/components/anim';
 import { useTabResetSeq } from '@/lib/tabReset';
 
 type FeedItem = {
@@ -80,17 +81,22 @@ function ExploreScreenInner() {
         ) : null}
       </View>
 
-      {searching ? (
-        <>
-          <View style={styles.tabs}>
-            <SearchTab label="SÉRIES ET FILMS" active={tab === 'media'} onPress={() => setTab('media')} />
-            <SearchTab label="UTILISATEURS" active={tab === 'users'} onPress={() => setTab('users')} />
-          </View>
-          {tab === 'media' ? <MediaResults query={debouncedQuery} rawQuery={query} /> : <UserResults query={debouncedQuery} />}
-        </>
-      ) : (
-        <Feed items={data?.feed} loading={isLoading} refreshing={isRefetching} onRefresh={refetch} />
-      )}
+      {/* Fondu à l'entrée/sortie du mode recherche, puis entre les deux onglets. */}
+      <FadeSwitch trigger={searching ? 'search' : 'feed'}>
+        {searching ? (
+          <>
+            <View style={styles.tabs}>
+              <SearchTab label="SÉRIES ET FILMS" active={tab === 'media'} onPress={() => setTab('media')} />
+              <SearchTab label="UTILISATEURS" active={tab === 'users'} onPress={() => setTab('users')} />
+            </View>
+            <FadeSwitch trigger={tab}>
+              {tab === 'media' ? <MediaResults query={debouncedQuery} rawQuery={query} /> : <UserResults query={debouncedQuery} />}
+            </FadeSwitch>
+          </>
+        ) : (
+          <Feed items={data?.feed} loading={isLoading} refreshing={isRefetching} onRefresh={refetch} />
+        )}
+      </FadeSwitch>
     </View>
   );
 }
@@ -186,12 +192,13 @@ function MediaResults({ query, rawQuery }: { query: string; rawQuery: string }) 
 
   return (
     <ScrollView contentContainerStyle={{ paddingBottom: 24, paddingTop: 6 }} keyboardShouldPersistTaps="handled">
-      {results.map((r) => {
+      {results.map((r, i) => {
         const key = `${r.type}-${r.id ?? r.tvdbId ?? r.tmdbId}`;
         const poster = tmdbImage(r.posterPath, 'w185');
         const isFollowed = followed[key] || r.inLibrary;
         return (
-          <Pressable key={key} style={styles.resultRow} onPress={() => open(r, key)}>
+          <AppearItem key={key} index={i}>
+          <Pressable style={styles.resultRow} onPress={() => open(r, key)}>
             {poster ? (
               <Image source={{ uri: poster }} style={styles.resultPoster} resizeMode="cover" />
             ) : (
@@ -215,15 +222,17 @@ function MediaResults({ query, rawQuery }: { query: string; rawQuery: string }) 
                 <ActivityIndicator color={COLORS.black} size="small" />
               </View>
             ) : isFollowed ? (
-              <View style={styles.addedSquare}>
+              // La coche « ajouté » arrive avec un petit rebond (feedback du +).
+              <PopIn style={styles.addedSquare}>
                 <Feather name="check" size={22} color={COLORS.textMuted} />
-              </View>
+              </PopIn>
             ) : (
               <Pressable style={styles.addSquare} onPress={() => add(r, key)} hitSlop={6}>
                 <Feather name="plus" size={24} color="#E6B800" />
               </Pressable>
             )}
           </Pressable>
+          </AppearItem>
         );
       })}
     </ScrollView>
@@ -264,10 +273,10 @@ function UserResults({ query }: { query: string }) {
 
   return (
     <ScrollView contentContainerStyle={{ paddingBottom: 24, paddingTop: 6 }} keyboardShouldPersistTaps="handled">
-      {users.map((u) => {
+      {users.map((u, i) => {
         const following = overrides[u.id] ?? u.isFollowing ?? false;
         return (
-          <View key={u.id} style={styles.userRow}>
+          <AppearItem key={u.id} index={i} style={styles.userRow}>
             <Pressable style={styles.userTap} onPress={() => router.push(`/user/${u.id}`)}>
               <View style={styles.avatar}>
                 <Text style={styles.avatarInit}>{u.displayName.slice(0, 1).toUpperCase()}</Text>
@@ -283,7 +292,7 @@ function UserResults({ query }: { query: string }) {
                 <Text style={[styles.followText, following && styles.followingText]}>{following ? 'ABONNÉ' : 'SUIVRE'}</Text>
               )}
             </Pressable>
-          </View>
+          </AppearItem>
         );
       })}
     </ScrollView>
@@ -552,15 +561,15 @@ function Feed({
           const key = `${f.type}-${f.tmdbId}`;
           const image = tmdbImage(f.backdropPath, 'w780') ?? tmdbImage(f.posterPath, 'w500');
           return (
-            <View key={key} style={styles.hero}>
-              <Pressable style={styles.heroImg} onPress={() => browseOpen(f, key)}>
+            <AppearItem key={key} index={i} style={styles.hero}>
+              <PressableScale style={styles.heroImg} scaleTo={0.98} onPress={() => browseOpen(f, key)}>
                 {image ? <Image source={{ uri: image }} style={StyleSheet.absoluteFill} resizeMode="cover" /> : null}
                 <View style={styles.heroShade} />
                 {openingKey === key ? (
                   <View style={StyleSheet.absoluteFill} pointerEvents="none"><ActivityIndicator style={{ flex: 1 }} color="#fff" /></View>
                 ) : null}
                 {followed[key] || f.inLibrary ? (
-                  <View style={styles.plus}><Feather name="check" size={26} color={COLORS.yellow} /></View>
+                  <PopIn style={styles.plus}><Feather name="check" size={26} color={COLORS.yellow} /></PopIn>
                 ) : (
                   <Pressable style={styles.plus} onPress={() => browseAdd(f, key)}>
                     {addingKey === key ? <ActivityIndicator color={COLORS.yellow} /> : <Feather name="plus" size={26} color={COLORS.yellow} />}
@@ -573,11 +582,11 @@ function Feed({
                   </View>
                   <Text style={styles.heroMeta}>{f.year ?? ''}</Text>
                 </View>
-              </Pressable>
+              </PressableScale>
               {f.overview ? (
                 <Text style={[styles.heroDesc, { backgroundColor: PASTELS[i % PASTELS.length] }]} numberOfLines={2}>{f.overview}</Text>
               ) : null}
-            </View>
+            </AppearItem>
           );
         })}
       </ScrollView>
@@ -674,9 +683,10 @@ function Feed({
         )}
       </View>
 
-      {/* Panneau détails (tap) : posé sur l'image comme TikTok (image visible au-dessus) */}
-      {detail && current ? (
-        <View style={styles.detailSheet}>
+      {/* Panneau détails (tap) : posé sur l'image comme TikTok (image visible
+          au-dessus). Monte/redescend en douceur via SlideUpBar. */}
+      {current ? (
+        <SlideUpBar visible={detail} style={styles.detailSheet} distance={160}>
           <Pressable style={styles.detailGrip} onPress={() => setDetail(false)} hitSlop={10}>
             <Feather name="chevron-down" size={26} color="#fff" />
           </Pressable>
@@ -705,7 +715,7 @@ function Feed({
             <DetailAction icon="x" label="Pas intéressé" tint={COLORS.red} onPress={() => { doPasInteresse(current); advance(); }} />
             <DetailAction icon="external-link" label="Fiche" tint="#fff" onPress={() => openFiche(current)} busy={busy} />
           </View>
-        </View>
+        </SlideUpBar>
       ) : null}
     </View>
   );

@@ -9,6 +9,7 @@ import type { MediaDto, ProfileStatsDto } from '@/lib/types';
 import { watchTime } from '@/lib/format';
 import { COLORS, FONTS } from '@/lib/theme';
 import { Loading, LoadError, Poster } from '@/components/ui';
+import { AppearItem, PopIn } from '@/components/anim';
 import { useTabResetSeq } from '@/lib/tabReset';
 import { usePullRefresh } from '@/lib/usePullRefresh';
 
@@ -77,9 +78,10 @@ function ProfileScreenInner() {
         <Pressable style={[styles.bell, { top: insets.top + 8 }]} onPress={() => router.push('/notifications')}>
           <Feather name="bell" size={22} color={COLORS.black} />
           {unread > 0 ? (
-            <View style={styles.badge}>
+            // La pastille de non-lus arrive avec un petit rebond.
+            <PopIn style={styles.badge}>
               <Text style={styles.badgeText}>{unread > 9 ? '9+' : unread}</Text>
-            </View>
+            </PopIn>
           ) : null}
         </Pressable>
         <Pressable style={[styles.dots, { top: insets.top + 8 }]} onPress={() => router.push('/settings')}>
@@ -124,10 +126,10 @@ function ProfileScreenInner() {
 
       <Section title="Statistiques">
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 24, gap: 12 }}>
-          <StatCard icon="tv" title="Temps passé devant des séries" values={[[st.months, 'MOIS'], [st.days, 'JOURS'], [st.hours, 'HEURES']]} />
-          <StatCard icon="tv" title="Épisodes vus" values={[[stats.episodesWatched, 'ÉPISODES']]} />
-          <StatCard icon="film" title="Temps passé devant des films" values={[[mt.months, 'MOIS'], [mt.days, 'JOURS'], [mt.hours, 'HEURES']]} />
-          <StatCard icon="film" title="Films regardés" values={[[stats.moviesWatched, 'FILMS']]} />
+          <AppearItem index={0}><StatCard icon="tv" title="Temps passé devant des séries" values={[[st.months, 'MOIS'], [st.days, 'JOURS'], [st.hours, 'HEURES']]} /></AppearItem>
+          <AppearItem index={1}><StatCard icon="tv" title="Épisodes vus" values={[[stats.episodesWatched, 'ÉPISODES']]} /></AppearItem>
+          <AppearItem index={2}><StatCard icon="film" title="Temps passé devant des films" values={[[mt.months, 'MOIS'], [mt.days, 'JOURS'], [mt.hours, 'HEURES']]} /></AppearItem>
+          <AppearItem index={3}><StatCard icon="film" title="Films regardés" values={[[stats.moviesWatched, 'FILMS']]} /></AppearItem>
         </ScrollView>
       </Section>
 

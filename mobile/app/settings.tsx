@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, Pressable, Modal, TextInput, ActivityIndicator } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, ScrollView, StyleSheet, Pressable, Modal, TextInput, ActivityIndicator, Animated, Easing, Platform } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -7,6 +7,10 @@ import { api, ApiError } from '@/lib/api';
 import { useAppStore } from '@/lib/store';
 import { COLORS, FONTS } from '@/lib/theme';
 import { PageHeader } from '@/components/PageHeader';
+import { FadeSwitch, PopIn } from '@/components/anim';
+import { useReduceMotion } from '@/lib/useReduceMotion';
+
+const NATIVE = Platform.OS !== 'web';
 
 const TABS = ['COMPTE', 'APPLICATION', 'À VENIR'];
 
@@ -23,9 +27,12 @@ export default function Settings() {
           </Pressable>
         ))}
       </View>
-      <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
-        {tab === 'COMPTE' ? <AccountTab /> : tab === 'APPLICATION' ? <AppTab /> : <UpcomingTab />}
-      </ScrollView>
+      {/* Bascule d'onglet en fondu, comme les onglets hauts des autres écrans. */}
+      <FadeSwitch trigger={tab}>
+        <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+          {tab === 'COMPTE' ? <AccountTab /> : tab === 'APPLICATION' ? <AppTab /> : <UpcomingTab />}
+        </ScrollView>
+      </FadeSwitch>
     </View>
   );
 }
@@ -150,9 +157,25 @@ function DeleteAccountModal({ onClose, onDeleted }: { onClose: () => void; onDel
 }
 
 function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  const reduce = useReduceMotion();
+  // Entrée de la carte : léger ressort (montée + scale) par-dessus le fondu du Modal.
+  const v = useRef(new Animated.Value(reduce ? 1 : 0)).current;
+  useEffect(() => {
+    if (reduce) { v.setValue(1); return; }
+    Animated.spring(v, { toValue: 1, useNativeDriver: NATIVE, friction: 8, tension: 120 }).start();
+  }, [reduce, v]);
   return (
     <Modal transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.overlay} onPress={onClose}>
+        <Animated.View
+          style={{
+            opacity: v.interpolate({ inputRange: [0, 1], outputRange: [0, 1], extrapolate: 'clamp' }),
+            transform: [
+              { translateY: v.interpolate({ inputRange: [0, 1], outputRange: [24, 0] }) },
+              { scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) },
+            ],
+          }}
+        >
         <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
           <View style={styles.sheetHead}>
             <Text style={styles.sheetTitle}>{title}</Text>
@@ -162,6 +185,7 @@ function Sheet({ title, onClose, children }: { title: string; onClose: () => voi
           </View>
           {children}
         </Pressable>
+        </Animated.View>
       </Pressable>
     </Modal>
   );
@@ -226,14 +250,31 @@ function Row({ label, onPress }: { label: string; onPress?: () => void }) {
   );
 }
 function ToggleRow({ label, sub, on, onToggle }: { label: string; sub?: string; on: boolean; onToggle: (v: boolean) => void }) {
+  const reduce = useReduceMotion();
+  // Le bouton glisse et la piste change de couleur au lieu de sauter d'un état
+  // à l'autre. Couleurs interpolées → driver JS obligatoire.
+  const v = useRef(new Animated.Value(on ? 1 : 0)).current;
+  useEffect(() => {
+    Animated.timing(v, { toValue: on ? 1 : 0, duration: reduce ? 0 : 180, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+  }, [on, reduce, v]);
   return (
     <View style={styles.toggleRow}>
       <View style={{ flex: 1 }}>
         <Text style={{ fontFamily: FONTS.regular, fontSize: 19 }}>{label}</Text>
         {sub ? <Text style={{ fontFamily: FONTS.regular, fontSize: 14, color: COLORS.textMuted }}>{sub}</Text> : null}
       </View>
-      <Pressable style={[styles.toggle, on && styles.toggleOn]} onPress={() => onToggle(!on)}>
-        <View style={[styles.knob, on && styles.knobOn]} />
+      <Pressable onPress={() => onToggle(!on)} hitSlop={8}>
+        <Animated.View style={[styles.toggle, { backgroundColor: v.interpolate({ inputRange: [0, 1], outputRange: ['#dddddd', COLORS.yellow] }) }]}>
+          <Animated.View
+            style={[
+              styles.knob,
+              {
+                backgroundColor: v.interpolate({ inputRange: [0, 1], outputRange: ['#ffffff', '#000000'] }),
+                transform: [{ translateX: v.interpolate({ inputRange: [0, 1], outputRange: [0, 22] }) }],
+              },
+            ]}
+          />
+        </Animated.View>
       </Pressable>
     </View>
   );
@@ -241,7 +282,13 @@ function ToggleRow({ label, sub, on, onToggle }: { label: string; sub?: string; 
 function RadioRow({ label, on, onPress }: { label: string; on: boolean; onPress: () => void }) {
   return (
     <Pressable style={[styles.row, { justifyContent: 'flex-start', gap: 16 }]} onPress={onPress}>
-      <View style={[styles.radio, on && styles.radioOn]}>{on ? <Feather name="check" size={14} color={COLORS.black} /> : null}</View>
+      <View style={[styles.radio, on && styles.radioOn]}>
+        {on ? (
+          <PopIn>
+            <Feather name="check" size={14} color={COLORS.black} />
+          </PopIn>
+        ) : null}
+      </View>
       <Text style={{ fontFamily: FONTS.regular, fontSize: 18 }}>{label}</Text>
     </Pressable>
   );
@@ -260,10 +307,8 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 23, fontFamily: FONTS.extraBold, paddingHorizontal: 24, paddingTop: 28 },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, paddingVertical: 16 },
   toggleRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, paddingVertical: 16, gap: 16 },
-  toggle: { width: 52, height: 30, borderRadius: 15, backgroundColor: '#ddd', padding: 3 },
-  toggleOn: { backgroundColor: COLORS.yellow },
-  knob: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#fff' },
-  knobOn: { backgroundColor: '#000', transform: [{ translateX: 22 }] },
+  toggle: { width: 52, height: 30, borderRadius: 15, padding: 3 },
+  knob: { width: 24, height: 24, borderRadius: 12 },
   radio: { width: 28, height: 28, borderRadius: 14, borderWidth: 2, borderColor: COLORS.border, alignItems: 'center', justifyContent: 'center' },
   radioOn: { backgroundColor: COLORS.yellow, borderColor: COLORS.yellow },
   divider: { height: 1, backgroundColor: COLORS.borderLight, marginVertical: 12 },

@@ -129,6 +129,31 @@ export function PressableScale({
   );
 }
 
+// Apparition « ressort » d'un petit élément (coche, badge, pastille) : scale +
+// fondu avec léger rebond. À monter quand l'état apparaît (ex. + devient ✓).
+export function PopIn({ children, style }: { children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
+  const reduce = useReduceMotion();
+  const v = useRef(new Animated.Value(reduce ? 1 : 0)).current;
+  useEffect(() => {
+    if (reduce) { v.setValue(1); return; }
+    Animated.spring(v, { toValue: 1, useNativeDriver: NATIVE, friction: 5, tension: 180 }).start();
+  }, [reduce, v]);
+  return (
+    <Animated.View
+      style={[
+        style,
+        {
+          // Le spring dépasse 1 (rebond) : on borne l'opacité, pas le scale.
+          opacity: v.interpolate({ inputRange: [0, 1], outputRange: [0, 1], extrapolate: 'clamp' }),
+          transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] }) }],
+        },
+      ]}
+    >
+      {children}
+    </Animated.View>
+  );
+}
+
 // Fondu + léger glissement latéral à chaque changement de `trigger` (ex. bascule
 // des onglets hauts À VOIR / À VENIR). Le contenu n'est pas remonté, juste animé.
 export function FadeSwitch({
