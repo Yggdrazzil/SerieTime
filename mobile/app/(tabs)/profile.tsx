@@ -76,7 +76,7 @@ function ProfileScreenInner() {
           </>
         ) : null}
         <Pressable style={[styles.bell, { top: insets.top + 8 }]} onPress={() => router.push('/notifications')}>
-          <Feather name="bell" size={22} color={COLORS.black} />
+          <Feather name="bell" size={20} color={COLORS.black} />
           {unread > 0 ? (
             // La pastille de non-lus arrive avec un petit rebond.
             <PopIn style={styles.badge}>
@@ -85,7 +85,7 @@ function ProfileScreenInner() {
           ) : null}
         </Pressable>
         <Pressable style={[styles.dots, { top: insets.top + 8 }]} onPress={() => router.push('/settings')}>
-          <Feather name="more-horizontal" size={26} color="#fff" />
+          <Feather name="more-horizontal" size={24} color="#fff" />
         </Pressable>
         <View style={styles.headRow}>
           {user.avatarUrl ? (
@@ -125,7 +125,7 @@ function ProfileScreenInner() {
       </View>
 
       <Section title="Statistiques">
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 24, gap: 12 }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 12 }}>
           <AppearItem index={0}><StatCard icon="tv" title="Temps passé devant des séries" values={[[st.months, 'MOIS'], [st.days, 'JOURS'], [st.hours, 'HEURES']]} /></AppearItem>
           <AppearItem index={1}><StatCard icon="tv" title="Épisodes vus" values={[[stats.episodesWatched, 'ÉPISODES']]} /></AppearItem>
           <AppearItem index={2}><StatCard icon="film" title="Temps passé devant des films" values={[[mt.months, 'MOIS'], [mt.days, 'JOURS'], [mt.hours, 'HEURES']]} /></AppearItem>
@@ -170,9 +170,9 @@ function Counter({ n, label, border, onPress }: { n: number; label: string; bord
 // Carte « Listes » façon TV Time : collage des affiches + titre en surimpression.
 function ListCollageCard({ title, posterPaths }: { title: string; posterPaths: string[] }) {
   const { width } = Dimensions.get('window');
-  const cardWidth = width - 48;
+  const cardWidth = width - 32;
   return (
-    <View style={[styles.listcard, { width: cardWidth, marginHorizontal: 24 }]}>
+    <View style={[styles.listcard, { width: cardWidth, marginHorizontal: 16 }]}>
       <View style={StyleSheet.absoluteFill}>
         <View style={{ flex: 1, flexDirection: 'row' }}>
           {(posterPaths.length ? posterPaths.slice(0, 4) : [null]).map((p, i) => (
@@ -193,7 +193,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
     <View style={{ paddingVertical: 20 }}>
       <View style={styles.sectHead}>
         <Text style={styles.sectTitle}>{title}</Text>
-        <Feather name="chevron-right" size={24} color={COLORS.black} />
+        <Feather name="chevron-right" size={22} color={COLORS.black} />
       </View>
       {children}
     </View>
@@ -204,7 +204,7 @@ function StatCard({ icon, title, values }: { icon: keyof typeof Feather.glyphMap
   return (
     <View style={styles.statcard}>
       <View style={styles.statTop}>
-        <Feather name={icon} size={20} color={COLORS.black} />
+        <Feather name={icon} size={18} color={COLORS.black} />
         <Text style={styles.statTitle}>{title}</Text>
       </View>
       <View style={styles.statVals}>
@@ -243,12 +243,12 @@ function PosterRow({
           {heart ? (
             // Pastille rouge + cœur blanc AVANT le titre, comme TV Time.
             <View style={styles.heartBadge}>
-              <Feather name="heart" size={15} color="#fff" />
+              <Feather name="heart" size={13} color="#fff" />
             </View>
           ) : null}
           <Text style={styles.sectTitle}>{title}</Text>
         </View>
-        <Feather name="chevron-right" size={24} color={COLORS.black} />
+        <Feather name="chevron-right" size={22} color={COLORS.black} />
       </Pressable>
       {items.length === 0 ? (
         // Section toujours visible façon TV Time, avec un état vide.
@@ -259,7 +259,7 @@ function PosterRow({
           <Text style={styles.emptyRowText}>{emptyLabel}</Text>
         </View>
       ) : (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 24, gap: 6 }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 6 }}>
           {items.map((m) => (
             <Poster
               key={m.id}
@@ -275,41 +275,43 @@ function PosterRow({
   );
 }
 
+// Cotes recalées sur TV Time (comparaison px des captures, même téléphone) :
+// avatar ~62dp, nom 24, compteurs 21/14, titres de section 21, marges 16.
 const styles = StyleSheet.create({
-  head: { height: 210, backgroundColor: '#20202a', justifyContent: 'flex-end', overflow: 'hidden' },
+  head: { height: 200, backgroundColor: '#20202a', justifyContent: 'flex-end', overflow: 'hidden' },
   coverShade: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.35)' },
-  bell: { position: 'absolute', left: 16, width: 46, height: 46, borderRadius: 23, backgroundColor: COLORS.yellow, alignItems: 'center', justifyContent: 'center' },
-  badge: { position: 'absolute', top: 2, right: 2, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: COLORS.red, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
-  badgeText: { color: '#fff', fontSize: 11, fontFamily: FONTS.extraBold },
+  bell: { position: 'absolute', left: 16, width: 40, height: 40, borderRadius: 20, backgroundColor: COLORS.yellow, alignItems: 'center', justifyContent: 'center' },
+  badge: { position: 'absolute', top: 0, right: 0, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: COLORS.red, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
+  badgeText: { color: '#fff', fontSize: 10, fontFamily: FONTS.extraBold },
   dots: { position: 'absolute', right: 12, width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  headRow: { flexDirection: 'row', alignItems: 'center', gap: 16, padding: 20 },
-  avatar: { width: 82, height: 82, borderRadius: 41, borderWidth: 2, borderColor: '#fff', backgroundColor: '#555' },
+  headRow: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16 },
+  avatar: { width: 62, height: 62, borderRadius: 31, borderWidth: 2, borderColor: '#fff', backgroundColor: '#555' },
   avatarEmpty: { alignItems: 'center', justifyContent: 'center' },
-  avatarInit: { color: '#fff', fontSize: 34, fontFamily: FONTS.extraBold },
-  emptyRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 24 },
+  avatarInit: { color: '#fff', fontSize: 26, fontFamily: FONTS.extraBold },
+  emptyRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16 },
   emptyPoster: { width: 70, aspectRatio: 2 / 3, borderRadius: 4, backgroundColor: '#eee', alignItems: 'center', justifyContent: 'center' },
   emptyRowText: { color: COLORS.textMuted, fontFamily: FONTS.regular, fontSize: 15 },
-  name: { color: '#fff', fontSize: 28, fontFamily: FONTS.extraBold },
-  modif: { marginTop: 6, borderWidth: 2, borderColor: '#fff', borderRadius: 999, paddingHorizontal: 18, paddingVertical: 5, alignSelf: 'flex-start' },
-  modifText: { color: '#fff', fontSize: 13, fontFamily: FONTS.extraBold },
+  name: { color: '#fff', fontSize: 24, fontFamily: FONTS.extraBold },
+  modif: { marginTop: 6, borderWidth: 1.5, borderColor: '#fff', borderRadius: 999, paddingHorizontal: 16, paddingVertical: 4, alignSelf: 'flex-start' },
+  modifText: { color: '#fff', fontSize: 12, fontFamily: FONTS.extraBold },
   counters: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: COLORS.borderLight },
-  counter: { flex: 1, alignItems: 'center', paddingVertical: 20 },
+  counter: { flex: 1, alignItems: 'center', paddingVertical: 14 },
   counterBorder: { borderLeftWidth: 1, borderLeftColor: COLORS.borderLight },
-  counterN: { fontSize: 26, fontFamily: FONTS.extraBold },
-  counterL: { fontFamily: FONTS.regular, fontSize: 16 },
-  sectHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, marginBottom: 14 },
-  sectTitle: { fontSize: 24, fontFamily: FONTS.extraBold },
-  statcard: { width: 300, borderWidth: 1, borderColor: COLORS.border, borderRadius: 5 },
-  statTop: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderBottomWidth: 1, borderBottomColor: COLORS.borderLight },
-  statTitle: { fontSize: 16, fontFamily: FONTS.semiBold },
-  statVals: { flexDirection: 'row', justifyContent: 'space-around', padding: 16 },
-  statV: { fontSize: 27, fontFamily: FONTS.extraBold },
-  statL: { fontSize: 12, fontFamily: FONTS.bold, letterSpacing: 0.4 },
-  listcard: { height: 155, borderRadius: 8, backgroundColor: '#2e2e38', justifyContent: 'flex-end', padding: 16, overflow: 'hidden' },
+  counterN: { fontSize: 21, fontFamily: FONTS.extraBold },
+  counterL: { fontFamily: FONTS.regular, fontSize: 14 },
+  sectHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, marginBottom: 12 },
+  sectTitle: { fontSize: 21, fontFamily: FONTS.extraBold },
+  statcard: { width: 290, borderWidth: 1, borderColor: COLORS.border, borderRadius: 10 },
+  statTop: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 10, borderBottomWidth: 1, borderBottomColor: COLORS.borderLight },
+  statTitle: { fontSize: 15, fontFamily: FONTS.semiBold },
+  statVals: { flexDirection: 'row', justifyContent: 'space-around', padding: 12 },
+  statV: { fontSize: 23, fontFamily: FONTS.extraBold },
+  statL: { fontSize: 11, fontFamily: FONTS.bold, letterSpacing: 0.4 },
+  listcard: { height: 145, borderRadius: 8, backgroundColor: '#2e2e38', justifyContent: 'flex-end', padding: 14, overflow: 'hidden' },
   listShade: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.25)' },
-  listTitle: { color: '#fff', fontSize: 22, fontFamily: FONTS.extraBold },
+  listTitle: { color: '#fff', fontSize: 20, fontFamily: FONTS.extraBold },
   dotsRow: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 12 },
   dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#cfcfcf' },
   dotActive: { backgroundColor: COLORS.yellow },
-  heartBadge: { width: 28, height: 28, borderRadius: 14, backgroundColor: COLORS.red, alignItems: 'center', justifyContent: 'center' },
+  heartBadge: { width: 24, height: 24, borderRadius: 12, backgroundColor: COLORS.red, alignItems: 'center', justifyContent: 'center' },
 });

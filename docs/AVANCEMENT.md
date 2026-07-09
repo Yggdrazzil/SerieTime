@@ -6,7 +6,7 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
-Dernière mise à jour : **2026-07-09** (Claude) — vague d'animations 4 : recherche/Explorer, réglages, social, notifications, films, profils
+Dernière mise à jour : **2026-07-09** (Claude) — cotes « pixel perfect » Explorer + Profil (suite du recalage TV Time du 08/07)
 
 ---
 
@@ -65,6 +65,30 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
 ## Journal des modifications
 
 > Entrée type : `### AAAA-MM-JJ — Auteur` puis une liste courte de ce qui a changé.
+
+### 2026-07-09 — Claude (2)
+- **Cotes « pixel perfect » Explorer + Profil** (comparaison px des captures
+  SerieTime vs TV Time, même téléphone — suite du recalage du 08/07 qui ne
+  couvrait que Séries/Films) :
+  - **Explorer — recherche** : barre compacte 70→**56dp** (saisie 19→17,
+    icône 24→22), **soulignement sous toute la rangée** au lieu d'un champ
+    encadré (le liseré venait du focus-ring du navigateur sur la web app,
+    neutralisé via `outlineStyle:none`) ; placeholder court « Rechercher » au
+    repos, complet une fois le champ actif (comme TV Time) ; onglets répartis
+    sur toute la largeur (police 15→14) ; résultats : affiche 74→**56dp**,
+    titre 20→**17**, méta 15→14, bouton +/coche 44→**40dp**, séparateurs
+    hairline entre les lignes.
+  - **Explorer — flux PARCOURIR** : cartes hero en **16/9** (au lieu de 16/11),
+    coins arrondis 5→**12**, bouton + 46→**40dp**, titre 22→**20**,
+    description 16→15 ; puces de mode/catégorie légèrement plus grandes
+    (police 13→14, comme les puces FLUX/DÉCOUVRIR de TV Time) + suppression
+    d'un `fontWeight` interdit (→ `FONTS.extraBold`).
+  - **Profil** : avatar 82→**62dp** (initiale 34→26), nom 28→**24**,
+    MODIFIER (police 13→12, bord 1.5), cloche 46→**40dp**, compteurs
+    26/16→**21/14** (hauteur réduite), titres de section 24→**21**
+    (chevrons 22), cartes stats : rayon 5→**10**, valeurs 27→**23**,
+    libellés 12→11 ; carte Listes 155→145dp ; **marges latérales 24→16**
+    partout (titres, affiches, stats), pastille cœur 28→24.
 
 ### 2026-07-09 — Claude
 - **Vague d'animations 4** — les écrans restants sont animés (toujours API

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { View, Text, TextInput, ScrollView, StyleSheet, Pressable, Image, ActivityIndicator, Keyboard, RefreshControl, Animated, PanResponder, Dimensions } from 'react-native';
+import { View, Text, TextInput, ScrollView, StyleSheet, Pressable, Image, ActivityIndicator, Keyboard, RefreshControl, Animated, PanResponder, Dimensions, Platform } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -46,6 +46,7 @@ export default function ExploreScreen() {
 function ExploreScreenInner() {
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState('');
+  const [focused, setFocused] = useState(false);
   const [tab, setTab] = useState<'media' | 'users'>('media');
   // Debounce : une requête quand l'utilisateur marque une pause, pas à chaque frappe.
   const debouncedQuery = useDebounced(query.trim(), 300);
@@ -64,14 +65,19 @@ function ExploreScreenInner() {
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.white, paddingTop: insets.top }}>
+      {/* Barre façon TV Time : icône + champ, simple soulignement sous toute la
+          rangée (pas d'encadré — on neutralise aussi le focus-ring du navigateur
+          sur la web app). Placeholder court au repos, complet une fois le champ actif. */}
       <View style={styles.searchbar}>
-        <Feather name="search" size={24} color={searching ? COLORS.black : COLORS.textMuted} />
+        <Feather name="search" size={22} color={searching ? COLORS.black : COLORS.textMuted} />
         <TextInput
-          style={styles.input}
-          placeholder="Rechercher des séries et films"
+          style={[styles.input, Platform.OS === 'web' && ({ outlineStyle: 'none' } as never)]}
+          placeholder={focused || query ? 'Rechercher des séries et films' : 'Rechercher'}
           placeholderTextColor={COLORS.textMuted}
           value={query}
           onChangeText={setQuery}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
           autoCapitalize="none"
         />
         {query ? (
@@ -211,7 +217,7 @@ function MediaResults({ query, rawQuery }: { query: string; rawQuery: string }) 
                 {r.title}
               </Text>
               <View style={styles.resultMetaRow}>
-                <Feather name={r.type === 'show' ? 'tv' : 'film'} size={15} color={COLORS.textMuted} />
+                <Feather name={r.type === 'show' ? 'tv' : 'film'} size={14} color={COLORS.textMuted} />
                 <Text style={styles.resultMeta}>
                   {[r.type === 'show' ? 'Série' : 'Film', r.year].filter(Boolean).join(' · ')}
                 </Text>
@@ -224,11 +230,11 @@ function MediaResults({ query, rawQuery }: { query: string; rawQuery: string }) 
             ) : isFollowed ? (
               // La coche « ajouté » arrive avec un petit rebond (feedback du +).
               <PopIn style={styles.addedSquare}>
-                <Feather name="check" size={22} color={COLORS.textMuted} />
+                <Feather name="check" size={20} color={COLORS.textMuted} />
               </PopIn>
             ) : (
               <Pressable style={styles.addSquare} onPress={() => add(r, key)} hitSlop={6}>
-                <Feather name="plus" size={24} color="#E6B800" />
+                <Feather name="plus" size={22} color="#E6B800" />
               </Pressable>
             )}
           </Pressable>
@@ -569,15 +575,15 @@ function Feed({
                   <View style={StyleSheet.absoluteFill} pointerEvents="none"><ActivityIndicator style={{ flex: 1 }} color="#fff" /></View>
                 ) : null}
                 {followed[key] || f.inLibrary ? (
-                  <PopIn style={styles.plus}><Feather name="check" size={26} color={COLORS.yellow} /></PopIn>
+                  <PopIn style={styles.plus}><Feather name="check" size={24} color={COLORS.yellow} /></PopIn>
                 ) : (
                   <Pressable style={styles.plus} onPress={() => browseAdd(f, key)}>
-                    {addingKey === key ? <ActivityIndicator color={COLORS.yellow} /> : <Feather name="plus" size={26} color={COLORS.yellow} />}
+                    {addingKey === key ? <ActivityIndicator color={COLORS.yellow} /> : <Feather name="plus" size={24} color={COLORS.yellow} />}
                   </Pressable>
                 )}
                 <View style={styles.heroCap}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Feather name={f.type === 'show' ? 'tv' : 'film'} size={22} color="#fff" />
+                    <Feather name={f.type === 'show' ? 'tv' : 'film'} size={20} color="#fff" />
                     <Text style={styles.heroTitle} numberOfLines={1}>{f.title}</Text>
                   </View>
                   <Text style={styles.heroMeta}>{f.year ?? ''}</Text>
@@ -744,51 +750,55 @@ function DetailAction({ icon, label, tint, onPress, busy }: { icon: keyof typeof
 
 const styles = StyleSheet.create({
   feedHead: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, gap: 10, backgroundColor: COLORS.white },
-  catChip: { backgroundColor: COLORS.chipGrey, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 },
+  catChip: { backgroundColor: COLORS.chipGrey, borderRadius: 999, paddingHorizontal: 16, paddingVertical: 9 },
   catChipSel: { backgroundColor: COLORS.yellow },
-  catChipText: { fontSize: 13, fontWeight: '700', color: COLORS.textMuted, letterSpacing: 0.4 },
+  catChipText: { fontSize: 14, fontFamily: FONTS.extraBold, color: COLORS.textMuted, letterSpacing: 0.4 },
   catChipTextSel: { color: COLORS.black },
   refreshBtn: { width: 36, height: 36, borderRadius: 18, borderWidth: 2, borderColor: COLORS.black, alignItems: 'center', justifyContent: 'center', marginLeft: 'auto' },
-  searchbar: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, height: 70 },
-  input: { flex: 1, fontFamily: FONTS.regular, fontSize: 19, borderBottomWidth: 1, borderBottomColor: COLORS.border, paddingVertical: 8 },
-  cancel: { color: COLORS.blue, fontFamily: FONTS.regular, fontSize: 17 },
+  // Cotes TV Time (comparaison px sur captures, même téléphone) : rangée ~56dp,
+  // saisie 17, soulignement sous icône + champ (pas d'encadré).
+  searchbar: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 20, height: 56, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  input: { flex: 1, fontFamily: FONTS.regular, fontSize: 17, borderWidth: 0, paddingVertical: 8 },
+  cancel: { color: COLORS.blue, fontFamily: FONTS.regular, fontSize: 16 },
   tabs: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: COLORS.borderLight },
-  tab: { paddingHorizontal: 18, paddingVertical: 12, borderBottomWidth: 3, borderBottomColor: 'transparent', marginBottom: -1 },
+  // Onglets répartis sur toute la largeur, comme TV Time.
+  tab: { flex: 1, alignItems: 'center', paddingVertical: 12, borderBottomWidth: 3, borderBottomColor: 'transparent', marginBottom: -1 },
   tabActive: { borderBottomColor: COLORS.black },
-  tabText: { fontSize: 15, fontFamily: FONTS.extraBold, letterSpacing: 0.4, color: COLORS.textSoft },
+  tabText: { fontSize: 14, fontFamily: FONTS.extraBold, letterSpacing: 0.4, color: COLORS.textSoft },
   tabTextActive: { color: COLORS.black },
-  resultRow: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: 20, paddingVertical: 10 },
-  resultPoster: { width: 74, aspectRatio: 2 / 3, borderRadius: 6, backgroundColor: '#e5e5e5' },
+  resultRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 20, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: COLORS.borderLight },
+  resultPoster: { width: 56, aspectRatio: 2 / 3, borderRadius: 4, backgroundColor: '#e5e5e5' },
   posterEmpty: { alignItems: 'center', justifyContent: 'center' },
-  resultTitle: { fontSize: 20, fontFamily: FONTS.bold },
-  resultMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
-  resultMeta: { fontFamily: FONTS.regular, fontSize: 15, color: COLORS.textMuted },
-  addSquare: { width: 44, height: 44, borderRadius: 10, borderWidth: 2.5, borderColor: COLORS.yellow, alignItems: 'center', justifyContent: 'center' },
-  addSquareGhost: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  addedSquare: { width: 44, height: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  resultTitle: { fontSize: 17, fontFamily: FONTS.bold },
+  resultMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 },
+  resultMeta: { fontFamily: FONTS.regular, fontSize: 14, color: COLORS.textMuted },
+  addSquare: { width: 40, height: 40, borderRadius: 10, borderWidth: 2.5, borderColor: COLORS.yellow, alignItems: 'center', justifyContent: 'center' },
+  addSquareGhost: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  addedSquare: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   userRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 20, paddingVertical: 10 },
   userTap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 14 },
-  avatar: { width: 46, height: 46, borderRadius: 23, backgroundColor: '#20202a', alignItems: 'center', justifyContent: 'center' },
-  avatarInit: { color: '#fff', fontSize: 18, fontFamily: FONTS.extraBold },
-  userName: { flex: 1, fontSize: 18, fontFamily: FONTS.bold },
+  avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#20202a', alignItems: 'center', justifyContent: 'center' },
+  avatarInit: { color: '#fff', fontSize: 17, fontFamily: FONTS.extraBold },
+  userName: { flex: 1, fontSize: 16, fontFamily: FONTS.bold },
   followBtn: { minWidth: 96, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 999, backgroundColor: COLORS.black, alignItems: 'center' },
   followingBtn: { backgroundColor: COLORS.chipGrey },
   followText: { color: '#fff', fontFamily: FONTS.extraBold, fontSize: 13, letterSpacing: 0.4 },
   followingText: { color: COLORS.black },
-  hero: { marginHorizontal: 20, marginBottom: 24, borderRadius: 5, overflow: 'hidden', ...{ elevation: 3 } },
-  heroImg: { aspectRatio: 16 / 11, backgroundColor: '#26262e', justifyContent: 'flex-end' },
+  // Cartes hero façon TV Time : image 16/9, coins bien arrondis, + de 40dp.
+  hero: { marginHorizontal: 20, marginBottom: 24, borderRadius: 12, overflow: 'hidden', ...{ elevation: 3 } },
+  heroImg: { aspectRatio: 16 / 9, backgroundColor: '#26262e', justifyContent: 'flex-end' },
   heroShade: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.25)' },
-  plus: { position: 'absolute', right: 16, top: 16, width: 46, height: 46, borderRadius: 10, borderWidth: 2.5, borderColor: COLORS.yellow, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.25)' },
+  plus: { position: 'absolute', right: 14, top: 14, width: 40, height: 40, borderRadius: 10, borderWidth: 2.5, borderColor: COLORS.yellow, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.25)' },
   heroCap: { padding: 14 },
-  heroTitle: { color: '#fff', fontSize: 22, fontFamily: FONTS.extraBold, flexShrink: 1 },
+  heroTitle: { color: '#fff', fontSize: 20, fontFamily: FONTS.extraBold, flexShrink: 1 },
   heroMeta: { color: 'rgba(255,255,255,0.9)', fontFamily: FONTS.regular, fontSize: 14, marginTop: 2 },
-  heroDesc: { padding: 16, fontFamily: FONTS.regular, fontSize: 16, lineHeight: 22 },
+  heroDesc: { padding: 14, fontFamily: FONTS.regular, fontSize: 15, lineHeight: 21 },
   // --- Bascule de mode Parcourir / Découvrir ---
   modeBar: { flexDirection: 'row', gap: 8, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 4 },
-  modeChip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 7, backgroundColor: COLORS.chipGrey },
+  modeChip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 999, paddingHorizontal: 16, paddingVertical: 9, backgroundColor: COLORS.chipGrey },
   modeChipOn: { backgroundColor: COLORS.yellow },
   modeChipDark: { backgroundColor: 'rgba(255,255,255,0.14)' },
-  modeChipText: { fontSize: 13, fontFamily: FONTS.extraBold, letterSpacing: 0.4 },
+  modeChipText: { fontSize: 14, fontFamily: FONTS.extraBold, letterSpacing: 0.4 },
   // --- Explorer façon TikTok/Tinder ---
   deckTop: { backgroundColor: COLORS.pageMuted, zIndex: 10 },
   catChipDark: { backgroundColor: 'rgba(255,255,255,0.14)' },
