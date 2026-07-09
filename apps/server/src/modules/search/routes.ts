@@ -84,25 +84,46 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
       include: { statuses: { where: { userId: request.userId } } },
       take: 20,
     });
-    const results: SearchResult[] = local.map((m) => ({
-      id: m.id,
-      tmdbId: m.tmdbId,
-      tvdbId: m.tvdbId,
-      type: m.type as 'show' | 'movie',
-      title: m.localizedTitle ?? m.title,
-      year: m.year,
-      posterPath: m.posterPath,
-      backdropPath: m.backdropPath,
-      overview: m.overview,
-      inLibrary: m.statuses.length > 0,
-    }));
+    // Déduplication à travers local + TMDb + TVDB : un même show pouvait sortir
+    // deux fois (ex. « Naruto » importé via TVDB + résultat TMDb au tmdbId
+    // différent). On compare par id externe ET par type+titre normalisé+année.
+    const results: SearchResult[] = [];
+    const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
+    const seen = new Set<string>();
+    const keysFor = (o: { tmdbId?: string | null; tvdbId?: string | null; type: string; title: string; year?: number | null }) => {
+      const k: string[] = [];
+      if (o.tmdbId) k.push(`tmdb:${o.tmdbId}`);
+      if (o.tvdbId) k.push(`tvdb:${o.tvdbId}`);
+      k.push(`${o.type}:${norm(o.title)}:${o.year ?? ''}`);
+      return k;
+    };
+    const add = (entry: SearchResult): boolean => {
+      const keys = keysFor(entry);
+      if (keys.some((key) => seen.has(key))) return false;
+      keys.forEach((key) => seen.add(key));
+      results.push(entry);
+      return true;
+    };
+
+    for (const m of local) {
+      add({
+        id: m.id,
+        tmdbId: m.tmdbId,
+        tvdbId: m.tvdbId,
+        type: m.type as 'show' | 'movie',
+        title: m.localizedTitle ?? m.title,
+        year: m.year,
+        posterPath: m.posterPath,
+        backdropPath: m.backdropPath,
+        overview: m.overview,
+        inLibrary: m.statuses.length > 0,
+      });
+    }
 
     if (tmdbEnabled()) {
       const remote = await tmdbSearch(q, 'multi');
-      const knownTmdb = new Set(local.map((m) => m.tmdbId).filter(Boolean));
       for (const r of remote.slice(0, 20)) {
-        if (knownTmdb.has(String(r.id))) continue;
-        results.push({
+        add({
           id: null,
           tmdbId: String(r.id),
           tvdbId: null,
@@ -119,19 +140,14 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
       }
     }
 
-    // Séries TheTVDB (source alternative, ex. exports TV Time). Ajoutées si activée
-    // et non déjà présentes (par tvdb_id local ou titre déjà listé).
+    // Séries TheTVDB (source alternative, ex. exports TV Time).
     if (tvdbEnabled()) {
-      const knownTvdb = new Set(local.map((m) => m.tvdbId).filter(Boolean));
-      const knownTitles = new Set(results.map((r) => r.title.toLowerCase()));
       const remote = await tvdbSearch(q);
       const lang = tvdbLanguage();
       for (const r of remote.slice(0, 20)) {
-        if (knownTvdb.has(r.tvdb_id)) continue;
         // Titre localisé (fra) sinon anglais sinon nom d'origine — évite « ワンピース ».
         const title = r.translations?.[lang] ?? r.translations?.['eng'] ?? r.name;
-        if (knownTitles.has(title.toLowerCase())) continue;
-        results.push({
+        add({
           id: null,
           tmdbId: null,
           tvdbId: r.tvdb_id,
