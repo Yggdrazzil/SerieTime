@@ -10,6 +10,7 @@ import { episodeRoutes } from './modules/episodes/routes.js';
 import { movieRoutes } from './modules/movies/routes.js';
 import { searchRoutes } from './modules/search/routes.js';
 import { profileRoutes } from './modules/profile/routes.js';
+import { statsRoutes } from './modules/stats/routes.js';
 import { listRoutes } from './modules/lists/routes.js';
 import { settingsRoutes } from './modules/settings/routes.js';
 import { backupRoutes } from './modules/backup/routes.js';
@@ -72,6 +73,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(movieRoutes);
   await app.register(searchRoutes);
   await app.register(profileRoutes);
+  await app.register(statsRoutes);
   await app.register(listRoutes);
   await app.register(settingsRoutes);
   await app.register(backupRoutes);
