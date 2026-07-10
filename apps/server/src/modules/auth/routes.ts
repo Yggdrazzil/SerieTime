@@ -40,6 +40,7 @@ function serializeUser(user: {
   googleId?: string | null;
   facebookId?: string | null;
   appleId?: string | null;
+  discordId?: string | null;
 }) {
   return {
     id: user.id,
@@ -57,6 +58,7 @@ function serializeUser(user: {
       google: Boolean(user.googleId),
       facebook: Boolean(user.facebookId),
       apple: Boolean(user.appleId),
+      discord: Boolean(user.discordId),
     },
   };
 }
@@ -72,8 +74,8 @@ async function createSession(userId: string) {
 // SSO — vérification des jetons auprès du fournisseur (côté serveur uniquement).
 // ---------------------------------------------------------------------------
 
-type Provider = 'google' | 'facebook' | 'apple';
-const ID_FIELD = { google: 'googleId', facebook: 'facebookId', apple: 'appleId' } as const;
+type Provider = 'google' | 'facebook' | 'apple' | 'discord';
+const ID_FIELD = { google: 'googleId', facebook: 'facebookId', apple: 'appleId', discord: 'discordId' } as const;
 
 type OAuthProfile = {
   providerId: string;
@@ -126,9 +128,37 @@ async function verifyFacebookToken(accessToken: string): Promise<OAuthProfile> {
   };
 }
 
+// Vérifie un access token Discord via /users/@me.
+async function verifyDiscordToken(accessToken: string): Promise<OAuthProfile> {
+  const res = await fetch('https://discord.com/api/users/@me', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok) throw new Error('discord_verify_failed');
+  const data = (await res.json()) as {
+    id?: string;
+    username?: string;
+    global_name?: string | null;
+    email?: string | null;
+    verified?: boolean;
+    avatar?: string | null;
+  };
+  if (!data.id) throw new Error('discord_no_id');
+  const avatar = data.avatar
+    ? `https://cdn.discordapp.com/avatars/${data.id}/${data.avatar}.png`
+    : null;
+  return {
+    providerId: data.id,
+    email: data.email ?? null,
+    emailVerified: Boolean(data.verified && data.email),
+    displayName: data.global_name || data.username || 'Utilisateur',
+    avatarUrl: avatar,
+  };
+}
+
 async function verifyOAuth(provider: Provider, token: string): Promise<OAuthProfile> {
   if (provider === 'google') return verifyGoogleToken(token);
   if (provider === 'facebook') return verifyFacebookToken(token);
+  if (provider === 'discord') return verifyDiscordToken(token);
   throw new Error('provider_not_supported'); // Apple : à venir.
 }
 
@@ -171,11 +201,14 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
   // client s'auto-configure sans rebuild — ce ne sont pas des secrets.
   app.get('/api/auth/providers', async () => {
     const googleClientId = env.GOOGLE_CLIENT_IDS.split(',').map((s) => s.trim()).filter(Boolean)[0] ?? '';
+    const discordClientId = env.DISCORD_CLIENT_ID.trim();
     return {
       google: googleClientId.length > 0,
       googleClientId,
       facebook: env.FACEBOOK_APP_ID.trim().length > 0,
       facebookAppId: env.FACEBOOK_APP_ID.trim(),
+      discord: discordClientId.length > 0,
+      discordClientId,
       apple: false, // à venir (nécessite un compte Apple Developer).
       password: true,
     };
@@ -185,7 +218,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
   // un compte existant si l'e-mail vérifié correspond (voir loginOrLinkOAuth).
   app.post('/api/auth/oauth', async (request, reply) => {
     const body = z
-      .object({ provider: z.enum(['google', 'facebook']), token: z.string().min(1) })
+      .object({ provider: z.enum(['google', 'facebook', 'discord']), token: z.string().min(1) })
       .parse(request.body);
     let profile: OAuthProfile;
     try {
@@ -201,7 +234,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
   // Lier une méthode SSO au compte connecté (depuis les réglages « comptes liés »).
   app.post('/api/auth/link', { preHandler: requireAuth }, async (request, reply) => {
     const body = z
-      .object({ provider: z.enum(['google', 'facebook']), token: z.string().min(1) })
+      .object({ provider: z.enum(['google', 'facebook', 'discord']), token: z.string().min(1) })
       .parse(request.body);
     let profile: OAuthProfile;
     try {
@@ -224,7 +257,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
 
   // Délier une méthode SSO — refusé s'il ne reste plus aucun moyen de connexion.
   app.post('/api/auth/unlink', { preHandler: requireAuth }, async (request, reply) => {
-    const body = z.object({ provider: z.enum(['google', 'facebook', 'apple']) }).parse(request.body);
+    const body = z.object({ provider: z.enum(['google', 'facebook', 'apple', 'discord']) }).parse(request.body);
     const user = await prisma.user.findUnique({ where: { id: request.userId } });
     if (!user) return reply.code(404).send({ error: 'not_found' });
     const field = ID_FIELD[body.provider];
@@ -233,6 +266,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       Boolean(user.googleId),
       Boolean(user.facebookId),
       Boolean(user.appleId),
+      Boolean(user.discordId),
     ].filter(Boolean).length;
     if (methods <= 1 && Boolean(user[field])) {
       return reply.code(400).send({ error: 'last_login_method' });

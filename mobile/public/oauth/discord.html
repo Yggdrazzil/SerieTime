@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Connexion Discord…</title>
+    <style>
+      body { font-family: -apple-system, system-ui, sans-serif; background: #fff; color: #333; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+    </style>
+  </head>
+  <body>
+    <p>Connexion en cours…</p>
+    <script>
+      // Discord (implicit grant) renvoie le token dans le fragment (#access_token=...).
+      // On le transmet à la fenêtre qui a ouvert la popup, puis on se ferme.
+      (function () {
+        var params = new URLSearchParams((location.hash || '').replace(/^#/, ''));
+        var token = params.get('access_token');
+        try {
+          if (window.opener) {
+            window.opener.postMessage(
+              { type: 'sso', provider: 'discord', token: token || null },
+              window.location.origin
+            );
+          }
+        } catch (e) {}
+        window.close();
+        // Si la fenêtre ne se ferme pas (bloquée), message de repli.
+        setTimeout(function () {
+          document.body.innerHTML = '<p>Tu peux fermer cet onglet et revenir à SerieTime.</p>';
+        }, 800);
+      })();
+    </script>
+  </body>
+</html>

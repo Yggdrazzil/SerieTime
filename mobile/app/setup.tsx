@@ -93,7 +93,7 @@ export default function Setup() {
 
   // Connexion / inscription via SSO (Google, Facebook) : un jeton du fournisseur
   // suffit — le serveur crée le compte ou retrouve/lie un compte existant.
-  const oauth = async (provider: 'google' | 'facebook', token: string) => {
+  const oauth = async (provider: 'google' | 'facebook' | 'discord', token: string) => {
     setBusy(true);
     setError(null);
     try {

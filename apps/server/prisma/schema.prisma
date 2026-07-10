@@ -30,6 +30,7 @@ model User {
   googleId     String?  @unique
   facebookId   String?  @unique
   appleId      String?  @unique
+  discordId    String?  @unique
   // Social : un profil privé n'est visible que de ses abonnés (et de lui-même).
   isPrivate    Boolean  @default(false)
   createdAt    DateTime @default(now())

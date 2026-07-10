@@ -20,6 +20,7 @@ const envSchema = z.object({
   GOOGLE_CLIENT_IDS: z.string().default(''),
   FACEBOOK_APP_ID: z.string().default(''),
   FACEBOOK_APP_SECRET: z.string().default(''),
+  DISCORD_CLIENT_ID: z.string().default(''),
   // NB : z.coerce.boolean() rendrait "false" -> true. On parse la chaîne explicitement.
   TVMAZE_ENABLED: z
     .string()

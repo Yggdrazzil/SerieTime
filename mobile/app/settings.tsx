@@ -9,7 +9,7 @@ import { COLORS, FONTS } from '@/lib/theme';
 import { PageHeader } from '@/components/PageHeader';
 import { FadeSwitch, PopIn } from '@/components/anim';
 import { useReduceMotion } from '@/lib/useReduceMotion';
-import { ssoWebAvailable, initGoogleButton, facebookLogin } from '@/lib/sso';
+import { ssoWebAvailable, initGoogleButton, facebookLogin, discordLogin } from '@/lib/sso';
 
 const NATIVE = Platform.OS !== 'web';
 
@@ -93,7 +93,11 @@ function AccountTab() {
   );
 }
 
-type Providers = { google: boolean; googleClientId: string; facebook: boolean; facebookAppId: string };
+type Providers = {
+  google: boolean; googleClientId: string;
+  facebook: boolean; facebookAppId: string;
+  discord: boolean; discordClientId: string;
+};
 
 // Section « Comptes liés » : lier/délier Google et Facebook au compte courant
 // (web app). Masquée si aucun fournisseur n'est configuré côté serveur.
@@ -111,7 +115,7 @@ function LinkedAccounts() {
     return () => { cancelled = true; };
   }, []);
 
-  const link = async (provider: 'google' | 'facebook', tok: string) => {
+  const link = async (provider: 'google' | 'facebook' | 'discord', tok: string) => {
     if (!token) return;
     setBusy(provider);
     setErr(null);
@@ -126,7 +130,7 @@ function LinkedAccounts() {
       setBusy(null);
     }
   };
-  const unlink = async (provider: 'google' | 'facebook') => {
+  const unlink = async (provider: 'google' | 'facebook' | 'discord') => {
     if (!token) return;
     setBusy(provider);
     setErr(null);
@@ -151,7 +155,7 @@ function LinkedAccounts() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cfg, linked.google]);
 
-  if (!ssoWebAvailable() || !cfg || (!cfg.google && !cfg.facebook)) return null;
+  if (!ssoWebAvailable() || !cfg || (!cfg.google && !cfg.facebook && !cfg.discord)) return null;
 
   return (
     <>
@@ -163,6 +167,20 @@ function LinkedAccounts() {
             <LinkedRow label="Google" busy={busy === 'google'} onUnlink={() => unlink('google')} />
           ) : (
             <View ref={gRef} style={{ alignItems: 'flex-start', paddingVertical: 4 }} />
+          )
+        ) : null}
+        {cfg.discord ? (
+          linked.discord ? (
+            <LinkedRow label="Discord" busy={busy === 'discord'} onUnlink={() => unlink('discord')} />
+          ) : (
+            <Pressable
+              style={[styles.fbLink, { backgroundColor: '#5865F2' }]}
+              disabled={busy === 'discord'}
+              onPress={() => discordLogin(cfg.discordClientId).then((t) => link('discord', t)).catch(() => undefined)}
+            >
+              <Feather name="message-circle" size={16} color="#fff" />
+              <Text style={styles.fbLinkText}>Lier Discord</Text>
+            </Pressable>
           )
         ) : null}
         {cfg.facebook ? (
