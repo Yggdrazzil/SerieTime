@@ -46,3 +46,12 @@ const GROUP_LABELS: Record<string, string> = {
 export function queueGroupLabel(group: string): string {
   return GROUP_LABELS[group] ?? group.toUpperCase();
 }
+
+// Compteurs sociaux compacts, format FR (séparateur virgule) façon TikTok :
+// 12 → "12" · 1200 → "1,2 K" · 13400 → "13,4 K" · 2_000_000 → "2 M".
+export function formatCount(n: number): string {
+  if (n < 1000) return String(n);
+  const [value, suffix]: [number, string] = n < 1_000_000 ? [n / 1000, 'K'] : [n / 1_000_000, 'M'];
+  const label = value.toFixed(1).replace(/\.0$/, '').replace('.', ',');
+  return `${label} ${suffix}`;
+}
