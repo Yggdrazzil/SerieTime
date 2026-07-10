@@ -6,6 +6,7 @@ import { api, checkHealth, ApiError } from '@/lib/api';
 import { useAppStore } from '@/lib/store';
 import { CONFIGURED_SERVER_URL } from '@/lib/config';
 import { COLORS, FONTS } from '@/lib/theme';
+import { SsoButtons } from '@/components/SsoButtons';
 
 type Step = 'server' | 'auth';
 type Mode = 'login' | 'register';
@@ -85,6 +86,22 @@ export default function Setup() {
       } else {
         setError(mode === 'register' ? 'Impossible de créer le compte.' : 'Connexion impossible.');
       }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Connexion / inscription via SSO (Google, Facebook) : un jeton du fournisseur
+  // suffit — le serveur crée le compte ou retrouve/lie un compte existant.
+  const oauth = async (provider: 'google' | 'facebook', token: string) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await api.post<{ token: string; user: any }>('/api/auth/oauth', { provider, token });
+      setAuth(res.token, res.user);
+      router.replace('/(tabs)');
+    } catch {
+      setError('Connexion via ce compte impossible.');
     } finally {
       setBusy(false);
     }
@@ -199,6 +216,9 @@ export default function Setup() {
               {mode === 'register' ? 'J’ai déjà un compte — Se connecter' : 'Créer un nouveau compte'}
             </Text>
           </Pressable>
+
+          {/* SSO (web app) : Google / Facebook. Masqué s'ils ne sont pas configurés. */}
+          <SsoButtons onToken={oauth} separator="ou" />
 
           {needsServerStep ? (
             <Pressable onPress={() => setStep('server')}>

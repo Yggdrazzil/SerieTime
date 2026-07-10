@@ -9,6 +9,7 @@ import { COLORS, FONTS } from '@/lib/theme';
 import { PageHeader } from '@/components/PageHeader';
 import { FadeSwitch, PopIn } from '@/components/anim';
 import { useReduceMotion } from '@/lib/useReduceMotion';
+import { ssoWebAvailable, initGoogleButton, facebookLogin } from '@/lib/sso';
 
 const NATIVE = Platform.OS !== 'web';
 
@@ -71,6 +72,7 @@ function AccountTab() {
         <Field label="Identifiant utilisateur" value={user?.id ?? ''} />
       </View>
       <Row label="Modifier le mot de passe" onPress={() => setPwOpen(true)} />
+      <LinkedAccounts />
       <Divider />
       <SectionTitle>Import & sauvegarde</SectionTitle>
       <Row label="Importer mes données TV Time" onPress={() => router.push('/import')} />
@@ -87,6 +89,112 @@ function AccountTab() {
 
       {pwOpen ? <PasswordModal onClose={() => setPwOpen(false)} /> : null}
       {delOpen ? <DeleteAccountModal onClose={() => setDelOpen(false)} onDeleted={logout} /> : null}
+    </View>
+  );
+}
+
+type Providers = { google: boolean; googleClientId: string; facebook: boolean; facebookAppId: string };
+
+// Section « Comptes liés » : lier/délier Google et Facebook au compte courant
+// (web app). Masquée si aucun fournisseur n'est configuré côté serveur.
+function LinkedAccounts() {
+  const { token, user, setAuth } = useAppStore();
+  const [cfg, setCfg] = useState<Providers | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const gRef = useRef<View>(null);
+  const linked = ((user as { linkedProviders?: Record<string, boolean> } | null)?.linkedProviders) ?? {};
+
+  useEffect(() => {
+    let cancelled = false;
+    api.get<Providers>('/api/auth/providers').then((p) => !cancelled && setCfg(p)).catch(() => undefined);
+    return () => { cancelled = true; };
+  }, []);
+
+  const link = async (provider: 'google' | 'facebook', tok: string) => {
+    if (!token) return;
+    setBusy(provider);
+    setErr(null);
+    try {
+      const res = await api.post<{ user: unknown }>('/api/auth/link', { provider, token: tok });
+      setAuth(token, res.user as never);
+    } catch (e) {
+      setErr(e instanceof ApiError && e.code === 'already_linked_other_account'
+        ? 'Ce compte est déjà lié à un autre utilisateur.'
+        : 'Liaison impossible.');
+    } finally {
+      setBusy(null);
+    }
+  };
+  const unlink = async (provider: 'google' | 'facebook') => {
+    if (!token) return;
+    setBusy(provider);
+    setErr(null);
+    try {
+      const res = await api.post<{ user: unknown }>('/api/auth/unlink', { provider });
+      setAuth(token, res.user as never);
+    } catch (e) {
+      setErr(e instanceof ApiError && e.code === 'last_login_method'
+        ? 'Impossible : c’est ta seule méthode de connexion.'
+        : 'Impossible de délier.');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  // Bouton officiel Google, rendu seulement s'il est configuré et pas déjà lié.
+  useEffect(() => {
+    if (!cfg?.google || linked.google || !ssoWebAvailable() || !gRef.current) return;
+    initGoogleButton(cfg.googleClientId, gRef.current as unknown as HTMLElement, (t) => link('google', t)).catch(
+      () => undefined,
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cfg, linked.google]);
+
+  if (!ssoWebAvailable() || !cfg || (!cfg.google && !cfg.facebook)) return null;
+
+  return (
+    <>
+      <Divider />
+      <SectionTitle>Comptes liés</SectionTitle>
+      <View style={{ paddingHorizontal: 24, gap: 12, paddingBottom: 8 }}>
+        {cfg.google ? (
+          linked.google ? (
+            <LinkedRow label="Google" busy={busy === 'google'} onUnlink={() => unlink('google')} />
+          ) : (
+            <View ref={gRef} style={{ alignItems: 'flex-start', paddingVertical: 4 }} />
+          )
+        ) : null}
+        {cfg.facebook ? (
+          linked.facebook ? (
+            <LinkedRow label="Facebook" busy={busy === 'facebook'} onUnlink={() => unlink('facebook')} />
+          ) : (
+            <Pressable
+              style={styles.fbLink}
+              disabled={busy === 'facebook'}
+              onPress={() => facebookLogin(cfg.facebookAppId).then((t) => link('facebook', t)).catch(() => undefined)}
+            >
+              <Feather name="facebook" size={16} color="#fff" />
+              <Text style={styles.fbLinkText}>Lier Facebook</Text>
+            </Pressable>
+          )
+        ) : null}
+        {err ? <Text style={{ color: COLORS.red, fontFamily: FONTS.regular, fontSize: 14 }}>{err}</Text> : null}
+      </View>
+    </>
+  );
+}
+
+function LinkedRow({ label, busy, onUnlink }: { label: string; busy: boolean; onUnlink: () => void }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <Feather name="check-circle" size={18} color={COLORS.green} />
+        <Text style={{ fontFamily: FONTS.bold, fontSize: 16 }}>{label} lié</Text>
+      </View>
+      <Pressable onPress={onUnlink} disabled={busy}>
+        {busy ? <ActivityIndicator size="small" color={COLORS.textMuted} /> : <Text style={{ color: COLORS.red, fontFamily: FONTS.bold, fontSize: 14 }}>Délier</Text>}
+      </Pressable>
     </View>
   );
 }
@@ -313,6 +421,8 @@ const styles = StyleSheet.create({
   radioOn: { backgroundColor: COLORS.yellow, borderColor: COLORS.yellow },
   divider: { height: 1, backgroundColor: COLORS.borderLight, marginVertical: 12 },
   logout: { fontSize: 15, fontFamily: FONTS.extraBold, letterSpacing: 0.6 },
+  fbLink: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#1877F2', borderRadius: 999, paddingVertical: 10, paddingHorizontal: 18, alignSelf: 'flex-start' },
+  fbLinkText: { color: '#fff', fontFamily: FONTS.bold, fontSize: 14 },
   cacheBtn: { borderWidth: 2, borderColor: COLORS.black, borderRadius: 999, paddingVertical: 14, alignItems: 'center' },
   cacheText: { fontSize: 14, fontFamily: FONTS.extraBold, letterSpacing: 0.6 },
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', paddingHorizontal: 24 },

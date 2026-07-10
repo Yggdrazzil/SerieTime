@@ -167,12 +167,19 @@ async function loginOrLinkOAuth(provider: Provider, profile: OAuthProfile) {
 
 export async function authRoutes(app: FastifyInstance): Promise<void> {
   // Quels providers SSO sont configurés côté serveur (le mobile adapte son écran).
-  app.get('/api/auth/providers', async () => ({
-    google: env.GOOGLE_CLIENT_IDS.trim().length > 0,
-    facebook: env.FACEBOOK_APP_ID.trim().length > 0,
-    apple: false, // à venir (nécessite un compte Apple Developer).
-    password: true,
-  }));
+  // On expose les IDs PUBLICS (client id Google, app id Facebook) pour que le
+  // client s'auto-configure sans rebuild — ce ne sont pas des secrets.
+  app.get('/api/auth/providers', async () => {
+    const googleClientId = env.GOOGLE_CLIENT_IDS.split(',').map((s) => s.trim()).filter(Boolean)[0] ?? '';
+    return {
+      google: googleClientId.length > 0,
+      googleClientId,
+      facebook: env.FACEBOOK_APP_ID.trim().length > 0,
+      facebookAppId: env.FACEBOOK_APP_ID.trim(),
+      apple: false, // à venir (nécessite un compte Apple Developer).
+      password: true,
+    };
+  });
 
   // Connexion / inscription via SSO. Idempotent : crée le compte, ou le relie à
   // un compte existant si l'e-mail vérifié correspond (voir loginOrLinkOAuth).
