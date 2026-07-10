@@ -5,6 +5,7 @@ import { requireAuth } from '../auth/routes.js';
 import { serializeMedia } from '../media/serialize.js';
 import { tmdbEnabled, tmdbSearch, tmdbSearchPerson, tmdbTrending } from '../../services/tmdb/index.js';
 import { tvdbEnabled, tvdbLanguage, tvdbSearch } from '../../services/tvdb/index.js';
+import { attachSocialStats } from './socialStats.js';
 
 type SearchResult = {
   id: string | null;
@@ -19,6 +20,9 @@ type SearchResult = {
   inLibrary: boolean;
   // Catégorie du flux Explorer (filtre côté app) — absent des résultats de recherche.
   category?: 'serie' | 'film' | 'anime';
+  // Signaux sociaux (toute l'app) + état perso — remplis par attachSocialStats sur le flux Explorer.
+  stats?: { likes: number; watched: number; comments: number };
+  me?: { liked: boolean; watched: boolean };
 };
 
 // Animé = animation (genre TMDb 16) d'origine japonaise.
@@ -321,7 +325,8 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
       perCat.set(cat, n + 1);
       return true;
     });
-    return { feed };
+    const withStats = await attachSocialStats(feed, request.userId);
+    return { feed: withStats };
   });
 
   app.get('/api/explore/discover', async () => {
