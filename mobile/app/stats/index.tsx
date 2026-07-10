@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Pressable } from 'react-native';
+import { Feather } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { watchTime } from '@/lib/format';
@@ -54,7 +56,11 @@ function SeriesTab({ s }: { s: SeriesStats }) {
   const t = watchTime(s.minutes);
   return (
     <ScrollView contentContainerStyle={styles.list}>
-      <BigCard title="Temps passé devant des épisodes" bigParts={[[t.months, 'MOIS'], [t.days, 'JOURS'], [t.hours, 'HEURES']]} />
+      <BigCard
+        title="Temps passé devant des épisodes"
+        bigParts={[[t.months, 'MOIS'], [t.days, 'JOURS'], [t.hours, 'HEURES']]}
+        compareHref="/stats/leaderboard?type=series"
+      />
       <Card title="Nombre total d'épisodes vus">
         <Text style={styles.huge}>{s.episodesWatched.toLocaleString('fr-FR')}</Text>
         <Text style={styles.sub}>{s.episodesLast7d} lors des 7 derniers jours</Text>
@@ -74,6 +80,7 @@ function SeriesTab({ s }: { s: SeriesStats }) {
       {s.marathons.length ? (
         <RankCard title="Plus longs marathons" col="ÉPISODES" rows={s.marathons.map((m) => [m.title, m.episodes])} />
       ) : null}
+      <BadgesCard />
     </ScrollView>
   );
 }
@@ -82,7 +89,11 @@ function MoviesTab({ m }: { m: MovieStats }) {
   const t = watchTime(m.minutes);
   return (
     <ScrollView contentContainerStyle={styles.list}>
-      <BigCard title="Temps passé à regarder des films" bigParts={[[t.months, 'MOIS'], [t.days, 'JOURS'], [t.hours, 'HEURES']]} />
+      <BigCard
+        title="Temps passé à regarder des films"
+        bigParts={[[t.months, 'MOIS'], [t.days, 'JOURS'], [t.hours, 'HEURES']]}
+        compareHref="/stats/leaderboard?type=movies"
+      />
       <Card title="Nombre total de films vus">
         <Text style={styles.huge}>{m.moviesWatched.toLocaleString('fr-FR')}</Text>
         <Text style={styles.sub}>{m.moviesLast7d} lors des 7 derniers jours</Text>
@@ -109,7 +120,8 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
   );
 }
 
-function BigCard({ title, bigParts }: { title: string; bigParts: [number, string][] }) {
+function BigCard({ title, bigParts, compareHref }: { title: string; bigParts: [number, string][]; compareHref?: string }) {
+  const router = useRouter();
   return (
     <View style={styles.card}>
       <Text style={styles.cardTitle}>{title}</Text>
@@ -121,7 +133,35 @@ function BigCard({ title, bigParts }: { title: string; bigParts: [number, string
           </View>
         ))}
       </View>
+      {compareHref ? (
+        <Pressable
+          style={styles.compare}
+          onPress={() => router.push(compareHref as Parameters<typeof router.push>[0])}
+        >
+          <Text style={styles.compareText}>COMPARER AVEC LES PERSONNES QUE VOUS SUIVEZ</Text>
+        </Pressable>
+      ) : null}
     </View>
+  );
+}
+
+// Carte « Badges » : nombre débloqué + accès à la page des succès.
+function BadgesCard() {
+  const router = useRouter();
+  const { data } = useQuery({
+    queryKey: ['stats', 'badges'],
+    queryFn: () => api.get<{ earned: number; total: number }>('/api/stats/badges'),
+    staleTime: 60_000,
+  });
+  return (
+    <Pressable style={styles.card} onPress={() => router.push('/stats/badges')}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Text style={styles.cardTitle}>Badges</Text>
+        <Feather name="chevron-right" size={22} color={COLORS.black} />
+      </View>
+      <Text style={styles.huge}>{data ? data.earned : '…'}</Text>
+      {data ? <Text style={styles.sub}>sur {data.total} badges</Text> : null}
+    </Pressable>
   );
 }
 
@@ -175,6 +215,8 @@ const styles = StyleSheet.create({
   big: { fontSize: 34, fontFamily: FONTS.extraBold },
   bigUnit: { fontSize: 15, fontFamily: FONTS.regular, color: COLORS.textMuted, marginBottom: 4 },
   sub: { fontFamily: FONTS.regular, fontSize: 14, color: COLORS.textMuted, textTransform: 'uppercase', marginTop: 2 },
+  compare: { marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: COLORS.borderLight },
+  compareText: { color: COLORS.blue, fontSize: 13, fontFamily: FONTS.bold, letterSpacing: 0.3 },
   axis: { fontSize: 10, fontFamily: FONTS.bold, color: COLORS.textMuted, letterSpacing: 0.5, marginBottom: 6 },
   chartRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', height: 165, gap: 3 },
   barCol: { flex: 1, alignItems: 'center', justifyContent: 'flex-end' },

@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../../db/client.js';
 import { requireAuth } from '../auth/routes.js';
 
@@ -164,5 +165,168 @@ export async function statsRoutes(app: FastifyInstance): Promise<void> {
         genres: topCounts(movieLib.flatMap((m) => splitGenres(m.media.genres)), 6),
       },
     };
+  });
+
+  // Classement (Bloc 2) : moi + les personnes que je suis, triés par temps de
+  // visionnage. Agrégation en SQL brut (une requête pour tous les comptes) :
+  // indispensable pour rester rapide avec des bibliothèques à 20k épisodes.
+  app.get('/api/stats/leaderboard', async (request) => {
+    const userId = request.userId;
+    const following = await prisma.follow.findMany({
+      where: { followerId: userId },
+      select: { followingId: true },
+    });
+    const ids = [userId, ...following.map((f) => f.followingId)];
+
+    const [epRows, mvRows, users] = await Promise.all([
+      prisma.$queryRaw<{ userId: string; minutes: bigint | number; count: bigint | number }[]>`
+        SELECT ues.userId AS userId,
+               SUM(COALESCE(e.runtime, m.runtime, ${EP_FALLBACK_MIN})) AS minutes,
+               COUNT(*) AS count
+        FROM "UserEpisodeStatus" ues
+        JOIN "Episode" e ON e.id = ues.episodeId
+        JOIN "Show" s ON s.id = e.showId
+        JOIN "Media" m ON m.id = s.mediaId
+        WHERE ues.status = 'watched' AND ues.userId IN (${Prisma.join(ids)})
+        GROUP BY ues.userId`,
+      prisma.$queryRaw<{ userId: string; minutes: bigint | number; count: bigint | number }[]>`
+        SELECT ums.userId AS userId,
+               SUM(COALESCE(m.runtime, ${MOVIE_FALLBACK_MIN})) AS minutes,
+               COUNT(*) AS count
+        FROM "UserMediaStatus" ums
+        JOIN "Media" m ON m.id = ums.mediaId
+        WHERE ums.status = 'completed' AND m.type = 'movie' AND ums.userId IN (${Prisma.join(ids)})
+        GROUP BY ums.userId`,
+      prisma.user.findMany({
+        where: { id: { in: ids } },
+        select: { id: true, displayName: true, avatarUrl: true },
+      }),
+    ]);
+
+    const ep = new Map(epRows.map((r) => [r.userId, { minutes: Number(r.minutes), count: Number(r.count) }]));
+    const mv = new Map(mvRows.map((r) => [r.userId, { minutes: Number(r.minutes), count: Number(r.count) }]));
+    const entry = (u: (typeof users)[number]) => ({
+      userId: u.id,
+      displayName: u.displayName,
+      avatarUrl: u.avatarUrl,
+      isMe: u.id === userId,
+    });
+    const series = users
+      .map((u) => ({ ...entry(u), minutes: ep.get(u.id)?.minutes ?? 0, episodes: ep.get(u.id)?.count ?? 0 }))
+      .sort((a, b) => b.minutes - a.minutes);
+    const movies = users
+      .map((u) => ({ ...entry(u), minutes: mv.get(u.id)?.minutes ?? 0, movies: mv.get(u.id)?.count ?? 0 }))
+      .sort((a, b) => b.minutes - a.minutes);
+    return { series, movies };
+  });
+
+  // Badges (Bloc 3) : calculés à la volée depuis l'état du compte — pas de table
+  // de déblocage, un badge reflète toujours la réalité (et « se répare » seul
+  // après un import). Icônes maison (Feather + couleur), pas d'art TV Time.
+  app.get('/api/stats/badges', async (request) => {
+    const userId = request.userId;
+    const [
+      episodesWatched,
+      moviesWatched,
+      showsAdded,
+      showsCompleted,
+      favorites,
+      comments,
+      epRatings,
+      mediaRatings,
+      followingCount,
+      followersCount,
+      imports,
+      minutesRow,
+      marathonRow,
+    ] = await Promise.all([
+      prisma.userEpisodeStatus.count({ where: { userId, status: 'watched' } }),
+      prisma.userMediaStatus.count({ where: { userId, status: 'completed', media: { type: 'movie' } } }),
+      prisma.userMediaStatus.count({ where: { userId, media: { type: 'show' } } }),
+      prisma.userMediaStatus.count({ where: { userId, status: 'completed', media: { type: 'show' } } }),
+      prisma.userMediaStatus.count({ where: { userId, isFavorite: true } }),
+      prisma.comment.count({ where: { userId } }),
+      prisma.userEpisodeStatus.count({ where: { userId, rating: { not: null } } }),
+      prisma.userMediaStatus.count({ where: { userId, rating: { not: null } } }),
+      prisma.follow.count({ where: { followerId: userId } }),
+      prisma.follow.count({ where: { followingId: userId } }),
+      prisma.import.count({ where: { userId } }),
+      prisma.$queryRaw<{ minutes: bigint | number | null }[]>`
+        SELECT SUM(COALESCE(e.runtime, m.runtime, ${EP_FALLBACK_MIN})) AS minutes
+        FROM "UserEpisodeStatus" ues
+        JOIN "Episode" e ON e.id = ues.episodeId
+        JOIN "Show" s ON s.id = e.showId
+        JOIN "Media" m ON m.id = s.mediaId
+        WHERE ues.status = 'watched' AND ues.userId = ${userId}`,
+      prisma.$queryRaw<{ maxRun: bigint | number | null }[]>`
+        SELECT MAX(c) AS maxRun FROM (
+          SELECT COUNT(*) AS c FROM "UserEpisodeStatus" ues
+          JOIN "Episode" e ON e.id = ues.episodeId
+          WHERE ues.userId = ${userId} AND ues.status = 'watched' AND ues.watchedAt IS NOT NULL
+          GROUP BY e.showId, date(ues.watchedAt / 1000, 'unixepoch')
+        )`,
+    ]);
+    const minutes = Number(minutesRow[0]?.minutes ?? 0);
+    const marathon = Number(marathonRow[0]?.maxRun ?? 0);
+    const ratings = epRatings + mediaRatings;
+
+    // (id, titre, description, icône Feather, couleur, valeur courante, objectif)
+    const def = (
+      id: string, title: string, description: string, icon: string, color: string, current: number, target: number,
+    ) => ({ id, title, description, icon, color, earned: current >= target, progress: { current: Math.min(current, target), target } });
+
+    const sections = [
+      {
+        title: 'Badges de visionnage',
+        badges: [
+          def('first-episode', 'Premier pas', 'Regarder son premier épisode', 'play', '#62D600', episodesWatched, 1),
+          def('serial-100', 'Habitué', 'Regarder 100 épisodes', 'tv', '#0075D9', episodesWatched, 100),
+          def('serial-1000', 'Accro aux séries', 'Regarder 1 000 épisodes', 'tv', '#7B5CD6', episodesWatched, 1000),
+          def('serial-5000', 'Marathonien du canapé', 'Regarder 5 000 épisodes', 'tv', '#E8871E', episodesWatched, 5000),
+          def('serial-20000', 'Légende du binge', 'Regarder 20 000 épisodes', 'award', '#FFD400', episodesWatched, 20000),
+          def('marathon-10', 'Marathonien', "10 épisodes d'une même série en un jour", 'zap', '#C7222A', marathon, 10),
+          def('time-month', 'Un mois de ta vie', "Cumuler 1 mois devant des séries", 'clock', '#0FA47A', minutes, 43_200),
+          def('time-year', 'Une année entière', "Cumuler 1 an devant des séries", 'clock', '#B8860B', minutes, 525_600),
+        ],
+      },
+      {
+        title: 'Badges de films',
+        badges: [
+          def('movie-1', 'Cinéphile en herbe', 'Regarder son premier film', 'film', '#62D600', moviesWatched, 1),
+          def('movie-50', 'Rat de cinéma', 'Regarder 50 films', 'film', '#0075D9', moviesWatched, 50),
+          def('movie-500', 'Encyclopédie vivante', 'Regarder 500 films', 'award', '#FFD400', moviesWatched, 500),
+        ],
+      },
+      {
+        title: 'Badges de collection',
+        badges: [
+          def('shows-10', 'Collectionneur', 'Suivre 10 séries', 'bookmark', '#62D600', showsAdded, 10),
+          def('shows-100', 'Grande bibliothèque', 'Suivre 100 séries', 'bookmark', '#0075D9', showsAdded, 100),
+          def('shows-500', 'Archiviste', 'Suivre 500 séries', 'archive', '#7B5CD6', showsAdded, 500),
+          def('completed-1', 'Finisseur', 'Terminer une série', 'check-circle', '#62D600', showsCompleted, 1),
+          def('completed-25', 'Jusqu’au générique', 'Terminer 25 séries', 'check-circle', '#E8871E', showsCompleted, 25),
+          def('favorite-1', 'Coup de cœur', 'Ajouter un favori', 'heart', '#C7222A', favorites, 1),
+        ],
+      },
+      {
+        title: 'Badges sociaux',
+        badges: [
+          def('comment-1', 'Bavard', 'Écrire un commentaire', 'message-circle', '#0075D9', comments, 1),
+          def('rating-1', 'Critique', 'Noter une série ou un film', 'star', '#FFD400', ratings, 1),
+          def('follow-1', 'Connecté', "S'abonner à quelqu'un", 'user-plus', '#62D600', followingCount, 1),
+          def('follower-1', 'Populaire', 'Avoir un abonné', 'users', '#7B5CD6', followersCount, 1),
+        ],
+      },
+      {
+        title: "Badges d'application",
+        badges: [
+          def('import-1', 'Migrateur', 'Importer son archive TV Time', 'download', '#0FA47A', imports, 1),
+        ],
+      },
+    ];
+
+    const earned = sections.reduce((n, s) => n + s.badges.filter((b) => b.earned).length, 0);
+    const total = sections.reduce((n, s) => n + s.badges.length, 0);
+    return { earned, total, sections };
   });
 }
