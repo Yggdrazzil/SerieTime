@@ -217,7 +217,7 @@ function FriendsTab() {
 
 const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, height: 52 },
-  title: { fontSize: 20, fontFamily: FONTS.extraBold },
+  title: { fontSize: 18, fontFamily: FONTS.extraBold },
   tabs: { flexDirection: 'row', paddingHorizontal: 16, gap: 8, marginBottom: 4 },
   tab: { flex: 1, paddingVertical: 10, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: 'transparent' },
   tabActive: { borderBottomColor: COLORS.yellow },
@@ -233,10 +233,10 @@ const styles = StyleSheet.create({
   feedComment: { fontFamily: FONTS.regular, fontSize: 14, color: COLORS.text, marginTop: 4, fontStyle: 'italic' },
   poster: { width: 40, aspectRatio: 2 / 3, borderRadius: 3, backgroundColor: '#e5e5e5', alignItems: 'center', justifyContent: 'center' },
   searchbar: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, height: 62 },
-  input: { flex: 1, fontFamily: FONTS.regular, fontSize: 17, borderBottomWidth: 1, borderBottomColor: COLORS.border, paddingVertical: 8 },
+  input: { flex: 1, fontFamily: FONTS.regular, fontSize: 16, borderBottomWidth: 1, borderBottomColor: COLORS.border, paddingVertical: 8 },
   userRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 20, paddingVertical: 10 },
   userTap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 14 },
-  userName: { flex: 1, fontSize: 17, fontFamily: FONTS.bold },
+  userName: { flex: 1, fontSize: 16, fontFamily: FONTS.bold },
   followBtn: { minWidth: 96, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 999, backgroundColor: COLORS.black, alignItems: 'center' },
   followingBtn: { backgroundColor: COLORS.chipGrey },
   followText: { color: '#fff', fontFamily: FONTS.extraBold, fontSize: 13, letterSpacing: 0.4 },

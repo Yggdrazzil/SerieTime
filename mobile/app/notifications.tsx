@@ -97,7 +97,7 @@ export default function Notifications() {
 
 const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, height: 52 },
-  title: { fontSize: 20, fontFamily: FONTS.extraBold },
+  title: { fontSize: 18, fontFamily: FONTS.extraBold },
   row: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: COLORS.borderLight },
   unread: { backgroundColor: COLORS.yellowSoft },
   iconWrap: { width: 40, height: 40, borderRadius: 20, backgroundColor: COLORS.chipGrey, alignItems: 'center', justifyContent: 'center' },

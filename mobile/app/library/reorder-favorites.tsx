@@ -115,8 +115,8 @@ function ReorderCell({ media, isShow }: { media: MediaDto; isShow: boolean }) {
 const styles = StyleSheet.create({
   topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingBottom: 2, paddingRight: 16 },
   topBtn: { width: 46, paddingVertical: 8, justifyContent: 'center' },
-  done: { color: COLORS.blue, fontSize: 18, fontFamily: FONTS.regular },
-  title: { fontSize: 22, fontFamily: FONTS.extraBold, lineHeight: 30, paddingHorizontal: 16, marginTop: 6, marginBottom: 14 },
+  done: { color: COLORS.blue, fontSize: 17, fontFamily: FONTS.regular },
+  title: { fontSize: 19, fontFamily: FONTS.extraBold, lineHeight: 26, paddingHorizontal: 16, marginTop: 6, marginBottom: 14 },
   divider: { height: 1, backgroundColor: COLORS.borderLight, marginBottom: 12 },
   posterBox: { flex: 1, borderRadius: 6, overflow: 'hidden', backgroundColor: '#e5e5e5' },
   posterEmpty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6, gap: 6 },

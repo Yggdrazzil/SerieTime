@@ -233,9 +233,9 @@ export default function Setup() {
 
 const styles = StyleSheet.create({
   brand: { fontSize: 34, fontFamily: FONTS.extraBold },
-  lead: { fontFamily: FONTS.regular, fontSize: 17, color: COLORS.textMuted, marginTop: 24 },
+  lead: { fontFamily: FONTS.regular, fontSize: 16, color: COLORS.textMuted, marginTop: 24 },
   label: { fontSize: 14, fontFamily: FONTS.bold, marginTop: 24 },
-  input: { borderBottomWidth: 1, borderBottomColor: COLORS.border, fontFamily: FONTS.regular, fontSize: 18, paddingVertical: 10, marginTop: 6 },
+  input: { borderBottomWidth: 1, borderBottomColor: COLORS.border, fontFamily: FONTS.regular, fontSize: 17, paddingVertical: 10, marginTop: 6 },
   error: { color: COLORS.red, fontFamily: FONTS.regular, fontSize: 15, marginTop: 12 },
   success: { color: COLORS.green, fontSize: 15, fontFamily: FONTS.semiBold, marginTop: 12 },
   btnOutline: { borderWidth: 2, borderColor: COLORS.black, borderRadius: 999, paddingVertical: 15, marginTop: 36, alignItems: 'center' },

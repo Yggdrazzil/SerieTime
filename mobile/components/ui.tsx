@@ -185,7 +185,7 @@ export const styles = StyleSheet.create({
   posterEmpty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6, gap: 6 },
   posterTitle: { fontSize: 12, fontFamily: FONTS.bold, color: '#777', textAlign: 'center' },
   empty: { alignItems: 'center', paddingVertical: 60, paddingHorizontal: 30 },
-  emptyTitle: { fontSize: 20, fontFamily: FONTS.extraBold, textAlign: 'center' },
+  emptyTitle: { fontSize: 18, fontFamily: FONTS.extraBold, textAlign: 'center' },
   emptyMsg: { fontFamily: FONTS.regular, fontSize: 15, color: COLORS.textMuted, marginTop: 8, textAlign: 'center' },
   retryBtn: { borderWidth: 2, borderColor: COLORS.black, borderRadius: 999, paddingVertical: 12, paddingHorizontal: 28, marginTop: 16 },
   retryText: { fontSize: 14, fontFamily: FONTS.extraBold, letterSpacing: 0.5 },

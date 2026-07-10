@@ -6,7 +6,7 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
-Dernière mise à jour : **2026-07-10** (Claude) — nouvelles saisons : resync TVDB corrigée (bug tmdbId), caches raccourcis, balayage d'arrière-plan pour « À voir »
+Dernière mise à jour : **2026-07-10** (Claude) — harmonisation générale des tailles (menus, feuilles, titres) sur toute l'app + feuille de tri des favoris pixel perfect
 
 ---
 
@@ -65,6 +65,24 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
 ## Journal des modifications
 
 > Entrée type : `### AAAA-MM-JJ — Auteur` puis une liste courte de ce qui a changé.
+
+### 2026-07-10 — Claude (3)
+- **Harmonisation générale des tailles** (réf. = onglet Séries recalé + mesures
+  px des captures TV Time). Échelle commune : grands titres de page 26→**21**,
+  titres de feuille/en-têtes 20-23→**18-19**, rangées de menus/feuilles
+  17-19→**15-16** (paddings 15-17→12-13), boutons pill texte 14-15→**13**
+  (hauteur ~40dp), champs 18→17.
+  - **Pages favoris pixel perfect** : titre 21, bouton jaune ~38dp (marges 12),
+    TRIER PAR 11/16, feuille de tri : titre 18, options 15 (rangées ~50dp),
+    pastille 28, ANNULER/APPLIQUER ~40dp ; menu « ... » 15 (icônes 19-20).
+  - **Réglages** : sections 23→19, rangées 19→16, interrupteurs/radios 16,
+    modales 18/17, boutons compacts. **Fiche** : sections 24→20, synopsis
+    18→16, saisons 24→20 (compteur 15), barre AJOUTER 15, Personnaliser 16,
+    compte à rebours 22. **Feuilles de filtres** (Séries/Films du profil) :
+    titre 18, options 15, puces 13, boutons 13/11. **Social / Notifications /
+    PageHeader / états vides** : titres 20→18, rangées 17→16. **Profil
+    public** : compteurs 24→21, sections 20→18. **Import / Setup / Édition de
+    profil / Couverture** : 17-24 → 16-20. Réordonnancement : titre 19.
 
 ### 2026-07-10 — Claude (2)
 - **Nouvelles saisons invisibles (cas Clevatess S2) : corrigé.** Trois causes

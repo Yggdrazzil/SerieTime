@@ -571,8 +571,8 @@ const pstyles = StyleSheet.create({
   // Mesures TV Time (réf. 38-40) : entête « Personnaliser » 15 regular,
   // options 17 semiBold, grille d'affiches 2 colonnes, sélection assombrie.
   menuHeader: { fontSize: 15, fontFamily: FONTS.regular, color: '#555', paddingHorizontal: 22, paddingTop: 20, paddingBottom: 8 },
-  menuItem: { paddingHorizontal: 22, paddingVertical: 17 },
-  menuItemText: { fontSize: 17, fontFamily: FONTS.semiBold },
+  menuItem: { paddingHorizontal: 22, paddingVertical: 13 },
+  menuItemText: { fontSize: 16, fontFamily: FONTS.regular },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16,
     paddingTop: 54, paddingBottom: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: COLORS.border,
@@ -590,7 +590,7 @@ const pstyles = StyleSheet.create({
   emptyNote: { color: COLORS.textMuted, fontFamily: FONTS.regular, fontSize: 15, padding: 20 },
   listCount: { color: COLORS.textMuted, fontFamily: FONTS.regular, fontSize: 15 },
   newListRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 24, paddingVertical: 16 },
-  newListInput: { flex: 1, borderBottomWidth: 1, borderBottomColor: COLORS.border, fontFamily: FONTS.regular, fontSize: 17, paddingVertical: 8 },
+  newListInput: { flex: 1, borderBottomWidth: 1, borderBottomColor: COLORS.border, fontFamily: FONTS.regular, fontSize: 16, paddingVertical: 8 },
   newListBtn: { backgroundColor: COLORS.yellow, borderRadius: 999, paddingHorizontal: 18, paddingVertical: 10 },
   newListBtnText: { fontFamily: FONTS.extraBold, fontSize: 13, letterSpacing: 0.4 },
 });
@@ -646,7 +646,7 @@ function MovieBody({ media, detail, onToggle }: any) {
       <View style={[styles.section, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <Feather name="eye" size={22} color={COLORS.black} />
-          <Text style={{ fontFamily: FONTS.regular, fontSize: 17 }}>{seen ? 'Vu' : 'Pas vu'}</Text>
+          <Text style={{ fontFamily: FONTS.regular, fontSize: 16 }}>{seen ? 'Vu' : 'Pas vu'}</Text>
         </View>
         <CheckCircle checked={seen} onPress={onToggle} />
       </View>
@@ -925,16 +925,16 @@ const styles = StyleSheet.create({
   heroShade: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.35)' },
   addBar: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: COLORS.yellow, paddingTop: 18, alignItems: 'center' },
   addBarRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  addBarText: { fontSize: 17, fontFamily: FONTS.extraBold, letterSpacing: 0.6 },
+  addBarText: { fontSize: 15, fontFamily: FONTS.extraBold, letterSpacing: 0.6 },
   heroBtns: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 14 },
   heroTitleWrap: { padding: 20 },
-  heroTitle: { color: '#fff', fontSize: 27, fontFamily: FONTS.extraBold },
+  heroTitle: { color: '#fff', fontSize: 25, fontFamily: FONTS.extraBold },
   heroSub: { color: 'rgba(255,255,255,0.9)', fontFamily: FONTS.regular, fontSize: 15, marginTop: 2 },
   section: { padding: 22, borderBottomWidth: 1, borderBottomColor: COLORS.borderLight },
   sectionHeadRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, marginBottom: 14 },
-  sectionTitle: { fontSize: 24, fontFamily: FONTS.extraBold },
+  sectionTitle: { fontSize: 20, fontFamily: FONTS.extraBold },
   muted: { color: COLORS.textMuted, fontFamily: FONTS.regular, fontSize: 16, marginTop: 8 },
-  overview: { fontFamily: FONTS.regular, fontSize: 18, lineHeight: 26, marginTop: 16 },
+  overview: { fontFamily: FONTS.regular, fontSize: 16, lineHeight: 23, marginTop: 14 },
   provBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: COLORS.provider, borderRadius: 999, paddingHorizontal: 24, paddingVertical: 12, alignSelf: 'flex-start', marginTop: 12 },
   provText: { color: '#fff', fontSize: 15, fontFamily: FONTS.extraBold },
   question: { textAlign: 'center', fontSize: 14, fontFamily: FONTS.bold, marginBottom: 16 },
@@ -949,10 +949,10 @@ const styles = StyleSheet.create({
   epRowTitle: { fontFamily: FONTS.regular, fontSize: 13, marginTop: 2 },
   // Compte à rebours des épisodes non diffusés (cf. TV Time : « 4 / JOURS »).
   daysWrap: { alignItems: 'center', minWidth: 44 },
-  daysNum: { fontSize: 24, fontFamily: FONTS.extraBold, lineHeight: 27 },
+  daysNum: { fontSize: 22, fontFamily: FONTS.extraBold, lineHeight: 25 },
   daysLabel: { fontSize: 10, fontFamily: FONTS.bold, letterSpacing: 0.8 },
-  seasonTitle: { fontSize: 24, fontFamily: FONTS.extraBold },
-  seasonProg: { fontFamily: FONTS.regular, fontSize: 17, marginRight: 14 },
+  seasonTitle: { fontSize: 20, fontFamily: FONTS.extraBold },
+  seasonProg: { fontFamily: FONTS.regular, fontSize: 15, marginRight: 14 },
   progressTrack: {
     position: 'absolute', left: 0, right: 0, bottom: 0, height: 5,
     borderBottomLeftRadius: 5, borderBottomRightRadius: 5, overflow: 'hidden',
@@ -963,7 +963,7 @@ const styles = StyleSheet.create({
   heroProgressTrack: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 5, backgroundColor: 'rgba(255,212,0,0.35)' },
   heroProgressFill: { height: '100%' },
   unmarkBar: { position: 'absolute', left: 12, right: 12, bottom: 20, backgroundColor: COLORS.white, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 20, paddingVertical: 18, ...SHADOW.card },
-  unmarkText: { fontSize: 17, fontFamily: FONTS.semiBold, color: COLORS.black },
+  unmarkText: { fontSize: 15, fontFamily: FONTS.semiBold, color: COLORS.black },
   overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: COLORS.overlay },
   // Menu « ... » : carte FLOTTANTE compacte (cotes TV Time — comparaison px des
   // captures) : marges 8, coins 14, rangées 48dp, police 17 fine, icônes 20.

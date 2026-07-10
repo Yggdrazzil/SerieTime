@@ -185,12 +185,12 @@ export function FavoritesPage({ kind }: { kind: MediaType }) {
           style={styles.menuRow}
           onPress={() => { setMenuOpen(false); router.push(`/library/reorder-favorites?type=${kind}`); }}
         >
-          <MaterialCommunityIcons name="swap-vertical" size={24} color={COLORS.black} />
+          <MaterialCommunityIcons name="swap-vertical" size={20} color={COLORS.black} />
           <Text style={styles.menuLabel}>Réordonner les éléments</Text>
         </Pressable>
         <View style={styles.sheetSep} />
         <Pressable style={styles.menuRow} onPress={() => { setMenuOpen(false); share(); }}>
-          <Feather name="share" size={22} color={COLORS.black} />
+          <Feather name="share" size={19} color={COLORS.black} />
           <Text style={styles.menuLabel}>Partager</Text>
         </Pressable>
       </BottomSheet>
@@ -223,7 +223,7 @@ function SortSheet({
             <Text style={styles.optionLabel}>{o.label}</Text>
             {temp === o.key ? (
               <PopIn style={styles.radioOn}>
-                <Feather name="check" size={17} color={COLORS.black} />
+                <Feather name="check" size={16} color={COLORS.black} />
               </PopIn>
             ) : (
               <View style={styles.radioOff} />
@@ -378,36 +378,36 @@ function FavPicker({
   );
 }
 
-// Cotes calquées sur les captures TV Time (même téléphone que le reste de
-// l'app) : grand titre 26, bouton jaune ~46dp, TRIER PAR 13/18, feuilles
-// blanches arrondies 16, cœurs 34dp, options de tri 17 + pastille 30.
+// Cotes recalées au px sur les captures TV Time (même téléphone) : grand
+// titre 21, bouton jaune ~38dp (texte 13), TRIER PAR 11/16, titre de feuille
+// 18, options 15 / rangées ~50dp, pastille 28, boutons de feuille ~40dp.
 const styles = StyleSheet.create({
   topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingBottom: 2 },
   topBtn: { width: 46, paddingVertical: 8, justifyContent: 'center' },
-  bigTitle: { fontSize: 26, fontFamily: FONTS.extraBold, paddingHorizontal: 16, marginTop: 6, marginBottom: 16 },
-  addBtn: { backgroundColor: COLORS.yellow, borderRadius: 999, marginHorizontal: 16, paddingVertical: 13, alignItems: 'center' },
-  addText: { fontSize: 15, fontFamily: FONTS.extraBold, letterSpacing: 0.5 },
-  sortRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 15 },
-  sortLabel: { fontSize: 13, fontFamily: FONTS.extraBold, color: COLORS.textMuted, letterSpacing: 0.5 },
-  sortValue: { fontSize: 18, fontFamily: FONTS.semiBold, color: COLORS.blue },
+  bigTitle: { fontSize: 21, fontFamily: FONTS.extraBold, paddingHorizontal: 16, marginTop: 6, marginBottom: 14 },
+  addBtn: { backgroundColor: COLORS.yellow, borderRadius: 999, marginHorizontal: 12, paddingVertical: 10, alignItems: 'center' },
+  addText: { fontSize: 13, fontFamily: FONTS.extraBold, letterSpacing: 0.5 },
+  sortRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 12 },
+  sortLabel: { fontSize: 11, fontFamily: FONTS.extraBold, color: COLORS.textMuted, letterSpacing: 0.5 },
+  sortValue: { fontSize: 16, fontFamily: FONTS.semiBold, color: COLORS.blue },
   divider: { height: 1, backgroundColor: COLORS.borderLight, marginBottom: 12 },
   // Feuilles basses
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
   sheet: { backgroundColor: COLORS.white, borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingTop: 6 },
   sheetFloating: { backgroundColor: COLORS.white, borderRadius: 14, marginHorizontal: 14, paddingVertical: 2, overflow: 'hidden' },
-  sheetTitle: { fontSize: 22, fontFamily: FONTS.extraBold, paddingHorizontal: 20, paddingVertical: 14 },
+  sheetTitle: { fontSize: 18, fontFamily: FONTS.extraBold, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 10 },
   sheetSep: { height: 1, backgroundColor: COLORS.borderLight, marginHorizontal: 20 },
-  optionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 15 },
-  optionLabel: { fontSize: 17, fontFamily: FONTS.regular, flex: 1 },
-  radioOn: { width: 30, height: 30, borderRadius: 15, backgroundColor: COLORS.yellow, alignItems: 'center', justifyContent: 'center' },
-  radioOff: { width: 30, height: 30, borderRadius: 15, borderWidth: 1.5, borderColor: '#cfcfcf' },
-  sheetFooter: { flexDirection: 'row', gap: 12, paddingHorizontal: 16, paddingTop: 14, borderTopWidth: 1, borderTopColor: COLORS.borderLight, marginTop: 6 },
-  cancelBtn: { flex: 1, borderWidth: 1.5, borderColor: COLORS.black, borderRadius: 999, paddingVertical: 13, alignItems: 'center' },
-  cancelText: { fontSize: 14, fontFamily: FONTS.extraBold, letterSpacing: 0.5 },
-  applyBtn: { flex: 1, backgroundColor: COLORS.yellow, borderRadius: 999, paddingVertical: 13, alignItems: 'center' },
-  applyText: { fontSize: 14, fontFamily: FONTS.extraBold, letterSpacing: 0.5 },
-  menuRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 20, paddingVertical: 17 },
-  menuLabel: { fontSize: 17, fontFamily: FONTS.regular },
+  optionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 12 },
+  optionLabel: { fontSize: 15, fontFamily: FONTS.regular, flex: 1 },
+  radioOn: { width: 28, height: 28, borderRadius: 14, backgroundColor: COLORS.yellow, alignItems: 'center', justifyContent: 'center' },
+  radioOff: { width: 28, height: 28, borderRadius: 14, borderWidth: 1.5, borderColor: '#cfcfcf' },
+  sheetFooter: { flexDirection: 'row', gap: 12, paddingHorizontal: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: COLORS.borderLight, marginTop: 6 },
+  cancelBtn: { flex: 1, borderWidth: 1.5, borderColor: COLORS.black, borderRadius: 999, paddingVertical: 11, alignItems: 'center' },
+  cancelText: { fontSize: 13, fontFamily: FONTS.extraBold, letterSpacing: 0.5 },
+  applyBtn: { flex: 1, backgroundColor: COLORS.yellow, borderRadius: 999, paddingVertical: 11, alignItems: 'center' },
+  applyText: { fontSize: 13, fontFamily: FONTS.extraBold, letterSpacing: 0.5 },
+  menuRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 20, paddingVertical: 13 },
+  menuLabel: { fontSize: 15, fontFamily: FONTS.regular },
   // Page Ajouter/Supprimer
   pickerHead: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 4, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: COLORS.border },
   pickerTitle: { flex: 1, textAlign: 'center', fontSize: 18, fontFamily: FONTS.bold },
@@ -415,7 +415,7 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, fontFamily: FONTS.regular, fontSize: 16, borderWidth: 0, paddingVertical: 8 },
   pickRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 20, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: COLORS.borderLight },
   pickPoster: { width: 40, height: 60, borderRadius: 3, backgroundColor: '#e5e5e5' },
-  pickName: { flex: 1, fontSize: 17, fontFamily: FONTS.semiBold },
+  pickName: { flex: 1, fontSize: 16, fontFamily: FONTS.semiBold },
   heartOn: { width: 34, height: 34, borderRadius: 17, backgroundColor: COLORS.red, alignItems: 'center', justifyContent: 'center' },
   heartOff: { width: 34, height: 34, borderRadius: 17, borderWidth: 1.5, borderColor: COLORS.border, alignItems: 'center', justifyContent: 'center' },
 });

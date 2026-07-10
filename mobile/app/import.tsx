@@ -229,21 +229,21 @@ function Row({ label, value, strong }: { label: string; value: number; strong?: 
 }
 
 const styles = StyleSheet.create({
-  lead: { fontFamily: FONTS.regular, fontSize: 17, color: COLORS.textMuted, lineHeight: 24 },
+  lead: { fontFamily: FONTS.regular, fontSize: 16, color: COLORS.textMuted, lineHeight: 23 },
   btnYellow: { backgroundColor: COLORS.yellow, borderRadius: 999, paddingVertical: 15, marginTop: 24, alignItems: 'center' },
   btnYellowText: { fontSize: 15, fontFamily: FONTS.extraBold, letterSpacing: 0.6 },
   error: { marginTop: 18, color: COLORS.red, fontFamily: FONTS.bold, fontSize: 15 },
   centerRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 24 },
   muted: { fontFamily: FONTS.regular, fontSize: 16, color: COLORS.textMuted },
-  reportTitle: { fontSize: 24, fontFamily: FONTS.extraBold },
+  reportTitle: { fontSize: 20, fontFamily: FONTS.extraBold },
   row: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3, marginTop: 4 },
-  rowLabel: { fontFamily: FONTS.regular, fontSize: 17 },
-  rowValue: { fontSize: 17, fontFamily: FONTS.extraBold },
+  rowLabel: { fontFamily: FONTS.regular, fontSize: 16 },
+  rowValue: { fontSize: 16, fontFamily: FONTS.extraBold },
   divider: { height: 1, backgroundColor: COLORS.borderLight, marginVertical: 10 },
   barTrack: { height: 12, borderRadius: 999, backgroundColor: COLORS.chipGrey, marginTop: 12, overflow: 'hidden' },
   barFill: { height: 12, borderRadius: 999, backgroundColor: COLORS.yellow },
   progText: { marginTop: 8, fontFamily: FONTS.bold, fontSize: 15 },
   hint: { marginTop: 10, fontFamily: FONTS.regular, fontSize: 14, color: COLORS.textSoft },
   doneBox: { marginTop: 28, gap: 8 },
-  doneTitle: { fontSize: 22, fontFamily: FONTS.extraBold },
+  doneTitle: { fontSize: 19, fontFamily: FONTS.extraBold },
 });
