@@ -6,7 +6,7 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
-Dernière mise à jour : **2026-07-09** (Claude) — onglet Séries : retour aux deux onglets À VOIR / À VENIR (historique au scroll, décision d'équipe)
+Dernière mise à jour : **2026-07-10** (Claude) — menu « ... » de la fiche pixel perfect + Arrêter de regarder + réactivité optimiste (fiche, listes)
 
 ---
 
@@ -65,6 +65,27 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
 ## Journal des modifications
 
 > Entrée type : `### AAAA-MM-JJ — Auteur` puis une liste courte de ce qui a changé.
+
+### 2026-07-10 — Claude
+- **Fiche : menu « ... » recalé sur TV Time (px des captures)** : carte
+  **flottante** (marges 8, coins 14) au lieu du panneau collé aux bords,
+  rangées 62→**48dp**, police 18 semi-gras → **17 fine**, icônes 22→20,
+  séparateurs hairline. **Films** : plus de rangée de statut ni de « Regarder
+  plus tard » (parité TV Time). **Séries commencées : « Arrêter de regarder »**
+  (statut Arrêtée via `/abandon`) — la série rejoint la section **ARRÊTÉ** de
+  la page Séries du profil, avec **barre de progression rouge** (TV Time) ;
+  libellés « Arrêtées/Abandonnée » → « Arrêté(e) ». Feuilles Personnaliser /
+  Ajouter à une liste alignées sur la même carte flottante.
+- **Réactivité « temps réel » (recette TanStack Query, optimistic updates)** :
+  toutes les actions de la fiche (favori, vu/pas vu, suivre, regarder plus
+  tard, arrêter, supprimer) écrivent immédiatement le résultat attendu dans le
+  cache (`onMutate` + rollback en cas d'échec), le serveur confirme en
+  arrière-plan — fini l'attente d'un aller-retour VPS avant que l'UI réagisse.
+  **Listes : bug corrigé** — création/coche n'invalidaient jamais le cache du
+  profil (les nouvelles listes n'apparaissaient qu'au redémarrage) ; désormais
+  coche/création **optimistes** dans la feuille + invalidation `['lists']` et
+  `['profile']`. Toasts affichés immédiatement. Serveur : notification des
+  abonnés en arrière-plan sur les favoris (ne retarde plus la réponse).
 
 ### 2026-07-09 — Claude (5)
 - **Onglet Séries : retour à la version TV Time** (décision d'équipe

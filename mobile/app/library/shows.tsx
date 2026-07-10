@@ -21,7 +21,7 @@ const PROGRESS_OPTS: { key: Progress; label: string }[] = [
   { key: 'watchlist', label: 'Regarder plus tard' },
   { key: 'up_to_date', label: 'À jour' },
   { key: 'completed', label: 'Terminé' },
-  { key: 'abandoned', label: 'Arrêtées' },
+  { key: 'abandoned', label: 'Arrêté' },
 ];
 const SORT_OPTS: { key: Sort; label: string }[] = [
   { key: 'default', label: 'Ordre TV Time' },
@@ -35,7 +35,7 @@ const GROUP_LABEL: Record<string, string> = {
   a_jour: 'À jour',
   termine: 'Terminé',
   pas_commence: 'Pas commencé',
-  arretees: 'Arrêtées',
+  arretees: 'Arrêté',
 };
 
 const remaining = (s: LibraryShow) => Math.max(0, s.progress.total - s.progress.watched);

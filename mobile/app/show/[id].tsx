@@ -14,7 +14,7 @@ import { AnimatedFill, Pop, SlideUpBar, FadeSwitch } from '@/components/anim';
 const INTEREST = ['LES ACTEURS', 'LA PRÉMISSE', 'LES CRÉATEURS', 'LA CHAÎNE/LA PLATEFORME', "LA FRANCHISE OU L'UNIVERS", 'AUTRE'];
 const STATUS_LABELS: Record<string, string> = {
   watching: 'En cours', completed: 'Terminée', watchlist: 'Regarder plus tard',
-  paused: 'En pause', abandoned: 'Abandonnée', not_started: 'Pas commencée',
+  paused: 'En pause', abandoned: 'Arrêtée', not_started: 'Pas commencée',
 };
 
 export default function ShowDetail() {
@@ -61,31 +61,72 @@ export default function ShowDetail() {
     enabled: !isMovie,
   });
 
+  // Mises à jour OPTIMISTES (recette TanStack Query) : on écrit tout de suite
+  // le résultat attendu dans le cache de la fiche (l'UI réagit immédiatement),
+  // le serveur confirme en arrière-plan ; rollback si échec, et `refresh` en
+  // onSettled réconcilie tout (files, profil…) sans bloquer l'utilisateur.
+  const detailKey = [isMovie ? 'movie' : 'show', String(id)];
+  const patchMedia = async (patch: Partial<MediaDto>) => {
+    await qc.cancelQueries({ queryKey: detailKey });
+    const prev = qc.getQueryData<{ media: MediaDto }>(detailKey);
+    if (prev?.media) qc.setQueryData(detailKey, { ...prev, media: { ...prev.media, ...patch } });
+    return { prev };
+  };
+  const rollback = (ctx?: { prev?: unknown }) => {
+    if (ctx?.prev) qc.setQueryData(detailKey, ctx.prev);
+  };
+
   const favorite = useMutation({
     mutationFn: () => api.post(`/api/${isMovie ? 'movies' : 'shows'}/${id}/favorite`),
+    onMutate: () => patchMedia({ isFavorite: !detail.data?.media?.isFavorite }),
+    onError: (_e, _v, ctx) => rollback(ctx),
     onSettled: refresh,
   });
   const markMovie = useMutation({
     mutationFn: (seen: boolean) => api.post(`/api/movies/${id}/${seen ? 'watched' : 'unwatched'}`),
+    onMutate: (seen: boolean) => patchMedia({ userStatus: seen ? 'completed' : 'watchlist' }),
+    onError: (_e, _v, ctx) => rollback(ctx),
     onSettled: refresh,
   });
   // Suivre (façon TV Time) : série -> statut « Pas commencé », film -> watchlist.
   const follow = useMutation({
     mutationFn: () => api.post(isMovie ? `/api/movies/${id}/watchlist` : `/api/shows/${id}/follow`),
-    onSuccess: () => {
+    onMutate: async () => {
       setJustAdded(true);
       setTimeout(() => setJustAdded(false), 2000);
+      return patchMedia({ userStatus: isMovie ? 'watchlist' : 'not_started' });
     },
+    onError: (_e, _v, ctx) => rollback(ctx),
     onSettled: refresh,
   });
   const watchLater = useMutation({
     mutationFn: () => api.post(isMovie ? `/api/movies/${id}/watchlist` : `/api/shows/${id}/watchlater`),
-    onSuccess: () => showToast('Regarder plus tard'),
+    onMutate: async () => {
+      showToast('Regarder plus tard');
+      return patchMedia({ userStatus: 'watchlist' });
+    },
+    onError: (_e, _v, ctx) => rollback(ctx),
+    onSettled: refresh,
+  });
+  // « Arrêter de regarder » (série commencée) : statut « Arrêtée », la série
+  // rejoint la section ARRÊTÉ de la page Séries du profil. Cocher un épisode
+  // la fera repasser « En cours » (recalcul serveur).
+  const abandon = useMutation({
+    mutationFn: () => api.post(`/api/shows/${id}/abandon`),
+    onMutate: async () => {
+      showToast('Série arrêtée');
+      return patchMedia({ userStatus: 'abandoned' });
+    },
+    onError: (_e, _v, ctx) => rollback(ctx),
     onSettled: refresh,
   });
   const removeTracking = useMutation({
     mutationFn: () => api.del(`/api/${isMovie ? 'movies' : 'shows'}/${id}/tracking`),
-    onSuccess: () => showToast(isMovie ? 'Film supprimé' : 'Série supprimée'),
+    onMutate: async () => {
+      showToast(isMovie ? 'Film supprimé' : 'Série supprimée');
+      return patchMedia({ userStatus: null, isFavorite: false });
+    },
+    onError: (_e, _v, ctx) => rollback(ctx),
     onSettled: refresh,
   });
   const share = () => {
@@ -215,10 +256,15 @@ export default function ShowDetail() {
 
       <Modal visible={menu} transparent animationType="fade" onRequestClose={() => setMenu(false)}>
         <Pressable style={styles.overlay} onPress={() => setMenu(false)} />
-        <View style={styles.sheet}>
-          <View style={styles.statusRow}>
-            <Text style={styles.statusText}>{STATUS_LABELS[media.userStatus ?? 'not_started']}</Text>
-          </View>
+        {/* Carte flottante compacte (cotes TV Time) : rangées ~48dp, police 17.
+            Films : pas de rangée de statut ni de « Regarder plus tard » (parité
+            TV Time) ; séries commencées : « Arrêter de regarder ». */}
+        <View style={[styles.sheet, { bottom: insets.bottom + 8 }]}>
+          {!isMovie ? (
+            <View style={styles.statusRow}>
+              <Text style={styles.statusText}>{STATUS_LABELS[media.userStatus ?? 'not_started']}</Text>
+            </View>
+          ) : null}
           <SheetItem icon="edit-2" label="Personnaliser" onPress={() => { setMenu(false); setPersoMenu(true); }} />
           <SheetItem
             icon="heart"
@@ -227,7 +273,12 @@ export default function ShowDetail() {
             onPress={() => { favorite.mutate(); setMenu(false); }}
           />
           <SheetItem icon="plus-square" label="Ajouter à une liste" onPress={() => { setMenu(false); setListsOpen(true); }} />
-          <SheetItem icon="clock" label="Regarder plus tard" onPress={() => { setMenu(false); watchLater.mutate(); }} />
+          {!isMovie ? (
+            <SheetItem icon="clock" label="Regarder plus tard" onPress={() => { setMenu(false); watchLater.mutate(); }} />
+          ) : null}
+          {!isMovie && (media.userStatus === 'watching' || media.userStatus === 'paused') ? (
+            <SheetItem icon="x-circle" label="Arrêter de regarder" onPress={() => { setMenu(false); abandon.mutate(); }} />
+          ) : null}
           {isFollowed ? (
             <SheetItem
               icon="minus-square"
@@ -264,7 +315,7 @@ export default function ShowDetail() {
 function SheetItem({ icon, label, onPress, color, last }: { icon: keyof typeof Feather.glyphMap; label: string; onPress: () => void; color?: string; last?: boolean }) {
   return (
     <Pressable style={[styles.sheetItem, last && { borderBottomWidth: 0 }]} onPress={onPress}>
-      <Feather name={icon} size={22} color={color ?? COLORS.black} />
+      <Feather name={icon} size={20} color={color ?? COLORS.black} />
       <Text style={styles.sheetLabel}>{label}</Text>
     </Pressable>
   );
@@ -281,10 +332,11 @@ function PersonalizeMenu({
   onClose: () => void;
   onPick: (mode: 'poster' | 'banner') => void;
 }) {
+  const insets = useSafeAreaInsets();
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.overlay} onPress={onClose} />
-      <View style={styles.sheet}>
+      <View style={[styles.sheet, { bottom: insets.bottom + 8 }]}>
         <Text style={pstyles.menuHeader}>Personnaliser</Text>
         <Pressable style={pstyles.menuItem} onPress={() => onPick('poster')}>
           <Text style={pstyles.menuItemText}>Modifier l&apos;affiche</Text>
@@ -405,45 +457,69 @@ function ListsSheet({
   onClose: () => void;
   onChanged: (added: boolean, title: string) => void;
 }) {
+  const insets = useSafeAreaInsets();
+  const qc = useQueryClient();
   const [newTitle, setNewTitle] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  type PickerList = { id: string; title: string; itemCount: number; containsMediaId?: boolean };
+  const pickerKey = ['lists', 'picker', mediaId];
   const lists = useQuery({
-    queryKey: ['lists', 'picker', mediaId],
-    queryFn: () =>
-      api.get<{ lists: { id: string; title: string; itemCount: number; containsMediaId?: boolean }[] }>(
-        `/api/lists?mediaId=${mediaId}`,
-      ),
+    queryKey: pickerKey,
+    queryFn: () => api.get<{ lists: PickerList[] }>(`/api/lists?mediaId=${mediaId}`),
     enabled: visible,
   });
+  // Les listes apparaissent aussi sur le profil (section « Listes ») : sans
+  // cette invalidation, elles n'y arrivaient qu'au redémarrage de l'app.
+  const syncOthers = () => {
+    qc.invalidateQueries({ queryKey: ['lists'] });
+    qc.invalidateQueries({ queryKey: ['profile'] });
+  };
 
-  const toggle = async (l: { id: string; title: string; containsMediaId?: boolean }) => {
+  // Coche/décoche OPTIMISTE : la case et le compteur bougent immédiatement,
+  // rollback si le serveur refuse.
+  const toggle = async (l: PickerList) => {
     if (busyId) return;
     setBusyId(l.id);
+    const added = !l.containsMediaId;
+    const prev = qc.getQueryData<{ lists: PickerList[] }>(pickerKey);
+    qc.setQueryData<{ lists: PickerList[] }>(pickerKey, (d) =>
+      d ? { lists: d.lists.map((x) => (x.id === l.id ? { ...x, containsMediaId: added, itemCount: Math.max(0, x.itemCount + (added ? 1 : -1)) } : x)) } : d,
+    );
+    onChanged(added, l.title);
     try {
-      if (l.containsMediaId) {
-        await api.del(`/api/lists/${l.id}/items/${mediaId}`);
-        onChanged(false, l.title);
-      } else {
-        await api.post(`/api/lists/${l.id}/items`, { mediaId });
-        onChanged(true, l.title);
-      }
-      lists.refetch();
+      if (added) await api.post(`/api/lists/${l.id}/items`, { mediaId });
+      else await api.del(`/api/lists/${l.id}/items/${mediaId}`);
+      syncOthers();
+    } catch {
+      if (prev) qc.setQueryData(pickerKey, prev);
     } finally {
       setBusyId(null);
     }
   };
 
+  // Création OPTIMISTE : la liste apparaît tout de suite (cochée), le serveur
+  // confirme derrière ; le profil est invalidé pour afficher la nouvelle liste.
   const create = async () => {
     const title = newTitle.trim();
     if (!title || creating) return;
     setCreating(true);
+    setNewTitle('');
+    const prev = qc.getQueryData<{ lists: PickerList[] }>(pickerKey);
+    const tempId = `tmp-${title}`;
+    qc.setQueryData<{ lists: PickerList[] }>(pickerKey, (d) =>
+      d ? { lists: [...d.lists, { id: tempId, title, itemCount: 1, containsMediaId: true }] } : d,
+    );
+    onChanged(true, title);
     try {
       const res = await api.post<{ id: string }>('/api/lists', { title });
       await api.post(`/api/lists/${res.id}/items`, { mediaId });
-      setNewTitle('');
-      onChanged(true, title);
-      lists.refetch();
+      qc.setQueryData<{ lists: PickerList[] }>(pickerKey, (d) =>
+        d ? { lists: d.lists.map((x) => (x.id === tempId ? { ...x, id: res.id } : x)) } : d,
+      );
+      syncOthers();
+    } catch {
+      if (prev) qc.setQueryData(pickerKey, prev);
     } finally {
       setCreating(false);
     }
@@ -452,7 +528,7 @@ function ListsSheet({
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.overlay} onPress={onClose} />
-      <View style={[styles.sheet, { maxHeight: '70%' }]}>
+      <View style={[styles.sheet, { maxHeight: '70%', bottom: insets.bottom + 8 }]}>
         <View style={styles.statusRow}>
           <Text style={styles.statusText}>Ajouter à une liste</Text>
         </View>
@@ -889,11 +965,13 @@ const styles = StyleSheet.create({
   unmarkBar: { position: 'absolute', left: 12, right: 12, bottom: 20, backgroundColor: COLORS.white, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 20, paddingVertical: 18, ...SHADOW.card },
   unmarkText: { fontSize: 17, fontFamily: FONTS.semiBold, color: COLORS.black },
   overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: COLORS.overlay },
-  sheet: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: COLORS.white, borderTopLeftRadius: 5, borderTopRightRadius: 5, paddingBottom: 20 },
-  statusRow: { backgroundColor: COLORS.chipGrey, borderBottomWidth: 3, borderBottomColor: COLORS.yellow, height: 62, justifyContent: 'center', paddingHorizontal: 24 },
-  statusText: { fontFamily: FONTS.regular, fontSize: 16, color: '#555' },
-  sheetItem: { flexDirection: 'row', alignItems: 'center', gap: 16, height: 62, paddingHorizontal: 24, borderBottomWidth: 1, borderBottomColor: COLORS.borderLight },
-  sheetLabel: { fontSize: 18, fontFamily: FONTS.semiBold },
+  // Menu « ... » : carte FLOTTANTE compacte (cotes TV Time — comparaison px des
+  // captures) : marges 8, coins 14, rangées 48dp, police 17 fine, icônes 20.
+  sheet: { position: 'absolute', left: 8, right: 8, bottom: 8, backgroundColor: COLORS.white, borderRadius: 14, overflow: 'hidden' },
+  statusRow: { backgroundColor: COLORS.chipGrey, borderBottomWidth: 3, borderBottomColor: COLORS.yellow, height: 48, justifyContent: 'center', paddingHorizontal: 20 },
+  statusText: { fontFamily: FONTS.regular, fontSize: 16, color: '#444' },
+  sheetItem: { flexDirection: 'row', alignItems: 'center', gap: 14, height: 48, paddingHorizontal: 20, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: COLORS.borderLight },
+  sheetLabel: { fontSize: 17, fontFamily: FONTS.regular },
 });
 
 type CommentDto = {

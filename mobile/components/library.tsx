@@ -56,13 +56,14 @@ export function Grid({ children }: { children: React.ReactNode }) {
 }
 
 // Affiche d'une série avec barre de progression (diffusés) : jaune en cours,
-// verte quand tous les épisodes disponibles sont vus.
+// verte quand tous les épisodes disponibles sont vus, ROUGE si arrêtée (TV Time).
 export function ShowCell({ show, bar = true }: { show: LibraryShow; bar?: boolean }) {
   const router = useRouter();
   const uri = tmdbImage(show.posterPath);
   const { watched, total } = show.progress;
   const started = watched > 0;
   const done = total > 0 && watched >= total;
+  const abandoned = show.userStatus === 'abandoned';
   const pct = total > 0 ? Math.min(100, (watched / total) * 100) : 0;
   return (
     <PressableScale style={styles.cell} onPress={() => router.push(`/show/${show.id}`)}>
@@ -78,8 +79,8 @@ export function ShowCell({ show, bar = true }: { show: LibraryShow; bar?: boolea
           </View>
         )}
         {bar && started ? (
-          <View style={styles.barTrack}>
-            <AnimatedFill pct={pct} color={done ? COLORS.green : COLORS.yellow} style={styles.barFill} />
+          <View style={[styles.barTrack, abandoned && { backgroundColor: 'rgba(229,57,53,0.30)' }]}>
+            <AnimatedFill pct={pct} color={abandoned ? COLORS.red : done ? COLORS.green : COLORS.yellow} style={styles.barFill} />
           </View>
         ) : null}
       </View>

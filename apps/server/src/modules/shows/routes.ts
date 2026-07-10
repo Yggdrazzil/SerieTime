@@ -447,14 +447,18 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
     });
     await createWatchEvent(request.userId, id, isFavorite ? 'favorited' : 'unfavorited');
     if (isFavorite) {
-      const me = await prisma.user.findUnique({ where: { id: request.userId } });
-      const { notifyFollowers } = await import('../social/notify.js');
-      await notifyFollowers(request.userId, {
-        type: 'friend_favorite',
-        title: `${me?.displayName ?? 'Quelqu’un'} a ajouté ${media.localizedTitle ?? media.title} à ses favoris`,
-        imageUrl: media.posterPath,
-        mediaId: id,
-      });
+      // Notification des abonnés en arrière-plan : ne retarde pas la réponse
+      // (la latence perçue du bouton Favoris venait en partie d'ici).
+      void (async () => {
+        const me = await prisma.user.findUnique({ where: { id: request.userId } });
+        const { notifyFollowers } = await import('../social/notify.js');
+        await notifyFollowers(request.userId, {
+          type: 'friend_favorite',
+          title: `${me?.displayName ?? 'Quelqu’un'} a ajouté ${media.localizedTitle ?? media.title} à ses favoris`,
+          imageUrl: media.posterPath,
+          mediaId: id,
+        });
+      })().catch(() => undefined);
     }
     return { ok: true, isFavorite };
   });
