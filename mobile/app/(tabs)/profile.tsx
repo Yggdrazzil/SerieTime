@@ -129,18 +129,19 @@ function ProfileScreenInner() {
         <Counter
           n={data.social?.followingCount ?? 0}
           label={(data.social?.followingCount ?? 0) > 1 ? 'abonnements' : 'abonnement'}
-          onPress={() => router.push('/social')}
+          onPress={() => router.push('/social/connections?type=following')}
         />
         <Counter
           n={data.social?.followersCount ?? 0}
           label={(data.social?.followersCount ?? 0) > 1 ? 'abonnés' : 'abonné'}
           border
-          onPress={() => router.push('/social')}
+          onPress={() => router.push('/social/connections?type=followers')}
         />
         <Counter
           n={data.social?.commentsCount ?? 0}
           label={(data.social?.commentsCount ?? 0) > 1 ? 'commentaires' : 'commentaire'}
           border
+          onPress={() => router.push('/social/my-comments')}
         />
       </View>
 
@@ -208,13 +209,18 @@ function ListCollageCard({ title, posterPaths }: { title: string; posterPaths: s
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+// Le chevron n'apparaît que si la section mène quelque part (onPress). Sinon
+// (Statistiques, Listes), pas de faux « cliquable ».
+function Section({ title, children, onPress }: { title: string; children: React.ReactNode; onPress?: () => void }) {
+  const head = (
+    <View style={styles.sectHead}>
+      <Text style={styles.sectTitle}>{title}</Text>
+      {onPress ? <Feather name="chevron-right" size={22} color={COLORS.black} /> : null}
+    </View>
+  );
   return (
     <View style={{ paddingVertical: 20 }}>
-      <View style={styles.sectHead}>
-        <Text style={styles.sectTitle}>{title}</Text>
-        <Feather name="chevron-right" size={22} color={COLORS.black} />
-      </View>
+      {onPress ? <Pressable onPress={onPress}>{head}</Pressable> : head}
       {children}
     </View>
   );

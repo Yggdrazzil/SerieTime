@@ -81,6 +81,29 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
     };
   });
 
+  // Mes commentaires (pour le compteur « commentaires » du profil).
+  app.get('/api/social/comments', async (request) => {
+    const rows = await prisma.comment.findMany({
+      where: { userId: request.userId },
+      include: { media: true },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+    return {
+      comments: rows.map((c) => ({
+        id: c.id,
+        body: c.body,
+        createdAt: c.createdAt.toISOString(),
+        media: {
+          id: c.media.id,
+          type: c.media.type,
+          title: c.media.localizedTitle ?? c.media.title,
+          posterPath: c.media.posterPath,
+        },
+      })),
+    };
+  });
+
   // --- Recherche d'utilisateurs -------------------------------------------
   app.get('/api/users/search', async (request) => {
     const { q } = z.object({ q: z.string().default('') }).parse(request.query ?? {});
