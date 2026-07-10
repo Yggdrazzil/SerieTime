@@ -150,14 +150,14 @@ export type TvdbEpisode = {
 // Épisodes "default" (paginés, page_size=500). On suit links.next jusqu'à null,
 // borné à 50 pages par sécurité. `lang` interroge la variante traduite
 // (/episodes/default/{lang}) — les champs name/overview y sont localisés.
-async function fetchEpisodePages(tvdbId: string, lang?: string): Promise<TvdbEpisode[]> {
+async function fetchEpisodePages(tvdbId: string, lang?: string, ttlMs: number = 3 * DAY): Promise<TvdbEpisode[]> {
   const base = `/series/${tvdbId}/episodes/default${lang ? `/${lang}` : ''}`;
   const all: TvdbEpisode[] = [];
   for (let page = 0; page < 50; page++) {
     const data = await tvdbGet<{
       data?: { episodes?: TvdbEpisode[] };
       links?: { next?: string | null };
-    }>(base, { page: String(page) }, 3 * DAY);
+    }>(base, { page: String(page) }, ttlMs);
     all.push(...(data?.data?.episodes ?? []));
     if (!data?.links?.next) break;
   }
@@ -166,10 +166,12 @@ async function fetchEpisodePages(tvdbId: string, lang?: string): Promise<TvdbEpi
 
 // Épisodes avec titres/synopsis localisés quand ils existent : la liste
 // canonique (numérotation, dates, images) est fusionnée avec la traduction.
-export async function tvdbSeriesEpisodes(tvdbId: string): Promise<TvdbEpisode[]> {
-  const canonical = await fetchEpisodePages(tvdbId);
+// `ttlMs` : durée du cache HTTP — courte pour une série EN COURS (une saison
+// qui démarre doit apparaître vite), longue pour une série terminée.
+export async function tvdbSeriesEpisodes(tvdbId: string, ttlMs: number = 3 * DAY): Promise<TvdbEpisode[]> {
+  const canonical = await fetchEpisodePages(tvdbId, undefined, ttlMs);
   if (canonical.length === 0) return canonical;
-  const translated = await fetchEpisodePages(tvdbId, tvdbLanguage()).catch(() => []);
+  const translated = await fetchEpisodePages(tvdbId, tvdbLanguage(), ttlMs).catch(() => []);
   if (translated.length === 0) return canonical;
   const byId = new Map(translated.map((e) => [e.id, e]));
   return canonical.map((e) => {

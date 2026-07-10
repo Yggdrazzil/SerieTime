@@ -7,6 +7,7 @@ import { requireAuth } from '../auth/routes.js';
 import { serializeEpisode, serializeMedia } from '../media/serialize.js';
 import { createWatchEvent, markEpisodeWatched, recalculateShowStatus } from '../media/actions.js';
 import { nextFavoriteOrder } from '../media/favorites.js';
+import { refreshStaleContinuingShows } from './refresh.js';
 import {
   syncCreditsFromTmdb,
   syncProvidersFromTmdb,
@@ -44,6 +45,9 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
   // Spec §17 : file "À voir" groupée.
   app.get('/api/shows/queue', async (request) => {
     const userId = request.userId;
+    // Balayage d'arrière-plan (fire-and-forget) : les séries en cours périmées
+    // sont resynchronisées pour que les nouvelles saisons rejoignent « À voir ».
+    void refreshStaleContinuingShows(userId).catch(() => undefined);
     const statuses = await prisma.userMediaStatus.findMany({
       where: { userId, media: { type: 'show' }, isHidden: false },
       include: {
@@ -263,14 +267,20 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
     let media = await getShowWithUserData(request.userId, id);
     if (!media) return reply.code(404).send({ error: 'not_found' });
 
-    // Refresh métadonnées si stale (cadences spec §16.4 gérées par ApiCache).
-    if (media.tmdbId && (!media.lastSyncedAt || Date.now() - media.lastSyncedAt.getTime() > 3 * 86_400_000)) {
+    // Refresh épisodes/métadonnées si stale. Fenêtre COURTE (6 h) pour une
+    // série en cours — une saison qui démarre doit apparaître sans attendre —
+    // longue (3 j) pour une série terminée. NB : l'ancienne garde exigeait un
+    // tmdbId, ce qui excluait à tort les séries ajoutées via TheTVDB seul
+    // (animés) : leurs nouvelles saisons n'arrivaient jamais.
+    const ended = media.status ? /ended|canceled|cancelled/i.test(media.status) : false;
+    const staleMs = ended ? 3 * 86_400_000 : 6 * 3_600_000;
+    if ((media.tvdbId || media.tmdbId) && (!media.lastSyncedAt || Date.now() - media.lastSyncedAt.getTime() > staleMs)) {
       // Les animés dont les épisodes viennent de TheTVDB (saisons correctes) sont
       // rafraîchis depuis TheTVDB pour ne pas réintroduire les saisons fusionnées TMDb.
       if (media.sourcePriority === 'tvdb' && media.tvdbId) {
         const { syncEpisodesFromTvdb } = await import('../../services/tvdb/index.js');
         await syncEpisodesFromTvdb(media.id).catch(() => undefined);
-      } else {
+      } else if (media.tmdbId) {
         await syncShowEpisodesFromTmdb(media.id).catch(() => undefined);
       }
       media = await getShowWithUserData(request.userId, id);

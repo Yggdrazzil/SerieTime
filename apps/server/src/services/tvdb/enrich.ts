@@ -74,7 +74,10 @@ export async function syncEpisodesFromTvdb(mediaId: string): Promise<void> {
   if (!media?.show || !media.tvdbId) return;
   const showId = media.show.id;
 
-  const episodes = (await tvdbSeriesEpisodes(media.tvdbId)).filter(
+  // Série en cours : cache TVDB court (6 h) pour attraper vite les nouveaux
+  // épisodes / une saison qui démarre ; série terminée : 3 jours suffisent.
+  const ended = media.status ? /ended|canceled|cancelled/i.test(media.status) : false;
+  const episodes = (await tvdbSeriesEpisodes(media.tvdbId, ended ? 3 * 86_400_000 : 6 * 3_600_000)).filter(
     (ep) => ep.seasonNumber != null && ep.number != null,
   );
   if (episodes.length === 0) return;
@@ -146,4 +149,9 @@ export async function syncEpisodesFromTvdb(mediaId: string): Promise<void> {
       ),
     );
   }
+
+  // 5) Nombre de saisons + horodatage de sync (base des fenêtres de fraîcheur).
+  const officialSeasonCount = new Set(episodes.filter((e) => e.seasonNumber > 0).map((e) => e.seasonNumber)).size;
+  await prisma.show.update({ where: { id: showId }, data: { numberOfSeasons: officialSeasonCount || undefined } }).catch(() => undefined);
+  await prisma.media.update({ where: { id: mediaId }, data: { lastSyncedAt: new Date() } }).catch(() => undefined);
 }

@@ -6,7 +6,7 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
-Dernière mise à jour : **2026-07-10** (Claude) — menu « ... » de la fiche pixel perfect + Arrêter de regarder + réactivité optimiste (fiche, listes)
+Dernière mise à jour : **2026-07-10** (Claude) — nouvelles saisons : resync TVDB corrigée (bug tmdbId), caches raccourcis, balayage d'arrière-plan pour « À voir »
 
 ---
 
@@ -65,6 +65,22 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
 ## Journal des modifications
 
 > Entrée type : `### AAAA-MM-JJ — Auteur` puis une liste courte de ce qui a changé.
+
+### 2026-07-10 — Claude (2)
+- **Nouvelles saisons invisibles (cas Clevatess S2) : corrigé.** Trois causes
+  serveur empilées :
+  1. **Bug** : la resync de la fiche exigeait un `tmdbId` — les séries ajoutées
+     via TheTVDB seul (animés, `sourcePriority: 'tvdb'`) n'étaient **jamais**
+     resynchronisées : une saison sortie après l'ajout n'arrivait jamais en base.
+  2. **Caches trop longs** : fenêtre de resync 3 j + cache HTTP TVDB 3 j
+     (≈ 6 j de retard cumulés). Désormais **6 h** (fenêtre et cache) pour les
+     séries EN COURS, 3 j pour les terminées ; `lastSyncedAt` et le nombre de
+     saisons sont mis à jour après chaque sync TVDB.
+  3. **Aucun rafraîchissement de fond** : la file « À voir » ne déclenche
+     désormais un **balayage d'arrière-plan** (`shows/refresh.ts`,
+     fire-and-forget, max 4 séries/2 min) qui resynchronise les séries en cours
+     périmées (> 12 h) — une saison qui démarre rejoint « À voir » sans ouvrir
+     la fiche, comme TV Time.
 
 ### 2026-07-10 — Claude
 - **Fiche : menu « ... » recalé sur TV Time (px des captures)** : carte
