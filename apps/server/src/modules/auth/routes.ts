@@ -36,6 +36,10 @@ function serializeUser(user: {
   gender: string | null;
   countryCode: string;
   provider: string;
+  passwordHash?: string | null;
+  googleId?: string | null;
+  facebookId?: string | null;
+  appleId?: string | null;
 }) {
   return {
     id: user.id,
@@ -47,6 +51,13 @@ function serializeUser(user: {
     gender: user.gender,
     countryCode: user.countryCode,
     provider: user.provider,
+    // Méthodes de connexion liées à ce compte (pour l'écran « comptes liés »).
+    linkedProviders: {
+      password: Boolean(user.passwordHash),
+      google: Boolean(user.googleId),
+      facebook: Boolean(user.facebookId),
+      apple: Boolean(user.appleId),
+    },
   };
 }
 
@@ -61,9 +72,13 @@ async function createSession(userId: string) {
 // SSO — vérification des jetons auprès du fournisseur (côté serveur uniquement).
 // ---------------------------------------------------------------------------
 
+type Provider = 'google' | 'facebook' | 'apple';
+const ID_FIELD = { google: 'googleId', facebook: 'facebookId', apple: 'appleId' } as const;
+
 type OAuthProfile = {
   providerId: string;
   email: string | null;
+  emailVerified: boolean;
   displayName: string;
   avatarUrl: string | null;
 };
@@ -83,6 +98,7 @@ async function verifyGoogleToken(idToken: string): Promise<OAuthProfile> {
   return {
     providerId: data.sub,
     email: data.email ?? null,
+    emailVerified: data.email_verified === 'true' || (data.email_verified as unknown) === true,
     displayName: data.name || data.email || 'Utilisateur',
     avatarUrl: data.picture ?? null,
   };
@@ -104,21 +120,43 @@ async function verifyFacebookToken(accessToken: string): Promise<OAuthProfile> {
   return {
     providerId: data.id,
     email: data.email ?? null,
+    emailVerified: true, // Facebook ne renvoie l'e-mail que s'il est vérifié.
     displayName: data.name || 'Utilisateur',
     avatarUrl: data.picture?.data?.url ?? null,
   };
 }
 
-// Retrouve le compte SSO (provider, providerId) ou le crée à la première connexion.
-async function upsertOAuthUser(provider: 'google' | 'facebook', profile: OAuthProfile) {
-  const existing = await prisma.user.findUnique({
-    where: { provider_providerId: { provider, providerId: profile.providerId } },
-  });
-  if (existing) return existing;
+async function verifyOAuth(provider: Provider, token: string): Promise<OAuthProfile> {
+  if (provider === 'google') return verifyGoogleToken(token);
+  if (provider === 'facebook') return verifyFacebookToken(token);
+  throw new Error('provider_not_supported'); // Apple : à venir.
+}
+
+// Connexion SSO en 3 temps :
+//   1) un compte est déjà lié à ce (provider, id) → connexion ;
+//   2) sinon, si l'e-mail (vérifié) correspond à un compte existant → on LIE ce
+//      provider à ce compte (l'utilisateur retrouve son compte mot de passe) ;
+//   3) sinon → nouveau compte.
+async function loginOrLinkOAuth(provider: Provider, profile: OAuthProfile) {
+  const field = ID_FIELD[provider];
+  const byProvider = await prisma.user.findFirst({ where: { [field]: profile.providerId } });
+  if (byProvider) return byProvider;
+
+  if (profile.email && profile.emailVerified) {
+    const byEmail = await prisma.user.findFirst({ where: { email: profile.email } });
+    if (byEmail) {
+      return prisma.user.update({
+        where: { id: byEmail.id },
+        data: { [field]: profile.providerId, avatarUrl: byEmail.avatarUrl ?? profile.avatarUrl },
+      });
+    }
+  }
+
   return prisma.user.create({
     data: {
       provider,
       providerId: profile.providerId,
+      [field]: profile.providerId,
       email: profile.email,
       displayName: profile.displayName,
       avatarUrl: profile.avatarUrl,
@@ -132,26 +170,68 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/auth/providers', async () => ({
     google: env.GOOGLE_CLIENT_IDS.trim().length > 0,
     facebook: env.FACEBOOK_APP_ID.trim().length > 0,
+    apple: false, // à venir (nécessite un compte Apple Developer).
     password: true,
   }));
 
-  // Connexion / inscription via SSO. Idempotent : crée le compte au premier login.
+  // Connexion / inscription via SSO. Idempotent : crée le compte, ou le relie à
+  // un compte existant si l'e-mail vérifié correspond (voir loginOrLinkOAuth).
   app.post('/api/auth/oauth', async (request, reply) => {
     const body = z
       .object({ provider: z.enum(['google', 'facebook']), token: z.string().min(1) })
       .parse(request.body);
     let profile: OAuthProfile;
     try {
-      profile =
-        body.provider === 'google'
-          ? await verifyGoogleToken(body.token)
-          : await verifyFacebookToken(body.token);
+      profile = await verifyOAuth(body.provider, body.token);
     } catch {
       return reply.code(401).send({ error: 'invalid_oauth_token' });
     }
-    const user = await upsertOAuthUser(body.provider, profile);
+    const user = await loginOrLinkOAuth(body.provider, profile);
     const session = await createSession(user.id);
     return { user: serializeUser(user), token: session.token, expiresAt: session.expiresAt };
+  });
+
+  // Lier une méthode SSO au compte connecté (depuis les réglages « comptes liés »).
+  app.post('/api/auth/link', { preHandler: requireAuth }, async (request, reply) => {
+    const body = z
+      .object({ provider: z.enum(['google', 'facebook']), token: z.string().min(1) })
+      .parse(request.body);
+    let profile: OAuthProfile;
+    try {
+      profile = await verifyOAuth(body.provider, body.token);
+    } catch {
+      return reply.code(401).send({ error: 'invalid_oauth_token' });
+    }
+    const field = ID_FIELD[body.provider];
+    // Déjà rattaché à un AUTRE compte ? refus (on ne vole pas une identité).
+    const taken = await prisma.user.findFirst({ where: { [field]: profile.providerId } });
+    if (taken && taken.id !== request.userId) {
+      return reply.code(409).send({ error: 'already_linked_other_account' });
+    }
+    const user = await prisma.user.update({
+      where: { id: request.userId },
+      data: { [field]: profile.providerId },
+    });
+    return { user: serializeUser(user) };
+  });
+
+  // Délier une méthode SSO — refusé s'il ne reste plus aucun moyen de connexion.
+  app.post('/api/auth/unlink', { preHandler: requireAuth }, async (request, reply) => {
+    const body = z.object({ provider: z.enum(['google', 'facebook', 'apple']) }).parse(request.body);
+    const user = await prisma.user.findUnique({ where: { id: request.userId } });
+    if (!user) return reply.code(404).send({ error: 'not_found' });
+    const field = ID_FIELD[body.provider];
+    const methods = [
+      Boolean(user.passwordHash),
+      Boolean(user.googleId),
+      Boolean(user.facebookId),
+      Boolean(user.appleId),
+    ].filter(Boolean).length;
+    if (methods <= 1 && Boolean(user[field])) {
+      return reply.code(400).send({ error: 'last_login_method' });
+    }
+    const updated = await prisma.user.update({ where: { id: user.id }, data: { [field]: null } });
+    return { user: serializeUser(updated) };
   });
 
   // Fallback e-mail / mot de passe — inscription (multi-comptes).

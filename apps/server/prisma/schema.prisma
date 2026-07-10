@@ -22,9 +22,14 @@ model User {
   gender       String?
   countryCode  String   @default("FR")
   passwordHash String?
-  // Identité d'authentification : "password" (fallback e-mail/mdp) ou "google" | "facebook" (SSO).
+  // Identité d'authentification : "password" (fallback e-mail/mdp) ou "google" | "facebook" | "apple" (SSO).
+  // provider/providerId = méthode d'origine (rétro-compat). Les colonnes ci-dessous
+  // permettent de LIER plusieurs méthodes à un même compte (SSO + mot de passe).
   provider     String   @default("password")
   providerId   String?
+  googleId     String?  @unique
+  facebookId   String?  @unique
+  appleId      String?  @unique
   // Social : un profil privé n'est visible que de ses abonnés (et de lui-même).
   isPrivate    Boolean  @default(false)
   createdAt    DateTime @default(now())
