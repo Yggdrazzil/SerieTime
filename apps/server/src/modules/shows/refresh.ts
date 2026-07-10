@@ -1,6 +1,7 @@
 import { prisma } from '../../db/client.js';
 import { syncShowEpisodesFromTmdb } from '../../services/tmdb/index.js';
 import { syncEpisodesFromTvdb } from '../../services/tvdb/index.js';
+import { recalculateShowStatus } from '../media/actions.js';
 
 // Fenêtre de fraîcheur du balayage d'arrière-plan et anti-rafale process-local.
 const STALE_MS = 12 * 3_600_000; // resynchroniser une série en cours après 12 h
@@ -21,7 +22,7 @@ export async function refreshStaleContinuingShows(userId: string): Promise<void>
 
   const statuses = await prisma.userMediaStatus.findMany({
     where: { userId, isHidden: false, status: { not: 'abandoned' }, media: { type: 'show' } },
-    include: { media: true },
+    include: { media: { include: { show: { select: { id: true } } } } },
   });
   const candidates = statuses
     .map((s) => s.media)
@@ -36,6 +37,10 @@ export async function refreshStaleContinuingShows(userId: string): Promise<void>
       else if (m.tmdbId) await syncShowEpisodesFromTmdb(m.id);
       else continue;
       await prisma.media.update({ where: { id: m.id }, data: { lastSyncedAt: new Date() } });
+      // La sync peut apporter une nouvelle saison : on recalcule le statut de
+      // l'utilisateur (une série « Terminée » redevient « En cours », donc
+      // visible dans les bons groupes de la bibliothèque).
+      if (m.show) await recalculateShowStatus(userId, m.show.id, null).catch(() => undefined);
     } catch {
       /* réessaiera au prochain balayage */
     }

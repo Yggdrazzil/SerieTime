@@ -6,7 +6,7 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
-Dernière mise à jour : **2026-07-10** (Claude) — harmonisation générale des tailles (menus, feuilles, titres) sur toute l'app + feuille de tri des favoris pixel perfect
+Dernière mise à jour : **2026-07-10** (Claude) — « À voir » : les nouvelles saisons des séries terminées reviennent dans la file (badge PREMIERE, statut recalculé)
 
 ---
 
@@ -65,6 +65,19 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
 ## Journal des modifications
 
 > Entrée type : `### AAAA-MM-JJ — Auteur` puis une liste courte de ce qui a changé.
+
+### 2026-07-10 — Claude (4)
+- **« À voir » ignorait les nouvelles saisons des séries terminées (suite
+  Clevatess)** : la file excluait inconditionnellement le statut « Terminée » —
+  une série finie dont une nouvelle saison démarrait ne réapparaissait jamais.
+  Désormais : si de nouveaux épisodes ont été diffusés (`remaining > 0`), la
+  série revient dans « À voir » avec son prochain épisode et le badge PREMIERE
+  (comportement TV Time). Le balayage d'arrière-plan **recalcule aussi le
+  statut** après chaque sync (« Terminée » → « En cours » quand une saison
+  arrive), pour des groupes de bibliothèque cohérents. **3 tests ajoutés**
+  (`new-season-queue.test.ts`, 61 tests serveur verts) : série à jour absente
+  de la file, retour avec PREMIERE à la diffusion d'une nouvelle saison,
+  re-sortie + statut « En cours » après visionnage.
 
 ### 2026-07-10 — Claude (3)
 - **Harmonisation générale des tailles** (réf. = onglet Séries recalé + mesures

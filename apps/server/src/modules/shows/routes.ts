@@ -85,14 +85,18 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
       if (status.status === 'watchlist') group = 'pas_commence';
       else if (status.status === 'abandoned') group = 'abandonne';
       else if (status.status === 'not_started') group = 'pas_commence';
-      else if (status.status === 'watching' || status.status === 'paused') {
-        if (remaining === 0) continue; // à jour → pas dans la file
+      else if (status.status === 'watching' || status.status === 'paused' || status.status === 'completed') {
+        // « Terminée » incluse : si une NOUVELLE saison / de nouveaux épisodes
+        // ont été diffusés depuis (remaining > 0), la série revient dans
+        // « À voir » avec son prochain épisode, comme TV Time (ex. Clevatess
+        // S2 après une S1 terminée). À jour → pas dans la file.
+        if (remaining === 0) continue;
         const last = status.lastWatchedAt;
         group =
           last && now.getTime() - last.getTime() > NOT_WATCHED_FOR_A_WHILE_DAYS * 86_400_000
             ? 'pas_regarde_depuis_un_moment'
             : 'a_voir';
-      } else continue; // completed
+      } else continue;
 
       if ((group === 'pas_commence' || group === 'abandonne') && refs.length > 0 && remaining === 0) continue;
 
