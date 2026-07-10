@@ -16,6 +16,7 @@ export function serializeMedia(media: Media, status?: UserMediaStatus | null): M
     status: media.status,
     runtime: media.runtime,
     genres: media.genres,
+    voteAverage: media.voteAverage,
     tmdbId: media.tmdbId,
     tvdbId: media.tvdbId,
     imdbId: media.imdbId,

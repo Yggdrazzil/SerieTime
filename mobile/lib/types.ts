@@ -15,6 +15,7 @@ export type MediaDto = {
   status?: string | null;
   runtime?: number | null;
   genres?: string | null;
+  voteAverage?: number | null;
   userStatus?: UserMediaState | null;
   isFavorite?: boolean;
   // Ordre personnalisé + date d'ajout aux favoris (pages « préférés »).

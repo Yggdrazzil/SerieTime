@@ -312,6 +312,16 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
       media = await getShowWithUserData(request.userId, id);
       if (!media) return reply.code(404).send({ error: 'not_found' });
     }
+    // Animé ajouté via TheTVDB seul : retrouve l'id TMDb (une fois) pour
+    // débloquer distribution, recommandations, bande-annonce et plateformes.
+    if (!media.tmdbId && media.tvdbId) {
+      const { ensureTmdbIdFromTvdb } = await import('../../services/tmdb/index.js');
+      const found = await ensureTmdbIdFromTvdb(media.id).catch(() => false);
+      if (found) {
+        media = await getShowWithUserData(request.userId, id);
+        if (!media) return reply.code(404).send({ error: 'not_found' });
+      }
+    }
     await syncProvidersFromTmdb(media.id).catch(() => undefined);
     await syncCreditsFromTmdb(media.id).catch(() => undefined);
 
@@ -331,23 +341,47 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
       trailerUrl = trailer?.key ? `https://www.youtube.com/watch?v=${trailer.key}` : null;
     }
 
-    let recommendations: ReturnType<typeof serializeMedia>[] = [];
+    type RecItem = {
+      id: string; type: 'show'; title: string; posterPath: string | null; backdropPath: string | null;
+      year: number | null; tmdbId: string; localId: string | null; inLibrary: boolean;
+    };
+    let recommendations: RecItem[] = [];
     if (media.tmdbId) {
       const recs = await tmdbRecommendations('tv', media.tmdbId).catch(() => []);
-      recommendations = recs.slice(0, 10).map((r) => ({
-        id: `tmdb:show:${r.id}`,
-        type: 'show' as const,
-        title: r.name ?? r.title ?? '',
-        posterPath: r.poster_path ?? null,
-        backdropPath: r.backdrop_path ?? null,
-        year: r.first_air_date ? new Date(r.first_air_date).getFullYear() : null,
-        tmdbId: String(r.id),
-      })) as ReturnType<typeof serializeMedia>[];
+      const ids = recs.slice(0, 10).map((r) => String(r.id));
+      // Marquage « déjà dans ma bibliothèque » (coche jaune façon TV Time).
+      const locals = await prisma.media.findMany({
+        where: { type: 'show', tmdbId: { in: ids } },
+        select: { id: true, tmdbId: true, statuses: { where: { userId: request.userId }, select: { id: true } } },
+      });
+      const byTmdb = new Map(locals.map((l) => [l.tmdbId, l]));
+      recommendations = recs.slice(0, 10).map((r) => {
+        const local = byTmdb.get(String(r.id));
+        return {
+          id: `tmdb:show:${r.id}`,
+          type: 'show' as const,
+          title: r.name ?? r.title ?? '',
+          posterPath: r.poster_path ?? null,
+          backdropPath: r.backdrop_path ?? null,
+          year: r.first_air_date ? new Date(r.first_air_date).getFullYear() : null,
+          tmdbId: String(r.id),
+          localId: local?.id ?? null,
+          inLibrary: (local?.statuses.length ?? 0) > 0,
+        };
+      });
     }
 
     const status = media.statuses[0] ?? null;
+    // « Série ajoutée par N personnes » + année de fin (« 2002 - 2007 »).
+    const addedByCount = await prisma.userMediaStatus.count({ where: { mediaId: media.id } });
+    const airTimes = (media.show?.episodes ?? [])
+      .filter((e) => e.seasonNumber > 0 && e.airDate)
+      .map((e) => e.airDate!.getTime());
+    const endYear = airTimes.length ? new Date(Math.max(...airTimes)).getFullYear() : null;
     return {
       media: serializeMedia(media, status),
+      addedByCount,
+      endYear,
       show: media.show
         ? {
             id: media.show.id,
@@ -370,10 +404,42 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
         name: c.person.name,
         character: c.characterName,
         profilePath: c.person.profilePath,
+        tmdbId: c.person.tmdbId,
       })),
       trailerUrl,
       recommendations,
       personalNote: status?.personalNote ?? null,
+    };
+  });
+
+  // Notes de la communauté (façon TV Time) : moyenne des notes d'épisodes de
+  // TOUS les utilisateurs, par saison — alimente le graphe de la fiche.
+  app.get('/api/shows/:id/community-ratings', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const episodes = await prisma.episode.findMany({
+      where: { show: { mediaId: id }, seasonNumber: { gt: 0 } },
+      select: { id: true, seasonNumber: true, episodeNumber: true },
+      orderBy: [{ seasonNumber: 'asc' }, { episodeNumber: 'asc' }],
+    });
+    if (episodes.length === 0) return reply.code(404).send({ error: 'not_found' });
+    const ratings = await prisma.userEpisodeStatus.findMany({
+      where: { episodeId: { in: episodes.map((e) => e.id) }, rating: { not: null } },
+      select: { episodeId: true, rating: true },
+    });
+    const byEpisode = new Map<string, number[]>();
+    for (const r of ratings) byEpisode.set(r.episodeId, [...(byEpisode.get(r.episodeId) ?? []), r.rating!]);
+    const seasons = new Map<number, { episodeNumber: number; avg: number; count: number }[]>();
+    for (const e of episodes) {
+      const values = byEpisode.get(e.id);
+      if (!values?.length) continue;
+      const avg = values.reduce((a, b) => a + b, 0) / values.length;
+      seasons.set(e.seasonNumber, [
+        ...(seasons.get(e.seasonNumber) ?? []),
+        { episodeNumber: e.episodeNumber, avg: Math.round(avg * 10) / 10, count: values.length },
+      ]);
+    }
+    return {
+      seasons: [...seasons.entries()].map(([seasonNumber, points]) => ({ seasonNumber, points })),
     };
   });
 

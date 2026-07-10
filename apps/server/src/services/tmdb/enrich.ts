@@ -2,6 +2,7 @@ import type { Media } from '@prisma/client';
 import { prisma } from '../../db/client.js';
 import {
   tmdbCredits,
+  tmdbFindByExternalId,
   tmdbEnabled,
   tmdbMovieDetails,
   tmdbSeasonDetails,
@@ -254,6 +255,20 @@ export function orderProvidersForMedia<T extends { providerName: string; offerTy
     return p.offerType === 'flatrate' ? 0 : p.offerType === 'free' || p.offerType === 'ads' ? 1 : 2;
   };
   return [...providers].sort((a, b) => rank(a) - rank(b));
+}
+
+// Les animés ajoutés via TheTVDB seul n'ont pas de tmdbId : on le retrouve via
+// /find (id TVDB) pour débloquer distribution, recommandations, bande-annonce
+// et plateformes — comme TV Time.
+export async function ensureTmdbIdFromTvdb(mediaId: string): Promise<boolean> {
+  if (!tmdbEnabled()) return false;
+  const media = await prisma.media.findUnique({ where: { id: mediaId } });
+  if (!media || media.tmdbId || !media.tvdbId) return false;
+  const found = await tmdbFindByExternalId(media.tvdbId, 'tvdb_id');
+  const hit = media.type === 'show' ? found?.tv_results?.[0] : found?.movie_results?.[0];
+  if (!hit?.id) return false;
+  await prisma.media.update({ where: { id: mediaId }, data: { tmdbId: String(hit.id) } });
+  return true;
 }
 
 export async function syncCreditsFromTmdb(mediaId: string): Promise<void> {

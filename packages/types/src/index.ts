@@ -78,6 +78,7 @@ export type MediaDto = {
   status?: string | null;
   runtime?: number | null;
   genres?: string | null;
+  voteAverage?: number | null;
   tmdbId?: string | null;
   tvdbId?: string | null;
   imdbId?: string | null;

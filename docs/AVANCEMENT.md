@@ -6,7 +6,7 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
-Dernière mise à jour : **2026-07-10** (Claude) — Paramètres façon TV Time (Réseaux sociaux, Vie privée/profil privé, radios, boutons jaunes)
+Dernière mise à jour : **2026-07-10** (Claude) — Fiche série/film complète façon TV Time (distribution + fiches acteurs, « également regardé », similaire à, notes de la communauté, page Commentaires, bannière repliable)
 
 ---
 
@@ -31,7 +31,7 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
 | Contenu séries via TheTVDB | ✅ Fait | Recherche, fiche, saisons/épisodes, titres/synopsis FR, artworks ; clé dans `apps/server/.env` |
 | Contenu films / tendances via TMDb | ✅ Fait | Clé TMDb (compte Benjamin) configurée sur le serveur de prod ; flux Explorer et images films actifs |
 | File « À voir » / « À venir » | ✅ Fait | Groupes TV Time (pas commencé, à voir, etc.) ; « Regarder plus tard » exclu des deux |
-| Fiche série/film façon TV Time | ✅ Fait | Barre « + AJOUTER » → « ✓ AJOUTÉE ! », bannière/affiche, onglets À propos / Épisodes / Discussion |
+| Fiche série/film façon TV Time | ✅ Fait | Bannière repliable, onglets À PROPOS / ÉPISODES, distribution (fiches acteurs), « également regardé », similaire à, notes de la communauté, page Commentaires dédiée |
 | Menu « … » de la fiche | ✅ Fait | Personnaliser (affiche + bannière, séries **et** films), Favoris, Ajouter à une liste, Regarder plus tard, Supprimer, Partager |
 | Consultation ≠ suivi | ✅ Fait | Taper un résultat ouvre la fiche sans l'ajouter ; seul le `+` suit (statut « Pas commencée » ; « En cours » au 1er épisode vu) |
 | Recherche (design TV Time) | ✅ Fait | Onglets SÉRIES ET FILMS / UTILISATEURS, « Annuler », `+` jaunes, debounce |
@@ -65,6 +65,37 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
 ## Journal des modifications
 
 > Entrée type : `### AAAA-MM-JJ — Auteur` puis une liste courte de ce qui a changé.
+
+### 2026-07-10 — Claude (6)
+- **Fiche série/film reconstruite façon TV Time** (comparaison px des captures Naruto) :
+  - **Bannière repliable** : la couverture (240 px) se réduit en barre compacte
+    avec titre centré au défilement (tous les onglets) ; sous-titre
+    « N saisons • Terminée • Plateforme » traduit en français.
+  - **Onglets réduits à À PROPOS / ÉPISODES** (comme TV Time) ; la discussion
+    devient une rangée « Commentaires (N) › » en bas de fiche.
+  - **À propos, ordre TV Time** : Où regarder (pastilles noires pour toutes les
+    plateformes), question d'intérêt compacte, **Similaire à** (vignette ronde +
+    titre, ouvre la fiche), **Informations** (années « 2002 - 2007 », genres FR,
+    rangée d'étoiles TMDb, synopsis, rangées horloge/chrono/« ajoutée par N
+    personnes »), **Distribution**, **Les utilisateurs ont également regardé**
+    (badge coche jaune si déjà suivi, import TMDb silencieux au clic), **Notes de
+    la communauté** (courbe SVG des moyennes d'épisodes par saison, sélecteur +
+    points), **Commentaires**. Fiche film alignée (Vu, mêmes sections).
+- **Distribution + fiches acteurs** (`/person`) : cartes horizontales photo/nom/rôle ;
+  page acteur sombre façon TV Time (‹ › pour passer d'un membre à l'autre, photo,
+  « Né(e) le … », bio, bouton 𝕏, **Filmographie** filtrable Séries/Films avec
+  affiches, rôles, notes en étoiles et genres — clic = ouverture de la fiche).
+  Données via TMDb : nouvelles routes `GET /api/people/:tmdbId` (bio + filmographie,
+  cache 30 j) et `GET /api/people/search?name=`.
+- **Page Commentaires dédiée** (`/comments/[id]`) : cartes blanches sur fond gris,
+  tri PERTINENTS/RÉCENTS, cœur (réaction ❤️), fils de réponses repliables,
+  partage, suppression de ses commentaires, FAB jaune crayon + composeur plein écran.
+- **Serveur** : `ensureTmdbIdFromTvdb` (les animés ajoutés via TheTVDB récupèrent
+  leur id TMDb → distribution/recommandations/bande-annonce débloquées) ;
+  recommandations enrichies (`localId`, `inLibrary`), `addedByCount`, `endYear`,
+  `voteAverage`, `tmdbId` du cast ; `GET /api/shows/:id/community-ratings`
+  (moyennes des notes d'épisodes de tous les utilisateurs, spéciaux exclus,
+  **testé** — 69 tests serveur verts).
 
 ### 2026-07-10 — Claude (5)
 - **Paramètres : copie TV Time** (comparaison px des captures) :

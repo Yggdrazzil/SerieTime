@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, Pressable, Modal, TextInput, ActivityIndicator, Image, Share, Platform } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, ScrollView, StyleSheet, Pressable, Modal, TextInput, ActivityIndicator, Image, Share, Platform, Animated, Dimensions } from 'react-native';
+import { Feather, Ionicons } from '@expo/vector-icons';
+import Svg, { Circle, Line, Polyline, Text as SvgText } from 'react-native-svg';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -9,7 +10,9 @@ import type { EpisodeDto, MediaDto } from '@/lib/types';
 import { episodeCode } from '@/lib/format';
 import { COLORS, RADIUS, SHADOW, FONTS } from '@/lib/theme';
 import { TopTabs, CheckCircle, Loading, LoadError, EmptyState } from '@/components/ui';
-import { AnimatedFill, Pop, SlideUpBar, FadeSwitch } from '@/components/anim';
+import { AnimatedFill, Pop, SlideUpBar, FadeSwitch, PressableScale } from '@/components/anim';
+import { Stars } from '@/components/Stars';
+import { genresFr, statusFr, airDayFr, compactCount } from '@/lib/frMedia';
 
 const INTEREST = ['LES ACTEURS', 'LA PRÉMISSE', 'LES CRÉATEURS', 'LA CHAÎNE/LA PLATEFORME', "LA FRANCHISE OU L'UNIVERS", 'AUTRE'];
 const STATUS_LABELS: Record<string, string> = {
@@ -146,10 +149,20 @@ export default function ShowDetail() {
     Share.share({ message }).catch(() => undefined);
   };
 
+  // En-tête repliable façon TV Time : la bannière se réduit en barre compacte
+  // (titre centré) à mesure que le contenu défile, quel que soit l'onglet.
+  const scrollY = useRef(new Animated.Value(0)).current;
+
   if (detail.isLoading) return <Loading />;
   if (!detail.data) return <LoadError onRetry={detail.refetch} busy={detail.isRefetching} />;
   const media: MediaDto = detail.data.media;
   const isFollowed = media.userStatus != null;
+  const HERO_MAX = 240;
+  const HERO_MIN = insets.top + 54;
+  const heroH = scrollY.interpolate({ inputRange: [0, 150], outputRange: [HERO_MAX, HERO_MIN], extrapolate: 'clamp' });
+  const bigOpacity = scrollY.interpolate({ inputRange: [0, 90], outputRange: [1, 0], extrapolate: 'clamp' });
+  const smallOpacity = scrollY.interpolate({ inputRange: [90, 150], outputRange: [0, 1], extrapolate: 'clamp' });
+  const onScroll = Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false });
 
   // Barre de progression globale : épisodes diffusés vus / diffusés (hors spéciaux).
   const heroProg = (() => {
@@ -169,7 +182,7 @@ export default function ShowDetail() {
 
   return (
     <Pop style={{ backgroundColor: COLORS.white }}>
-      <View style={styles.hero}>
+      <Animated.View style={[styles.hero, { height: heroH }]}>
         {(() => {
           const heroUri = tmdbImage(media.backdropPath, 'w780') ?? tmdbImage(media.posterPath, 'w500');
           return heroUri ? (
@@ -187,17 +200,25 @@ export default function ShowDetail() {
             <Feather name="more-horizontal" size={28} color="#fff" />
           </Pressable>
         </View>
-        <View style={styles.heroTitleWrap}>
+        {/* Titre compact centré, visible quand l'en-tête est replié. */}
+        <Animated.Text
+          style={[styles.heroCollapsedTitle, { top: insets.top + 12, opacity: smallOpacity }]}
+          numberOfLines={1}
+        >
+          {media.title}
+        </Animated.Text>
+        <Animated.View style={[styles.heroTitleWrap, { opacity: bigOpacity }]}>
           <Text style={styles.heroTitle}>{media.title}</Text>
           <Text style={styles.heroSub}>
             {isMovie
-              ? [media.year, media.genres].filter(Boolean).join(' · ')
+              ? [media.year, genresFr(media.genres)].filter(Boolean).join(' • ')
               : [
                   detail.data.show?.numberOfSeasons ? `${detail.data.show.numberOfSeasons} saison${detail.data.show.numberOfSeasons > 1 ? 's' : ''}` : null,
+                  statusFr(media.status),
                   detail.data.show?.platform ?? detail.data.show?.network,
-                ].filter(Boolean).join(' · ')}
+                ].filter(Boolean).join(' • ')}
           </Text>
-        </View>
+        </Animated.View>
         {/* Progression globale au bas de la bannière : jaune en cours, verte à jour. */}
         {heroProg ? (
           <View style={styles.heroProgressTrack}>
@@ -208,23 +229,25 @@ export default function ShowDetail() {
             />
           </View>
         ) : null}
-      </View>
+      </Animated.View>
 
       {isMovie ? (
-        <>
-          <MovieBody media={media} detail={detail.data} onToggle={() => markMovie.mutate(media.userStatus !== 'completed')} />
-          <CommentsTab mediaId={String(id)} />
-        </>
+        <MovieBody
+          media={media}
+          detail={detail.data}
+          mediaId={String(id)}
+          onToggle={() => markMovie.mutate(media.userStatus !== 'completed')}
+          onScroll={onScroll}
+        />
       ) : (
         <>
-          <TopTabs tabs={['À PROPOS', 'ÉPISODES', 'DISCUSSION']} active={tab} onChange={setTab} />
+          {/* Comme TV Time : deux onglets, les commentaires vivent au bas de « À propos ». */}
+          <TopTabs tabs={['À PROPOS', 'ÉPISODES']} active={tab} onChange={setTab} />
           <FadeSwitch trigger={tab}>
             {tab === 'À PROPOS' ? (
-              <AboutTab media={media} detail={detail.data} interest={interest} setInterest={setInterest} />
-            ) : tab === 'ÉPISODES' ? (
-              <EpisodesTab showId={String(id)} posterPath={media.posterPath} onChange={refresh} />
+              <AboutTab media={media} detail={detail.data} mediaId={String(id)} interest={interest} setInterest={setInterest} onScroll={onScroll} />
             ) : (
-              <CommentsTab mediaId={String(id)} />
+              <EpisodesTab showId={String(id)} posterPath={media.posterPath} onChange={refresh} onScroll={onScroll} />
             )}
           </FadeSwitch>
         </>
@@ -595,24 +618,274 @@ const pstyles = StyleSheet.create({
   newListBtnText: { fontFamily: FONTS.extraBold, fontSize: 13, letterSpacing: 0.4 },
 });
 
-function AboutTab({ media, detail, interest, setInterest }: any) {
-  const providers = detail.providers ?? [];
+// Ouvre une recommandation TMDb : fiche locale si la série/le film est déjà
+// connu, sinon import silencieux (follow: false) puis navigation.
+function useOpenRec(type: 'show' | 'movie') {
+  const router = useRouter();
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const open = async (item: { tmdbId: string; localId?: string | null }) => {
+    if (busyId) return;
+    if (item.localId) {
+      router.push(`/show/${item.localId}${type === 'movie' ? '?type=movie' : ''}`);
+      return;
+    }
+    setBusyId(item.tmdbId);
+    try {
+      const res = await api.post<{ mediaId: string }>(
+        `/api/${type === 'movie' ? 'movies' : 'shows'}/add-from-tmdb`,
+        { tmdbId: item.tmdbId, follow: false },
+      );
+      router.push(`/show/${res.mediaId}${type === 'movie' ? '?type=movie' : ''}`);
+    } finally {
+      setBusyId(null);
+    }
+  };
+  return { open, busyId };
+}
+
+// « Où regarder » : pastilles noires horizontales (une par plateforme), rouage
+// à droite — cotes TV Time.
+function WhereToWatch({ providers }: { providers: { name: string }[] }) {
   return (
-    <ScrollView>
-      <View style={styles.section}>
-        <View style={styles.sectionHeadRow}>
-          <Text style={styles.sectionTitle}>Où regarder</Text>
-          <Feather name="settings" size={22} color={COLORS.black} />
-        </View>
-        {providers.length === 0 ? (
-          <Text style={styles.muted}>Non disponible</Text>
-        ) : (
-          <View style={styles.provBtn}>
-            <Feather name="play" size={18} color="#fff" />
-            <Text style={styles.provText}>{providers[0].name.toUpperCase()}</Text>
-          </View>
-        )}
+    <View style={styles.section}>
+      <View style={styles.sectionHeadRowTight}>
+        <Text style={styles.sectionTitle}>Où regarder</Text>
+        <Feather name="settings" size={22} color={COLORS.black} />
       </View>
+      {providers.length === 0 ? (
+        <Text style={styles.muted}>Non disponible</Text>
+      ) : (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingTop: 12 }}>
+          {providers.map((p) => (
+            <View key={p.name} style={styles.provBtn}>
+              <Ionicons name="play-circle-outline" size={20} color="#fff" />
+              <Text style={styles.provText}>{p.name.toUpperCase()}</Text>
+            </View>
+          ))}
+        </ScrollView>
+      )}
+    </View>
+  );
+}
+
+// « Similaire à » : vignette ronde + titre de l'œuvre la plus proche (première
+// recommandation TMDb), ouvre sa fiche au clic.
+function SimilarTo({ item, isMovie }: { item: any; isMovie: boolean }) {
+  const rec = useOpenRec(isMovie ? 'movie' : 'show');
+  const thumb = tmdbImage(item.posterPath, 'w185');
+  return (
+    <PressableScale style={[styles.section, styles.similarRow]} onPress={() => rec.open(item)}>
+      {thumb ? <Image source={{ uri: thumb }} style={styles.similarThumb} resizeMode="cover" /> : <View style={styles.similarThumb} />}
+      <View style={{ flex: 1 }}>
+        <Text style={styles.similarTitle}>Similaire à</Text>
+        <Text style={styles.similarName} numberOfLines={1}>{item.title}</Text>
+      </View>
+      {rec.busyId === item.tmdbId ? (
+        <ActivityIndicator size="small" color={COLORS.black} />
+      ) : (
+        <Feather name="chevron-right" size={22} color={COLORS.textMuted} />
+      )}
+    </PressableScale>
+  );
+}
+
+// Rangées d'infos sous le synopsis (horloge = jour/heure de diffusion,
+// chrono = durée d'épisode, silhouettes = « ajoutée par N personnes »).
+function MetaRows({ show, media, addedByCount, isMovie }: any) {
+  const schedule = !isMovie && show?.airDay ? [airDayFr(show.airDay), show.airTime].filter(Boolean).join(' ') : null;
+  if (!schedule && !media.runtime && !addedByCount) return null;
+  return (
+    <View style={styles.metaRows}>
+      {schedule ? (
+        <View style={styles.metaItem}>
+          <Feather name="clock" size={20} color={COLORS.black} />
+          <Text style={styles.metaText}>{schedule}</Text>
+        </View>
+      ) : null}
+      {media.runtime ? (
+        <View style={styles.metaItem}>
+          <Ionicons name="stopwatch-outline" size={21} color={COLORS.black} />
+          <Text style={styles.metaText}>{media.runtime}m</Text>
+        </View>
+      ) : null}
+      {addedByCount > 0 ? (
+        <View style={styles.metaItem}>
+          <Feather name="users" size={20} color={COLORS.black} />
+          <Text style={styles.metaText}>
+            {isMovie ? 'Film ajouté' : 'Série ajoutée'} par {compactCount(addedByCount)} personne{addedByCount > 1 ? 's' : ''}
+          </Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+// « Distribution » : cartes horizontales photo + nom + rôle (bandeau sombre en
+// bas de carte, façon TV Time) ; le clic ouvre la fiche acteur (/person).
+function CastSection({ cast, mediaId, type }: { cast: any[]; mediaId: string; type: 'show' | 'movie' }) {
+  const router = useRouter();
+  if (!cast.length) return null;
+  return (
+    <View style={[styles.section, { paddingHorizontal: 0 }]}>
+      <Text style={[styles.sectionTitle, { paddingHorizontal: 20 }]}>Distribution</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingHorizontal: 20, paddingTop: 14 }}>
+        {cast.map((c, i) => (
+          <PressableScale
+            key={`${c.name}-${i}`}
+            style={styles.castCard}
+            onPress={() => router.push(`/person?mediaId=${mediaId}&type=${type}&index=${i}`)}
+          >
+            {tmdbImage(c.profilePath, 'w185') ? (
+              <Image source={{ uri: tmdbImage(c.profilePath, 'w185')! }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+            ) : (
+              <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
+                <Feather name="user" size={30} color="#9a9a9a" />
+              </View>
+            )}
+            <View style={styles.castCap}>
+              <Text style={styles.castName} numberOfLines={1}>{c.name}</Text>
+              {c.character ? <Text style={styles.castRole} numberOfLines={1}>{c.character.toUpperCase()}</Text> : null}
+            </View>
+          </PressableScale>
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
+
+// « Les utilisateurs ont également regardé » : affiches horizontales, badge
+// coche jaune si déjà dans ma bibliothèque, import TMDb silencieux au clic.
+function AlsoWatched({ items, type }: { items: any[]; type: 'show' | 'movie' }) {
+  const rec = useOpenRec(type);
+  if (!items.length) return null;
+  return (
+    <View style={[styles.section, { paddingHorizontal: 0 }]}>
+      <Text style={[styles.sectionTitle, { paddingHorizontal: 20 }]}>Les utilisateurs ont également regardé</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingHorizontal: 20, paddingTop: 14 }}>
+        {items.map((r) => (
+          <PressableScale key={r.tmdbId} style={styles.recoCard} onPress={() => rec.open(r)}>
+            {tmdbImage(r.posterPath, 'w342') ? (
+              <Image source={{ uri: tmdbImage(r.posterPath, 'w342')! }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+            ) : (
+              <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
+                <Feather name={type === 'movie' ? 'film' : 'tv'} size={26} color="#9a9a9a" />
+              </View>
+            )}
+            {r.inLibrary ? (
+              <View style={styles.recoBadge}>
+                <Feather name="check" size={18} color={COLORS.black} />
+              </View>
+            ) : null}
+            {rec.busyId === r.tmdbId ? (
+              <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.35)', alignItems: 'center', justifyContent: 'center' }]}>
+                <ActivityIndicator color="#fff" />
+              </View>
+            ) : null}
+          </PressableScale>
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
+
+type RatingPoint = { episodeNumber: number; avg: number; count: number };
+type RatingSeason = { seasonNumber: number; points: RatingPoint[] };
+
+// « Notes de la communauté » : courbe des moyennes d'épisodes par saison
+// (quadrillage 0-5, polyline jaune, sélecteur de saison + points), cf. TV Time.
+// Masquée tant qu'aucun épisode n'a été noté (404 / liste vide).
+function CommunityRatings({ mediaId }: { mediaId: string }) {
+  const [season, setSeason] = useState(0);
+  const q = useQuery({
+    queryKey: ['community-ratings', mediaId],
+    queryFn: () => api.get<{ seasons: RatingSeason[] }>(`/api/shows/${mediaId}/community-ratings`),
+    retry: false,
+  });
+  const seasons = q.data?.seasons ?? [];
+  if (!seasons.length) return null;
+  const idx = Math.min(season, seasons.length - 1);
+  const cur = seasons[idx];
+  const W = Dimensions.get('window').width - 40;
+  const H = 150;
+  const PAD = { l: 26, r: 8, t: 8, b: 20 };
+  // Les notes sont sur 5 dans l'app ; garde-fou si une source note sur 10.
+  const maxVal = Math.max(...seasons.flatMap((s) => s.points.map((p) => p.avg)));
+  const scaleMax = maxVal > 5 ? 10 : 5;
+  const xs = cur.points.length > 1 ? (W - PAD.l - PAD.r) / (cur.points.length - 1) : 0;
+  const y = (v: number) => PAD.t + (1 - v / scaleMax) * (H - PAD.t - PAD.b);
+  const pts = cur.points.map((p, i) => `${PAD.l + i * xs},${y(p.avg)}`).join(' ');
+  return (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>Notes de la communauté</Text>
+      <Pressable style={styles.seasonPickRow} onPress={() => setSeason((idx + 1) % seasons.length)}>
+        <Text style={styles.seasonPick}>Saison {cur.seasonNumber}</Text>
+        {seasons.length > 1 ? <Feather name="chevron-down" size={18} color={COLORS.black} /> : null}
+      </Pressable>
+      <Svg width={W} height={H}>
+        {[0, 1, 2, 3, 4, 5].map((g) => {
+          const v = (g * scaleMax) / 5;
+          return (
+            <React.Fragment key={g}>
+              <Line x1={PAD.l} y1={y(v)} x2={W - PAD.r} y2={y(v)} stroke="#ececec" strokeWidth={1} />
+              <SvgText x={PAD.l - 8} y={y(v) + 4} fontSize={10} fill="#9a9a9a" textAnchor="end">
+                {String(v)}
+              </SvgText>
+            </React.Fragment>
+          );
+        })}
+        {cur.points.length > 1 ? <Polyline points={pts} fill="none" stroke={COLORS.yellow} strokeWidth={2.5} /> : null}
+        {cur.points.map((p, i) => (
+          <Circle key={i} cx={PAD.l + i * xs} cy={y(p.avg)} r={3.5} fill={COLORS.yellow} />
+        ))}
+      </Svg>
+      {seasons.length > 1 ? (
+        <View style={styles.dotsRow}>
+          {seasons.map((_, i) => (
+            <View key={i} style={[styles.dot, i === idx && styles.dotOn]} />
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+// Rangée « Commentaires » (compteur + chevron) : ouvre la page dédiée.
+function CommentsRowLink({ mediaId, title }: { mediaId: string; title: string }) {
+  const router = useRouter();
+  const q = useQuery({
+    queryKey: ['comments', mediaId],
+    queryFn: () => api.get<{ comments: { replies?: unknown[] }[] }>(`/api/media/${mediaId}/comments`),
+  });
+  const total = (q.data?.comments ?? []).reduce((n, c) => n + 1 + (c.replies?.length ?? 0), 0);
+  return (
+    <Pressable
+      style={[styles.section, styles.commentsRow]}
+      onPress={() => router.push(`/comments/${mediaId}?title=${encodeURIComponent(title)}`)}
+    >
+      <Text style={styles.sectionTitle}>Commentaires</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <Text style={styles.commentsCount}>{total}</Text>
+        <Feather name="chevron-right" size={24} color={COLORS.black} />
+      </View>
+    </Pressable>
+  );
+}
+
+// « 2002 - 2007 » pour une série terminée/annulée, sinon l'année de début.
+function yearRange(media: MediaDto, endYear?: number | null) {
+  if (!media.year) return null;
+  const done = media.status ? /ended|cancell?ed/i.test(media.status) : false;
+  if (done && endYear && endYear !== media.year) return `${media.year} - ${endYear}`;
+  return String(media.year);
+}
+
+// Onglet « À propos » — ordre des sections calqué sur la fiche TV Time :
+// où regarder, question d'intérêt, similaire à, informations (méta + étoiles +
+// synopsis + rangées), distribution, également regardé, notes, commentaires.
+function AboutTab({ media, detail, mediaId, interest, setInterest, onScroll }: any) {
+  return (
+    <ScrollView onScroll={onScroll} scrollEventThrottle={16} contentContainerStyle={{ paddingBottom: 90 }}>
+      <WhereToWatch providers={detail.providers ?? []} />
 
       <View style={styles.section}>
         <Text style={styles.question}>QU'EST-CE QUI VOUS INTÉRESSE LE PLUS DANS CETTE SÉRIE ?</Text>
@@ -629,20 +902,30 @@ function AboutTab({ media, detail, interest, setInterest }: any) {
         ))}
       </View>
 
+      {detail.recommendations?.length ? <SimilarTo item={detail.recommendations[0]} isMovie={false} /> : null}
+
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Informations sur la série</Text>
-        <Text style={styles.muted}>{[media.status, media.genres].filter(Boolean).join(' · ')}</Text>
+        <Text style={styles.infoMeta}>
+          {[yearRange(media, detail.endYear), genresFr(media.genres)].filter(Boolean).join(' • ')}
+        </Text>
+        {media.voteAverage ? <Stars rating10={media.voteAverage} size={22} /> : null}
         {media.overview ? <Text style={styles.overview}>{media.overview}</Text> : null}
+        <MetaRows show={detail.show} media={media} addedByCount={detail.addedByCount} isMovie={false} />
       </View>
+
+      <CastSection cast={detail.cast ?? []} mediaId={mediaId} type="show" />
+      <AlsoWatched items={detail.recommendations ?? []} type="show" />
+      <CommunityRatings mediaId={mediaId} />
+      <CommentsRowLink mediaId={mediaId} title={media.title} />
     </ScrollView>
   );
 }
 
-function MovieBody({ media, detail, onToggle }: any) {
+function MovieBody({ media, detail, mediaId, onToggle, onScroll }: any) {
   const seen = media.userStatus === 'completed';
-  const providers = detail.providers ?? [];
   return (
-    <ScrollView>
+    <ScrollView onScroll={onScroll} scrollEventThrottle={16} contentContainerStyle={{ paddingBottom: 90 }}>
       <View style={[styles.section, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <Feather name="eye" size={22} color={COLORS.black} />
@@ -650,23 +933,22 @@ function MovieBody({ media, detail, onToggle }: any) {
         </View>
         <CheckCircle checked={seen} onPress={onToggle} />
       </View>
+
+      <WhereToWatch providers={detail.providers ?? []} />
+
+      {detail.recommendations?.length ? <SimilarTo item={detail.recommendations[0]} isMovie /> : null}
+
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Où regarder</Text>
-        {providers.length === 0 ? (
-          <Text style={styles.muted}>Non disponible</Text>
-        ) : (
-          <View style={styles.provBtn}>
-            <Feather name="play" size={18} color="#fff" />
-            <Text style={styles.provText}>{providers[0].name.toUpperCase()}</Text>
-          </View>
-        )}
+        <Text style={styles.sectionTitle}>Informations sur le film</Text>
+        <Text style={styles.infoMeta}>{[media.year, genresFr(media.genres)].filter(Boolean).join(' • ')}</Text>
+        {media.voteAverage ? <Stars rating10={media.voteAverage} size={22} /> : null}
+        {media.overview ? <Text style={styles.overview}>{media.overview}</Text> : null}
+        <MetaRows show={null} media={media} addedByCount={detail.addedByCount} isMovie />
       </View>
-      {media.overview ? (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Synopsis</Text>
-          <Text style={styles.overview}>{media.overview}</Text>
-        </View>
-      ) : null}
+
+      <CastSection cast={detail.cast ?? []} mediaId={mediaId} type="movie" />
+      <AlsoWatched items={detail.recommendations ?? []} type="movie" />
+      <CommentsRowLink mediaId={mediaId} title={media.title} />
     </ScrollView>
   );
 }
@@ -691,7 +973,7 @@ function EpThumb({ stillPath, fallback }: { stillPath?: string | null; fallback?
   );
 }
 
-function EpisodesTab({ showId, posterPath, onChange }: { showId: string; posterPath?: string | null; onChange: () => void }) {
+function EpisodesTab({ showId, posterPath, onChange, onScroll }: { showId: string; posterPath?: string | null; onChange: () => void; onScroll?: any }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState<Record<number, boolean>>({});
   // Snackbar « Marquer tout comme non vu » (2ᵉ appui sur la coche maîtresse).
@@ -813,7 +1095,12 @@ function EpisodesTab({ showId, posterPath, onChange }: { showId: string; posterP
 
   return (
     <View style={{ flex: 1 }}>
-    <ScrollView style={{ backgroundColor: COLORS.pageMuted }} contentContainerStyle={{ paddingBottom: 40 }}>
+    <ScrollView
+      style={{ backgroundColor: COLORS.pageMuted }}
+      contentContainerStyle={{ paddingBottom: 40 }}
+      onScroll={onScroll}
+      scrollEventThrottle={16}
+    >
       {data.nextEpisode ? (
         <View style={{ paddingTop: 20, borderBottomWidth: 1, borderBottomColor: COLORS.borderLight, backgroundColor: COLORS.white }}>
           <Text style={[styles.sectionTitle, { paddingHorizontal: 24 }]}>{anyWatched ? 'Continuer le suivi' : 'Démarrer le suivi'}</Text>
@@ -930,17 +1217,49 @@ const styles = StyleSheet.create({
   heroTitleWrap: { padding: 20 },
   heroTitle: { color: '#fff', fontSize: 25, fontFamily: FONTS.extraBold },
   heroSub: { color: 'rgba(255,255,255,0.9)', fontFamily: FONTS.regular, fontSize: 15, marginTop: 2 },
-  section: { padding: 22, borderBottomWidth: 1, borderBottomColor: COLORS.borderLight },
+  // Titre compact centré quand la bannière est repliée (marges = place des boutons).
+  heroCollapsedTitle: { position: 'absolute', left: 60, right: 60, textAlign: 'center', color: '#fff', fontSize: 18, fontFamily: FONTS.bold },
+  section: { paddingHorizontal: 20, paddingVertical: 18, borderBottomWidth: 1, borderBottomColor: COLORS.borderLight },
   sectionHeadRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, marginBottom: 14 },
+  // Variante sans marges pour les entêtes DANS une section (Où regarder + rouage).
+  sectionHeadRowTight: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   sectionTitle: { fontSize: 20, fontFamily: FONTS.extraBold },
   muted: { color: COLORS.textMuted, fontFamily: FONTS.regular, fontSize: 16, marginTop: 8 },
   overview: { fontFamily: FONTS.regular, fontSize: 16, lineHeight: 23, marginTop: 14 },
-  provBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: COLORS.provider, borderRadius: 999, paddingHorizontal: 24, paddingVertical: 12, alignSelf: 'flex-start', marginTop: 12 },
-  provText: { color: '#fff', fontSize: 15, fontFamily: FONTS.extraBold },
-  question: { textAlign: 'center', fontSize: 14, fontFamily: FONTS.bold, marginBottom: 16 },
-  qbtn: { backgroundColor: COLORS.chipGrey, borderRadius: 6, paddingVertical: 16, marginBottom: 12, alignItems: 'center' },
+  infoMeta: { color: COLORS.textMuted, fontFamily: FONTS.regular, fontSize: 15, marginTop: 6 },
+  // Pastilles noires « Où regarder » (TV Time affiche toutes les plateformes).
+  provBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#101014', borderRadius: 999, paddingHorizontal: 22, paddingVertical: 12 },
+  provText: { color: '#fff', fontSize: 14, fontFamily: FONTS.extraBold, letterSpacing: 0.3 },
+  question: { textAlign: 'center', fontSize: 13, fontFamily: FONTS.extraBold, marginBottom: 14, letterSpacing: 0.2 },
+  qbtn: { backgroundColor: COLORS.chipGrey, borderRadius: 8, paddingVertical: 12, marginBottom: 10, alignItems: 'center' },
   qbtnSel: { backgroundColor: COLORS.yellow },
-  qbtnText: { fontSize: 14, fontFamily: FONTS.bold },
+  qbtnText: { fontSize: 13.5, fontFamily: FONTS.bold },
+  // « Similaire à » : vignette ronde 56 + titre 20 / nom 16 (réf. TV Time).
+  similarRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  similarThumb: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#e5e5e5' },
+  similarTitle: { fontSize: 20, fontFamily: FONTS.extraBold },
+  similarName: { fontSize: 16, fontFamily: FONTS.regular, color: COLORS.textMuted, marginTop: 2 },
+  // Rangées méta (horloge / chrono / personnes) sous le synopsis.
+  metaRows: { marginTop: 18, gap: 14 },
+  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  metaText: { fontSize: 17, fontFamily: FONTS.regular },
+  // Distribution : cartes 108x148, bandeau sombre nom/rôle en bas.
+  castCard: { width: 108, height: 148, borderRadius: 8, overflow: 'hidden', backgroundColor: '#e5e5e5', justifyContent: 'flex-end' },
+  castCap: { backgroundColor: 'rgba(0,0,0,0.55)', paddingHorizontal: 7, paddingVertical: 6 },
+  castName: { color: '#fff', fontSize: 13, fontFamily: FONTS.bold },
+  castRole: { color: 'rgba(255,255,255,0.85)', fontSize: 10.5, fontFamily: FONTS.bold, letterSpacing: 0.3, marginTop: 1 },
+  // « Également regardé » : affiches 132 (2/3), badge coche jaune en haut à droite.
+  recoCard: { width: 132, aspectRatio: 2 / 3, borderRadius: 8, overflow: 'hidden', backgroundColor: '#e5e5e5' },
+  recoBadge: { position: 'absolute', top: 0, right: 10, width: 34, height: 30, backgroundColor: COLORS.yellow, borderBottomLeftRadius: 6, borderBottomRightRadius: 6, alignItems: 'center', justifyContent: 'center' },
+  // Notes de la communauté : sélecteur de saison + points de pagination.
+  seasonPickRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, marginBottom: 12, alignSelf: 'flex-start' },
+  seasonPick: { fontSize: 16, fontFamily: FONTS.bold },
+  dotsRow: { flexDirection: 'row', gap: 6, justifyContent: 'center', marginTop: 10 },
+  dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#d9d9d9' },
+  dotOn: { backgroundColor: COLORS.black },
+  // Rangée « Commentaires » (compteur + chevron) vers la page dédiée.
+  commentsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  commentsCount: { fontSize: 17, fontFamily: FONTS.regular, color: COLORS.textMuted },
   eprow: { flexDirection: 'row', backgroundColor: COLORS.white, borderRadius: 5, minHeight: 92, overflow: 'hidden', marginBottom: 8, ...SHADOW.card },
   epThumb: { width: 90, backgroundColor: '#e5e5e5' },
   epCode: { fontSize: 19, fontFamily: FONTS.extraBold },
@@ -974,163 +1293,3 @@ const styles = StyleSheet.create({
   sheetLabel: { fontSize: 17, fontFamily: FONTS.regular },
 });
 
-type CommentDto = {
-  id: string;
-  body: string;
-  createdAt: string;
-  episodeId: string | null;
-  parentId: string | null;
-  user: { id: string; displayName: string; avatarUrl: string | null };
-  isMine: boolean;
-  reactions: { total: number; byEmoji: Record<string, number>; mine: string[] };
-  replies?: CommentDto[];
-};
-
-const REACT_EMOJIS = ['❤️', '👍', '😂', '😮', '😢'];
-
-// Discussion sociale : commentaires, fils de réponses et réactions multi-emoji.
-function CommentsTab({ mediaId }: { mediaId: string }) {
-  const router = useRouter();
-  const qc = useQueryClient();
-  const [text, setText] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [replyTo, setReplyTo] = useState<string | null>(null);
-  const [replyText, setReplyText] = useState('');
-  const { data, isLoading } = useQuery({
-    queryKey: ['comments', mediaId],
-    queryFn: () => api.get<{ comments: CommentDto[] }>(`/api/media/${mediaId}/comments`),
-  });
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['comments', mediaId] });
-
-  const post = async () => {
-    if (!text.trim()) return;
-    setBusy(true);
-    try {
-      await api.post(`/api/media/${mediaId}/comments`, { body: text.trim() });
-      setText('');
-      invalidate();
-    } finally {
-      setBusy(false);
-    }
-  };
-  const postReply = async (parentId: string) => {
-    if (!replyText.trim()) return;
-    await api.post(`/api/media/${mediaId}/comments`, { body: replyText.trim(), parentId });
-    setReplyText('');
-    setReplyTo(null);
-    invalidate();
-  };
-  const react = async (c: CommentDto, emoji: string) => {
-    await api.post(`/api/comments/${c.id}/react`, { emoji });
-    invalidate();
-  };
-  const remove = async (c: CommentDto) => {
-    await api.del(`/api/comments/${c.id}`);
-    invalidate();
-  };
-
-  const renderComment = (c: CommentDto, isReply = false) => (
-    <View key={c.id} style={[cstyles.row, isReply && cstyles.replyRow]}>
-      <Pressable style={cstyles.avatar} onPress={() => router.push(`/user/${c.user.id}`)}>
-        <Text style={cstyles.avatarInit}>{c.user.displayName.slice(0, 1).toUpperCase()}</Text>
-      </Pressable>
-      <View style={{ flex: 1 }}>
-        <Text style={cstyles.name}>{c.user.displayName}</Text>
-        <Text style={cstyles.body}>{c.body}</Text>
-        <View style={cstyles.reactBar}>
-          {REACT_EMOJIS.map((e) => {
-            const count = c.reactions.byEmoji[e] ?? 0;
-            const mine = c.reactions.mine.includes(e);
-            return (
-              <Pressable key={e} style={[cstyles.chip, mine && cstyles.chipActive]} onPress={() => react(c, e)}>
-                <Text style={cstyles.chipText}>
-                  {e}
-                  {count > 0 ? ` ${count}` : ''}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-        <View style={cstyles.actions}>
-          {!isReply ? (
-            <Pressable onPress={() => { setReplyTo(replyTo === c.id ? null : c.id); setReplyText(''); }} hitSlop={8}>
-              <Text style={cstyles.action}>Répondre</Text>
-            </Pressable>
-          ) : null}
-          {c.isMine ? (
-            <Pressable onPress={() => remove(c)} hitSlop={8}>
-              <Text style={cstyles.action}>Supprimer</Text>
-            </Pressable>
-          ) : null}
-        </View>
-        {replyTo === c.id ? (
-          <View style={cstyles.replyComposer}>
-            <TextInput
-              style={cstyles.replyInput}
-              placeholder="Votre réponse…"
-              placeholderTextColor={COLORS.textMuted}
-              value={replyText}
-              onChangeText={setReplyText}
-            />
-            <Pressable style={[cstyles.replySend, !replyText.trim() && { opacity: 0.4 }]} onPress={() => postReply(c.id)} disabled={!replyText.trim()}>
-              <Text style={cstyles.sendText}>OK</Text>
-            </Pressable>
-          </View>
-        ) : null}
-        {c.replies?.map((r) => renderComment(r, true))}
-      </View>
-    </View>
-  );
-
-  return (
-    <View style={cstyles.wrap}>
-      <View style={cstyles.composer}>
-        <TextInput
-          style={cstyles.input}
-          placeholder="Partager un avis…"
-          placeholderTextColor={COLORS.textMuted}
-          value={text}
-          onChangeText={setText}
-          multiline
-        />
-        <Pressable
-          style={[cstyles.send, (!text.trim() || busy) && { opacity: 0.4 }]}
-          onPress={post}
-          disabled={!text.trim() || busy}
-        >
-          {busy ? <ActivityIndicator color="#000" /> : <Text style={cstyles.sendText}>PUBLIER</Text>}
-        </Pressable>
-      </View>
-      {isLoading ? (
-        <Loading />
-      ) : (data?.comments.length ?? 0) === 0 ? (
-        <EmptyState title="Aucun commentaire" message="Soyez le premier à réagir." />
-      ) : (
-        data!.comments.map((c) => renderComment(c))
-      )}
-    </View>
-  );
-}
-
-const cstyles = StyleSheet.create({
-  wrap: { padding: 20 },
-  composer: { marginBottom: 20 },
-  input: { borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, minHeight: 60, padding: 12, fontFamily: FONTS.regular, fontSize: 16, textAlignVertical: 'top' },
-  send: { alignSelf: 'flex-end', marginTop: 10, backgroundColor: COLORS.yellow, borderRadius: 999, paddingHorizontal: 22, paddingVertical: 10 },
-  sendText: { fontFamily: FONTS.extraBold, fontSize: 13, letterSpacing: 0.4 },
-  row: { flexDirection: 'row', gap: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.borderLight },
-  replyRow: { borderBottomWidth: 0, paddingVertical: 8, marginLeft: 8, borderLeftWidth: 2, borderLeftColor: COLORS.borderLight, paddingLeft: 12 },
-  avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#20202a', alignItems: 'center', justifyContent: 'center' },
-  avatarInit: { color: '#fff', fontSize: 16, fontFamily: FONTS.extraBold },
-  name: { fontSize: 15, fontFamily: FONTS.extraBold },
-  body: { fontFamily: FONTS.regular, fontSize: 16, lineHeight: 22, marginTop: 3 },
-  reactBar: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
-  chip: { borderWidth: 1, borderColor: COLORS.border, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
-  chipActive: { borderColor: COLORS.yellow, backgroundColor: COLORS.yellowSoft },
-  chipText: { fontFamily: FONTS.regular, fontSize: 14 },
-  actions: { flexDirection: 'row', alignItems: 'center', gap: 20, marginTop: 8 },
-  action: { fontSize: 14, color: COLORS.textMuted, fontFamily: FONTS.semiBold },
-  replyComposer: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 },
-  replyInput: { flex: 1, borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, fontFamily: FONTS.regular, fontSize: 15 },
-  replySend: { backgroundColor: COLORS.yellow, borderRadius: 999, paddingHorizontal: 16, paddingVertical: 9 },
-});

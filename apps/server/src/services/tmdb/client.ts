@@ -83,6 +83,38 @@ export async function tmdbSearchPerson(query: string): Promise<unknown[]> {
   return data?.results ?? [];
 }
 
+// Fiche personne (acteur/doubleur) : détails + réseaux + filmographie complète.
+// La bio française est souvent vide sur TMDb : on garde la langue par défaut et
+// le client affiche ce qui existe (TV Time affiche aussi la bio anglaise).
+export type TmdbPersonCredit = {
+  id: number;
+  media_type?: string;
+  name?: string;
+  title?: string;
+  character?: string;
+  poster_path?: string | null;
+  first_air_date?: string;
+  release_date?: string;
+  episode_count?: number;
+  genre_ids?: number[];
+  vote_average?: number;
+  popularity?: number;
+};
+export type TmdbPerson = {
+  id: number;
+  name: string;
+  biography?: string;
+  birthday?: string | null;
+  deathday?: string | null;
+  place_of_birth?: string | null;
+  profile_path?: string | null;
+  external_ids?: { twitter_id?: string | null; instagram_id?: string | null };
+  combined_credits?: { cast?: TmdbPersonCredit[] };
+};
+export async function tmdbPerson(tmdbId: string): Promise<TmdbPerson | null> {
+  return cachedFetch(`/person/${tmdbId}`, { append_to_response: 'external_ids,combined_credits' }, 30 * DAY);
+}
+
 export async function tmdbFindByExternalId(
   externalId: string,
   source: 'tvdb_id' | 'imdb_id',

@@ -11,6 +11,7 @@ import {
   syncProvidersFromTmdb,
   orderProvidersForMedia,
   tmdbVideos,
+  tmdbRecommendations,
 } from '../../services/tmdb/index.js';
 
 export async function movieRoutes(app: FastifyInstance): Promise<void> {
@@ -88,8 +89,41 @@ export async function movieRoutes(app: FastifyInstance): Promise<void> {
       const trailer = videos?.results?.find((v) => v.site === 'YouTube' && v.type === 'Trailer');
       trailerUrl = trailer?.key ? `https://www.youtube.com/watch?v=${trailer.key}` : null;
     }
+    // Recommandations (« Les utilisateurs ont également regardé ») + marquage
+    // bibliothèque + « Film ajouté par N personnes » — parité fiche série.
+    type RecItem = {
+      id: string; type: 'movie'; title: string; posterPath: string | null; backdropPath: string | null;
+      year: number | null; tmdbId: string; localId: string | null; inLibrary: boolean;
+    };
+    let recommendations: RecItem[] = [];
+    if (media.tmdbId) {
+      const recs = await tmdbRecommendations('movie', media.tmdbId).catch(() => []);
+      const ids = recs.slice(0, 10).map((r) => String(r.id));
+      const locals = await prisma.media.findMany({
+        where: { type: 'movie', tmdbId: { in: ids } },
+        select: { id: true, tmdbId: true, statuses: { where: { userId: request.userId }, select: { id: true } } },
+      });
+      const byTmdb = new Map(locals.map((l) => [l.tmdbId, l]));
+      recommendations = recs.slice(0, 10).map((r) => {
+        const local = byTmdb.get(String(r.id));
+        return {
+          id: `tmdb:movie:${r.id}`,
+          type: 'movie' as const,
+          title: r.title ?? r.name ?? '',
+          posterPath: r.poster_path ?? null,
+          backdropPath: r.backdrop_path ?? null,
+          year: r.release_date ? new Date(r.release_date).getFullYear() : null,
+          tmdbId: String(r.id),
+          localId: local?.id ?? null,
+          inLibrary: (local?.statuses.length ?? 0) > 0,
+        };
+      });
+    }
+    const addedByCount = await prisma.userMediaStatus.count({ where: { mediaId: media.id } });
     return {
       media: serializeMedia(media, media.statuses[0] ?? null),
+      addedByCount,
+      recommendations,
       providers: orderProvidersForMedia(providers, media).map((p) => ({
         name: p.providerName,
         logoPath: p.providerLogoPath,
@@ -100,6 +134,7 @@ export async function movieRoutes(app: FastifyInstance): Promise<void> {
         name: c.person.name,
         character: c.characterName,
         profilePath: c.person.profilePath,
+        tmdbId: c.person.tmdbId,
       })),
       trailerUrl,
     };
