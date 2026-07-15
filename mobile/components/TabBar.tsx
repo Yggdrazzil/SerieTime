@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, Pressable, StyleSheet, Animated, Platform } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { Feather, Ionicons } from '@expo/vector-icons';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQueryClient } from '@tanstack/react-query';
@@ -13,14 +13,11 @@ const NATIVE = Platform.OS !== 'web';
 const ICONS: Record<string, keyof typeof Feather.glyphMap> = {
   index: 'tv',
   movies: 'film',
-  // Feather n'a pas d'icône « manette » : "target" est la plus proche
-  // disponible dans le set déjà utilisé par la barre (pas de mélange Feather/
-  // Ionicons ici pour ne pas modifier le typage `TabIcon`, partagé par tous
-  // les onglets — cf. task-7-brief.md).
-  games: 'target',
   explore: 'search',
   profile: 'user',
 };
+// L'onglet Jeux utilise une vraie icône manette (Ionicons — Feather n'en a pas).
+const GAMES_ICON: keyof typeof Ionicons.glyphMap = 'game-controller-outline';
 const LABELS: Record<string, string> = {
   index: 'Séries',
   movies: 'Films',
@@ -56,7 +53,12 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
         };
         return (
           <Pressable key={route.key} style={styles.item} onPress={onPress}>
-            <TabIcon name={ICONS[route.name] ?? 'circle'} focused={focused} showDot={route.name === 'explore' && !focused} />
+            <TabIcon
+              name={route.name === 'games' ? undefined : ICONS[route.name] ?? 'circle'}
+              ionicon={route.name === 'games' ? GAMES_ICON : undefined}
+              focused={focused}
+              showDot={route.name === 'explore' && !focused}
+            />
             <Text style={[styles.label, { color: focused ? COLORS.black : COLORS.textMuted }]}>
               {LABELS[route.name] ?? route.name}
             </Text>
@@ -68,16 +70,21 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
 }
 
 // Icône d'onglet : petit « pop » élastique quand l'onglet devient actif.
-function TabIcon({ name, focused, showDot }: { name: keyof typeof Feather.glyphMap; focused: boolean; showDot: boolean }) {
+function TabIcon({ name, ionicon, focused, showDot }: { name?: keyof typeof Feather.glyphMap; ionicon?: keyof typeof Ionicons.glyphMap; focused: boolean; showDot: boolean }) {
   const reduce = useReduceMotion();
   const scale = useRef(new Animated.Value(focused ? 1 : 0.92)).current;
+  const color = focused ? COLORS.black : COLORS.textMuted;
   useEffect(() => {
     if (reduce) { scale.setValue(focused ? 1 : 0.92); return; }
     Animated.spring(scale, { toValue: focused ? 1 : 0.92, useNativeDriver: NATIVE, friction: 5, tension: 200 }).start();
   }, [focused, reduce, scale]);
   return (
     <Animated.View style={{ transform: [{ scale }] }}>
-      <Feather name={name} size={23} color={focused ? COLORS.black : COLORS.textMuted} />
+      {ionicon ? (
+        <Ionicons name={ionicon} size={24} color={color} />
+      ) : (
+        <Feather name={name ?? 'circle'} size={23} color={color} />
+      )}
       {showDot ? <View style={styles.dot} /> : null}
     </Animated.View>
   );

@@ -33,7 +33,9 @@ export function igdbImageUrl(imageId: string, size = 't_cover_big'): string {
 }
 
 export async function igdbSearch(q: string): Promise<IgdbGame[]> {
-  const body = `search "${q.replace(/"/g, '')}"; ${FIELDS}; where category = 0; limit 30;`;
+  // NB : le champ IGDB `category` a été déprécié (migré vers `game_type`) et
+  // `where category = 0` ne matche plus RIEN → on ne filtre plus par type ici.
+  const body = `search "${q.replace(/"/g, '')}"; ${FIELDS}; limit 30;`;
   return (await igdbQuery<IgdbGame[]>('games', body, DAY)) ?? [];
 }
 
@@ -44,13 +46,13 @@ export async function igdbGame(id: number): Promise<IgdbGame | null> {
 }
 
 export async function igdbPopular(): Promise<IgdbGame[]> {
-  const body = `${FIELDS}; where total_rating_count > 200 & category = 0; sort total_rating desc; limit 30;`;
+  const body = `${FIELDS}; where total_rating_count > 200; sort total_rating desc; limit 30;`;
   return (await igdbQuery<IgdbGame[]>('games', body, DAY)) ?? [];
 }
 
 export async function igdbUpcoming(): Promise<IgdbGame[]> {
   const now = Math.floor(Date.now() / 1000);
-  const body = `${FIELDS}; where first_release_date > ${now} & category = 0; sort first_release_date asc; limit 30;`;
+  const body = `${FIELDS}; where first_release_date > ${now}; sort first_release_date asc; limit 30;`;
   return (await igdbQuery<IgdbGame[]>('games', body, DAY)) ?? [];
 }
 
