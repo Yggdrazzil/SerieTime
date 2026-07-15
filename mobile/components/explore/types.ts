@@ -12,6 +12,8 @@ export type FeedItem = {
   inLibrary: boolean;
   stats?: { likes: number; watched: number; comments: number };
   me?: { liked: boolean; watched: boolean };
+  // Note communautaire TMDb (/10) — affichée en pastille ★ sur la carte.
+  voteAverage?: number | null;
 };
 
 export type FeedCategory = 'tout' | 'serie' | 'film' | 'anime';

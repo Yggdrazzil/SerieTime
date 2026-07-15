@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Image, Pressable } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { api, tmdbImage } from '@/lib/api';
-import { FONTS } from '@/lib/theme';
+import { COLORS, FONTS } from '@/lib/theme';
 import { shareMedia } from '@/lib/share';
 import { ActionRail, type RailState } from './ActionRail';
 import { DescriptionOverlay } from './DescriptionOverlay';
@@ -114,7 +114,15 @@ export function TikTokCard({
             {item.title}
           </Text>
         </View>
-        <Text style={styles.meta}>{meta}</Text>
+        <View style={styles.metaRow}>
+          <Text style={styles.meta}>{meta}</Text>
+          {typeof item.voteAverage === 'number' && item.voteAverage > 0 ? (
+            <View style={styles.ratingPill}>
+              <Feather name="star" size={12} color={COLORS.yellow} />
+              <Text style={styles.ratingText}>{item.voteAverage.toFixed(1).replace('.', ',')}</Text>
+            </View>
+          ) : null}
+        </View>
         {item.overview ? (
           <Text style={styles.overview} numberOfLines={2}>
             {item.overview}
@@ -152,7 +160,10 @@ const styles = StyleSheet.create({
   scrimBottom: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 260, backgroundColor: 'rgba(0,0,0,0.45)' },
   caption: { position: 'absolute', left: 18, right: 84, bottom: 96 },
   title: { color: '#fff', fontSize: 24, fontFamily: FONTS.extraBold, flexShrink: 1 },
-  meta: { color: 'rgba(255,255,255,0.85)', fontFamily: FONTS.bold, fontSize: 14, marginTop: 4 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 },
+  meta: { color: 'rgba(255,255,255,0.85)', fontFamily: FONTS.bold, fontSize: 14 },
+  ratingPill: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(0,0,0,0.45)', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
+  ratingText: { color: '#fff', fontFamily: FONTS.extraBold, fontSize: 12.5 },
   overview: { color: 'rgba(255,255,255,0.92)', fontFamily: FONTS.regular, fontSize: 15, lineHeight: 20, marginTop: 10 },
   hint: { color: 'rgba(255,255,255,0.55)', fontFamily: FONTS.regular, fontSize: 12, marginTop: 10 },
 });
