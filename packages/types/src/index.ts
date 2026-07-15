@@ -1,4 +1,4 @@
-export type MediaType = 'show' | 'movie';
+export type MediaType = 'show' | 'movie' | 'game';
 
 export type UserMediaState =
   | 'watching'
@@ -131,6 +131,9 @@ export type ProfileStatsDto = {
   moviesWatched: number;
   showMinutes: number;
   movieMinutes: number;
+  // Jeux vidéo : suivis + « joués » (en cours ou terminés).
+  gamesCount: number;
+  gamesPlayed: number;
 };
 
 export type ListDto = {

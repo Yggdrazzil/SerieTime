@@ -8,7 +8,9 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, tmdbImage } from '@/lib/api';
-import type { FavSortKey, MediaDto, MediaType } from '@/lib/types';
+import type { FavSortKey, MediaDto } from '@/lib/types';
+// Page favoris drag & drop : séries/films uniquement (les jeux ont leur page dédiée).
+type FavKind = 'show' | 'movie';
 import { useAppStore } from '@/lib/store';
 import { COLORS, FONTS } from '@/lib/theme';
 import { LoadError, EmptyState } from '@/components/ui';
@@ -49,7 +51,7 @@ export function sortFavorites<T extends MediaDto>(items: T[], sort: FavSortKey):
 
 // Données des deux pages : bibliothèque complète (pour Ajouter/Supprimer) dont
 // on extrait les favoris. Les séries gardent leur progression (barres).
-export function useFavoritesData(kind: MediaType) {
+export function useFavoritesData(kind: FavKind) {
   const shows = useQuery({
     queryKey: ['shows', 'library'],
     queryFn: () => api.get<{ items: LibraryShow[] }>('/api/shows/library'),
@@ -102,7 +104,7 @@ const WORDING = {
 // grand titre à gauche, bouton jaune, rangée TRIER PAR (feuille de tri),
 // grille 3 colonnes triée.
 // ============================================================================
-export function FavoritesPage({ kind }: { kind: MediaType }) {
+export function FavoritesPage({ kind }: { kind: FavKind }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const w = WORDING[kind];
@@ -300,7 +302,7 @@ function BottomSheet({
 function FavPicker({
   kind, visible, items, onClose,
 }: {
-  kind: MediaType;
+  kind: FavKind;
   visible: boolean;
   items: MediaDto[];
   onClose: () => void;

@@ -71,6 +71,14 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
 
 ## Journal des modifications
 
+### 2026-07-15 — Profil : sections Jeux + Jeux préférés + stat « Jeux joués »
+- `/api/profile` renvoie `games`/`favoriteGames` (mêmes règles que séries/films :
+  les « Voulus » restent dans l'onglet Jeux) et les stats gagnent `gamesCount`/
+  `gamesPlayed` (en cours + terminés).
+- Profil mobile : carte stat « Jeux joués » (icône manette), rangées « Jeux »
+  (→ onglet Jeux) et « Jeux préférés » (→ nouvelle page `/library/favorite-games`,
+  grille simple, tap = fiche jeu). `/api/profile/favorites` accepte `type=game`.
+
 ### 2026-07-15 — Import robuste (reprise + dates de diffusion) & densité UI
 - **Import TV Time — étape 3/3 rétablie** : après statuts/affiches, le job de fond
   synchronise désormais les **listes d'épisodes + dates de diffusion** des séries

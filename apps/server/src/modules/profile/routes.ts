@@ -7,7 +7,7 @@ import { requireAuth } from '../auth/routes.js';
 import { serializeMedia } from '../media/serialize.js';
 
 async function computeStats(userId: string): Promise<ProfileStatsDto> {
-  const [showsCount, moviesCount, ratingsCount, watchedEpisodes, watchedMovies] = await Promise.all([
+  const [showsCount, moviesCount, ratingsCount, watchedEpisodes, watchedMovies, gamesCount, gamesPlayed] = await Promise.all([
     prisma.userMediaStatus.count({ where: { userId, media: { type: 'show' } } }),
     prisma.userMediaStatus.count({ where: { userId, media: { type: 'movie' } } }),
     prisma.userEpisodeStatus.count({ where: { userId, rating: { not: null } } }).then(async (episodeRatings) => {
@@ -22,6 +22,11 @@ async function computeStats(userId: string): Promise<ProfileStatsDto> {
       where: { userId, status: 'completed', media: { type: 'movie' } },
       select: { media: { select: { runtime: true } } },
     }),
+    prisma.userMediaStatus.count({ where: { userId, media: { type: 'game' }, isHidden: false } }),
+    // « Joués » = en cours ou terminés (les « Voulus » n'ont pas été lancés).
+    prisma.userMediaStatus.count({
+      where: { userId, media: { type: 'game' }, isHidden: false, status: { in: ['playing', 'completed'] } },
+    }),
   ]);
   const showMinutes = episodesWatchTimeMinutes(
     watchedEpisodes.map((e) => e.episode.runtime ?? e.episode.show.media.runtime),
@@ -35,6 +40,8 @@ async function computeStats(userId: string): Promise<ProfileStatsDto> {
     moviesWatched: watchedMovies.length,
     showMinutes,
     movieMinutes,
+    gamesCount,
+    gamesPlayed,
   };
 }
 
@@ -44,7 +51,7 @@ export async function profileRoutes(app: FastifyInstance): Promise<void> {
   // Profil complet pour l'écran /profile.
   app.get('/api/profile', async (request) => {
     const user = await prisma.user.findUniqueOrThrow({ where: { id: request.userId } });
-    const [stats, lists, shows, favoriteShows, movies, favoriteMovies, followingCount, followersCount, commentsCount] = await Promise.all([
+    const [stats, lists, shows, favoriteShows, movies, favoriteMovies, games, favoriteGames, followingCount, followersCount, commentsCount] = await Promise.all([
       computeStats(request.userId),
       prisma.mediaList.findMany({
         where: { userId: request.userId },
@@ -78,6 +85,20 @@ export async function profileRoutes(app: FastifyInstance): Promise<void> {
         orderBy: [{ favoriteOrder: { sort: 'asc', nulls: 'last' } }, { favoritedAt: 'asc' }],
         take: 12,
       }),
+      // Sections « Jeux »/« Jeux préférés » : mêmes règles que séries/films
+      // (les « Voulus » restent dans l'onglet Jeux, pas dans le profil).
+      prisma.userMediaStatus.findMany({
+        where: { userId: request.userId, media: { type: 'game' }, isHidden: false, status: { not: 'wishlist' } },
+        include: { media: true },
+        orderBy: { updatedAt: 'desc' },
+        take: 12,
+      }),
+      prisma.userMediaStatus.findMany({
+        where: { userId: request.userId, media: { type: 'game' }, isFavorite: true },
+        include: { media: true },
+        orderBy: [{ favoriteOrder: { sort: 'asc', nulls: 'last' } }, { favoritedAt: 'asc' }],
+        take: 12,
+      }),
       // Compteurs sociaux de l'en-tête (façon TV Time : abonnements / abonnés / commentaires).
       prisma.follow.count({ where: { followerId: request.userId } }),
       prisma.follow.count({ where: { followingId: request.userId } }),
@@ -107,6 +128,8 @@ export async function profileRoutes(app: FastifyInstance): Promise<void> {
       favoriteShows: favoriteShows.map((s) => serializeMedia(s.media, s)),
       movies: movies.map((s) => serializeMedia(s.media, s)),
       favoriteMovies: favoriteMovies.map((s) => serializeMedia(s.media, s)),
+      games: games.map((s) => serializeMedia(s.media, s)),
+      favoriteGames: favoriteGames.map((s) => serializeMedia(s.media, s)),
     };
   });
 
@@ -133,7 +156,7 @@ export async function profileRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get('/api/profile/favorites', async (request) => {
-    const query = z.object({ type: z.enum(['show', 'movie']).optional() }).parse(request.query ?? {});
+    const query = z.object({ type: z.enum(['show', 'movie', 'game']).optional() }).parse(request.query ?? {});
     const statuses = await prisma.userMediaStatus.findMany({
       where: {
         userId: request.userId,

@@ -35,7 +35,7 @@ export const useAppStore = create<AppState>()(
       user: null,
       hydrated: false,
       coverPick: null,
-      favSort: { show: 'user', movie: 'user' },
+      favSort: { show: 'user', movie: 'user', game: 'user' },
       setServerUrl: (url) => set({ serverUrl: url.replace(/\/+$/, '') }),
       setAuth: (token, user) => set({ token, user }),
       setCoverPick: (url) => set({ coverPick: url }),

@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { View, Text, ScrollView, StyleSheet, Pressable, Image, Dimensions, RefreshControl, Platform } from 'react-native';
-import { Feather } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { Feather, Ionicons } from '@expo/vector-icons';
+import { useRouter, type Href } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -34,6 +34,8 @@ type ProfileResponse = {
   favoriteShows: MediaDto[];
   movies: MediaDto[];
   favoriteMovies: MediaDto[];
+  games: MediaDto[];
+  favoriteGames: MediaDto[];
 };
 
 export default function ProfileScreen() {
@@ -151,6 +153,7 @@ function ProfileScreenInner() {
           <AppearItem index={1}><StatCard icon="tv" title="Épisodes vus" values={[[stats.episodesWatched, 'ÉPISODES']]} /></AppearItem>
           <AppearItem index={2}><StatCard icon="film" title="Temps passé devant des films" values={[[mt.months, 'MOIS'], [mt.days, 'JOURS'], [mt.hours, 'HEURES']]} /></AppearItem>
           <AppearItem index={3}><StatCard icon="film" title="Films regardés" values={[[stats.moviesWatched, 'FILMS']]} /></AppearItem>
+          <AppearItem index={4}><StatCard ionicon="game-controller-outline" title="Jeux joués" values={[[stats.gamesPlayed ?? 0, 'JEUX']]} /></AppearItem>
         </ScrollView>
       </Section>
 
@@ -175,6 +178,8 @@ function ProfileScreenInner() {
       <PosterRow title="Séries préférées" items={data.favoriteShows} heart emptyLabel="Aucune série en favori" href="/library/favorite-shows" />
       <PosterRow title="Films" items={data.movies} isMovie emptyLabel="Aucun film ajouté" href="/library/movies" />
       <PosterRow title="Films préférés" items={data.favoriteMovies} isMovie heart emptyLabel="Aucun film en favori" href="/library/favorite-movies" />
+      <PosterRow title="Jeux" items={data.games ?? []} isGame emptyLabel="Aucun jeu joué" href="/games" />
+      <PosterRow title="Jeux préférés" items={data.favoriteGames ?? []} isGame heart emptyLabel="Aucun jeu en favori" href="/library/favorite-games" />
     </ScrollView>
   );
 }
@@ -226,11 +231,15 @@ function Section({ title, children, onPress }: { title: string; children: React.
   );
 }
 
-function StatCard({ icon, title, values }: { icon: keyof typeof Feather.glyphMap; title: string; values: [number, string][] }) {
+function StatCard({ icon, ionicon, title, values }: { icon?: keyof typeof Feather.glyphMap; ionicon?: keyof typeof Ionicons.glyphMap; title: string; values: [number, string][] }) {
   return (
     <View style={styles.statcard}>
       <View style={styles.statTop}>
-        <Feather name={icon} size={18} color={COLORS.black} />
+        {ionicon ? (
+          <Ionicons name={ionicon} size={18} color={COLORS.black} />
+        ) : (
+          <Feather name={icon ?? 'activity'} size={18} color={COLORS.black} />
+        )}
         <Text style={styles.statTitle}>{title}</Text>
       </View>
       <View style={styles.statVals}>
@@ -250,6 +259,7 @@ function PosterRow({
   items,
   heart,
   isMovie,
+  isGame,
   emptyLabel,
   href,
 }: {
@@ -257,6 +267,7 @@ function PosterRow({
   items: MediaDto[];
   heart?: boolean;
   isMovie?: boolean;
+  isGame?: boolean;
   emptyLabel: string;
   href: string;
 }) {
@@ -280,7 +291,11 @@ function PosterRow({
         // Section toujours visible façon TV Time, avec un état vide.
         <View style={styles.emptyRow}>
           <View style={styles.emptyPoster}>
-            <Feather name={isMovie ? 'film' : 'tv'} size={26} color="#b4b4b4" />
+            {isGame ? (
+              <Ionicons name="game-controller-outline" size={26} color="#b4b4b4" />
+            ) : (
+              <Feather name={isMovie ? 'film' : 'tv'} size={26} color="#b4b4b4" />
+            )}
           </View>
           <Text style={styles.emptyRowText}>{emptyLabel}</Text>
         </View>
@@ -292,7 +307,7 @@ function PosterRow({
               title={m.title}
               uri={tmdbImage(m.posterPath)}
               width={118}
-              onPress={() => router.push(`/show/${m.id}${isMovie ? '?type=movie' : ''}`)}
+              onPress={() => router.push((isGame ? `/game/${m.id}` : `/show/${m.id}${isMovie ? '?type=movie' : ''}`) as Href)}
             />
           ))}
         </ScrollView>

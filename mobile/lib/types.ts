@@ -1,4 +1,4 @@
-export type MediaType = 'show' | 'movie';
+export type MediaType = 'show' | 'movie' | 'game';
 // Tri des pages « préférés » (feuille TRIER PAR, façon TV Time).
 export type FavSortKey = 'user' | 'recent' | 'oldest' | 'az' | 'za';
 export type UserMediaState =
@@ -64,4 +64,7 @@ export type ProfileStatsDto = {
   moviesWatched: number;
   showMinutes: number;
   movieMinutes: number;
+  // Jeux vidéo : suivis + « joués » (en cours ou terminés).
+  gamesCount: number;
+  gamesPlayed: number;
 };
