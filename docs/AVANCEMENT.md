@@ -6,7 +6,7 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
-Dernière mise à jour : **2026-07-11** (Claude) — Explorer : barre de recherche compacte (réf. TV Time), bouton actualiser supprimé, tirer-pour-actualiser ressort façon Instagram (compatible web)
+Dernière mise à jour : **2026-07-15** (Claude) — Commentaires : logique et carte partagées (`useComments` + `CommentCard`) entre la page plein écran et le bottom sheet Explorer façon TikTok
 
 ---
 
@@ -65,6 +65,27 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
 ## Journal des modifications
 
 > Entrée type : `### AAAA-MM-JJ — Auteur` puis une liste courte de ce qui a changé.
+
+### 2026-07-15 — Claude
+- **Refactor Commentaires : logique + carte partagées** (page plein écran
+  `/comments/[id]` ET nouveau bottom sheet Explorer façon TikTok), sans
+  changement de comportement de la page existante :
+  - `mobile/components/comments/types.ts` : `CommentDto`, `dateFr`.
+  - `mobile/components/comments/useComments.ts` : requête (même clé
+    `['comments', mediaId]`, cache partagé avec les compteurs
+    `CommentsRowLink`), tri PERTINENTS/RÉCENTS, réponses, `post`/`postReply`,
+    cœur ❤️ et suppression **optimistes** (rollback si échec), partage.
+  - `mobile/components/comments/CommentCard.tsx` : rendu d'une carte
+    (avatar, cœur, réponses, partage, fil de réponses + composeur inline).
+  - `mobile/app/comments/[id].tsx` consomme désormais ces modules (chrome de
+    page inchangé : en-tête, tri, FAB crayon jaune, modale composeur).
+  - `mobile/components/explore/CommentsSheet.tsx` réutilise `useComments` +
+    `CommentCard` (au lieu de l'ancien `CommentsTab`) ; barre de composition
+    **inline en bas** façon TikTok (pas de FAB) ; le hook n'est monté qu'une
+    fois le `mediaId` résolu (composant interne `CommentsPanel`).
+  - Suppression de l'ancien `mobile/components/comments.tsx` (obsolète,
+    devenu doublon).
+  - `cd mobile && npm run typecheck` : 0 erreur.
 
 ### 2026-07-11 — Claude (4)
 - **Explorer : barre de recherche recalée sur TV Time** (comparaison px des
