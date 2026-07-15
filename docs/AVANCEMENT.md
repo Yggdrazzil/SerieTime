@@ -6,7 +6,7 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
-Dernière mise à jour : **2026-07-15** (Claude) — Jeux vidéo : modèle de données Prisma (`Game`, `Media.igdbId`, `UserMediaStatus.playtimeMinutes`)
+Dernière mise à jour : **2026-07-15** (Claude) — Jeux vidéo : module API `/api/games` (recherche IGDB, ajout, bibliothèque par statut, détail)
 
 ---
 
@@ -45,7 +45,9 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
 | Hébergement VPS | ✅ Fait | Prod sur le VPS Hostinger de Benjamin : `https://serietime.studio-vives.fr` (Docker isolé, HTTPS Let's Encrypt, backup DB nocturne) |
 | Web app (navigateur / écran d'accueil) | ✅ Fait | Export Expo web servi par Nginx à la racine du domaine (`/api` proxifié) ; utilisable iPhone + Android sans store |
 | Distribution native (APK / stores) | ⏳ Optionnel | EAS Build documenté dans le README ; la web app couvre déjà l'usage quotidien |
-| Jeux vidéo — modèle de données | ✅ Fait | Table `Game` (plateformes, développeur, éditeur, modes, Steam App ID, DLC) + `Media.igdbId` + `UserMediaStatus.playtimeMinutes` (migration `add_games`) ; reste à faire : provider IGDB, module API jeux, UI mobile |
+| Jeux vidéo — modèle de données | ✅ Fait | Table `Game` (plateformes, développeur, éditeur, modes, Steam App ID, DLC) + `Media.igdbId` + `UserMediaStatus.playtimeMinutes` (migration `add_games`) |
+| Jeux vidéo — provider IGDB | ✅ Fait | `apps/server/src/services/igdb/` : auth Twitch (client credentials, cache mémoire), requêtes Apicalypse avec cache `ApiCache`, mapper `igdbToMedia` |
+| Jeux vidéo — module API | ✅ Fait | `apps/server/src/modules/games/routes.ts` : `GET /api/games/search`, `POST /api/games/add-from-igdb`, `GET /api/games` (bibliothèque groupée par statut wishlist/playing/completed/abandoned), `POST /api/games/:id/status`, `GET /api/games/:id` (enrichissement paresseux), `DELETE /api/games/:id/tracking` ; reste à faire : UI mobile |
 
 ## Prochaines étapes (par priorité)
 
@@ -66,6 +68,22 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
 ## Journal des modifications
 
 > Entrée type : `### AAAA-MM-JJ — Auteur` puis une liste courte de ce qui a changé.
+
+### 2026-07-15 — Jeux vidéo : module API games (Task 4)
+- `apps/server/src/modules/games/routes.ts` : routes `GET /api/games/search`
+  (recherche IGDB), `POST /api/games/add-from-igdb` (ajout par id IGDB, statut
+  optionnel), `GET /api/games` (bibliothèque groupée par statut wishlist/
+  playing/completed/abandoned), `POST /api/games/:id/status` (changement de
+  statut), `GET /api/games/:id` (détail, enrichissement paresseux si jamais
+  synchronisé), `DELETE /api/games/:id/tracking`.
+- Helper `ensureGameFromIgdb(igdbId)` (miroir de `ensureMediaFromTmdb`) :
+  crée/met à jour `Media`(type `game`) + `Game` à partir d'IGDB ; renvoie
+  l'existant sans erreur si IGDB est hors-ligne/quota dépassé.
+- Module enregistré dans `apps/server/src/app.ts` (`await
+  app.register(gamesRoutes)`).
+- TDD : test `apps/server/src/__tests__/games.test.ts` (bibliothèque groupée
+  par statut + changement de statut), suite complète 78/78 sans régression.
+- Prépare la tâche suivante : UI mobile de suivi des jeux.
 
 ### 2026-07-15 — Jeux vidéo : modèle de données (Task 1)
 - Migration Prisma additive `add_games` : nouvelle table `Game` (mediaId
