@@ -70,7 +70,7 @@ export function igdbToMedia(g: IgdbGame) {
       releaseDate: release,
       year: release ? release.getFullYear() : null,
       genres: norm(g.genres),
-      voteAverage: typeof g.total_rating === 'number' ? g.total_rating : null,
+      voteAverage: typeof g.total_rating === 'number' ? g.total_rating / 10 : null,
       voteCount: typeof g.total_rating_count === 'number' ? g.total_rating_count : null,
     },
     game: {

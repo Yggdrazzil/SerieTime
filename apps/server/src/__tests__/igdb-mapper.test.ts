@@ -26,7 +26,7 @@ describe('igdbToMedia', () => {
     expect(out.media.year).toBe(2015);
     expect(out.media.posterPath).toBe(igdbImageUrl('co1wyy'));
     expect(out.media.genres).toBe('RPG, Adventure');
-    expect(Math.round(out.media.voteAverage!)).toBe(93);
+    expect(out.media.voteAverage).toBeCloseTo(9.32, 2);
     expect(out.game.platforms).toBe('PC, PS4');
     expect(out.game.developer).toBe('CD Projekt RED');
     expect(out.game.publisher).toBe('CD Projekt');
