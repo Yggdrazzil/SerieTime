@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Image, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Image, Pressable, Platform } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { api, tmdbImage } from '@/lib/api';
@@ -39,7 +39,11 @@ export function TikTokCard({
     comments: item.stats?.comments ?? 0,
   });
 
-  const image = tmdbImage(item.backdropPath, 'w780') ?? tmdbImage(item.posterPath, 'w500');
+  // Portrait plein écran : l'AFFICHE (poster) est cadrée pour ce format, en haute
+  // résolution et affichée ENTIÈRE (contain → aucun rognage). Un fond flouté
+  // (backdrop, sinon l'affiche) remplit l'écran derrière pour l'immersion.
+  const poster = tmdbImage(item.posterPath, 'original') ?? tmdbImage(item.backdropPath, 'w1280');
+  const bg = tmdbImage(item.backdropPath, 'w780') ?? tmdbImage(item.posterPath, 'w780');
   const meta = [
     item.year,
     item.category === 'anime' ? 'Animé' : item.type === 'show' ? 'Série' : 'Film',
@@ -123,8 +127,23 @@ export function TikTokCard({
 
   return (
     <View style={[styles.card, { height }]}>
-      {image ? (
-        <Image source={{ uri: image }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+      {/* Fond flouté plein écran (immersion, cache l'upscale). Blur natif via
+          blurRadius ; sur le web react-native-web ignore blurRadius → filtre CSS. */}
+      {bg ? (
+        <Image
+          source={{ uri: bg }}
+          style={[
+            StyleSheet.absoluteFill,
+            Platform.OS === 'web' ? ({ filter: 'blur(30px)', transform: [{ scale: 1.15 }] } as never) : null,
+          ]}
+          resizeMode="cover"
+          blurRadius={Platform.OS === 'web' ? 0 : 30}
+        />
+      ) : null}
+      <View style={styles.bgDim} pointerEvents="none" />
+      {/* Affiche entière, nette, centrée — aucun rognage. */}
+      {poster ? (
+        <Image source={{ uri: poster }} style={StyleSheet.absoluteFill} resizeMode="contain" />
       ) : (
         <View style={[StyleSheet.absoluteFill, styles.noImg]}>
           <Feather name="image" size={48} color="#555" />
@@ -185,6 +204,8 @@ export function TikTokCard({
 const styles = StyleSheet.create({
   card: { width: '100%', backgroundColor: '#0d0d12', justifyContent: 'flex-end', overflow: 'hidden' },
   noImg: { alignItems: 'center', justifyContent: 'center' },
+  // Assombrit le fond flouté pour faire ressortir l'affiche + le texte.
+  bgDim: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.45)' },
   scrimTop: { position: 'absolute', top: 0, left: 0, right: 0, height: 140, backgroundColor: 'rgba(0,0,0,0.35)' },
   scrimBottom: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 260, backgroundColor: 'rgba(0,0,0,0.45)' },
   caption: { position: 'absolute', left: 18, right: 84, bottom: 96 },

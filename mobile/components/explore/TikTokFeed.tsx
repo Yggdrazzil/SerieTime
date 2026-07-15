@@ -83,7 +83,7 @@ export function TikTokFeed() {
     }
   }, [all, loadingMore]);
 
-  // Suit la carte active + prefetch des 2 backdrops suivants pour un snap fluide.
+  // Suit la carte active + prefetch des affiches suivantes pour un snap fluide.
   // Callback stable (RN interdit de le changer entre les rendus) : lit deckRef.
   const onViewable = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
     const idx = viewableItems[0]?.index ?? 0;
@@ -91,7 +91,8 @@ export function TikTokFeed() {
     const d = deckRef.current;
     for (let i = idx + 1; i <= idx + 2; i++) {
       const it = d[i];
-      const uri = it && (tmdbImage(it.backdropPath, 'w780') ?? tmdbImage(it.posterPath, 'w500'));
+      // On préchauffe l'affiche (ce que montre la carte) en taille correcte.
+      const uri = it && (tmdbImage(it.posterPath, 'w780') ?? tmdbImage(it.backdropPath, 'w780'));
       if (uri) RNImage.prefetch(uri);
     }
   }).current;
