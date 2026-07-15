@@ -13,12 +13,18 @@ const NATIVE = Platform.OS !== 'web';
 const ICONS: Record<string, keyof typeof Feather.glyphMap> = {
   index: 'tv',
   movies: 'film',
+  // Feather n'a pas d'icône « manette » : "target" est la plus proche
+  // disponible dans le set déjà utilisé par la barre (pas de mélange Feather/
+  // Ionicons ici pour ne pas modifier le typage `TabIcon`, partagé par tous
+  // les onglets — cf. task-7-brief.md).
+  games: 'target',
   explore: 'search',
   profile: 'user',
 };
 const LABELS: Record<string, string> = {
   index: 'Séries',
   movies: 'Films',
+  games: 'Jeux',
   explore: 'Explorer',
   profile: 'Profil',
 };
