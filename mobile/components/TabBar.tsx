@@ -41,7 +41,7 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
             // Arriver sur Explorer = nouveau tirage du flux (règle produit).
             // Fait ici (changement d'onglet) et non au focus : revenir d'une
             // fiche ne doit pas re-mélanger le flux en pleine navigation.
-            if (route.name === 'explore') qc.invalidateQueries({ queryKey: ['explore', 'feed'] });
+            if (route.name === 'explore') qc.invalidateQueries({ queryKey: ['explore'] }); // feed + jeux
           }
           // Re-clic sur l'onglet déjà actif (façon TV Time) : actualiser les
           // données ET remonter l'écran à son état par défaut (via `bump` +

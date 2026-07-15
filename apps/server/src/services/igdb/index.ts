@@ -65,7 +65,16 @@ export async function igdbGame(id: number): Promise<IgdbGame | null> {
 }
 
 export async function igdbPopular(): Promise<IgdbGame[]> {
-  const body = `${FIELDS}; where total_rating_count > 200; sort total_rating desc; limit 30;`;
+  const body = `${FIELDS}; where total_rating_count > 200; sort total_rating desc; limit 50;`;
+  return ((await igdbQuery<IgdbGame[]>('games', body, DAY)) ?? []).filter(isMainGame);
+}
+
+// Sorties récentes bien notées (2 dernières années) : élargit le vivier du
+// flux Explorer au-delà du top all-time, pour que chaque tirage varie.
+export async function igdbRecent(): Promise<IgdbGame[]> {
+  const now = Math.floor(Date.now() / 1000);
+  const twoYearsAgo = now - 2 * 365 * 86_400;
+  const body = `${FIELDS}; where first_release_date > ${twoYearsAgo} & first_release_date < ${now} & total_rating_count > 20; sort total_rating desc; limit 50;`;
   return ((await igdbQuery<IgdbGame[]>('games', body, DAY)) ?? []).filter(isMainGame);
 }
 

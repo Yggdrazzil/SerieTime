@@ -39,7 +39,9 @@ export function TikTokFeed() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0); // carte actuellement à l'écran
   const [commentBumps, setCommentBumps] = useState<Record<string, number>>({}); // +commentaires publiés par carte
+  const [endRefreshing, setEndRefreshing] = useState(false); // carte de fin atteinte → nouveau tirage
   const dryRef = useRef(0); // nombre de fetchs consécutifs sans nouveauté
+  const endBusy = useRef(false); // anti double-déclenchement du tirage de fin
 
   const { data, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['explore', 'feed'],
@@ -120,6 +122,28 @@ export function TikTokFeed() {
     setActiveIndex(0);
   }, [refetch, isGames, gamesQuery]);
 
+  // Arrivé sur la CARTE DE FIN (page après la dernière proposition) : nouveau
+  // tirage complet et retour en haut — « tu as tout vu, on t'en ressert ».
+  const maybeEndRefresh = useCallback(
+    (offsetY: number) => {
+      const d = deckRef.current;
+      if (!height || d.length === 0) return;
+      if (offsetY < d.length * height - 2) return; // pas encore sur la carte de fin
+      if (endBusy.current) return;
+      endBusy.current = true;
+      setEndRefreshing(true);
+      void (async () => {
+        try {
+          await onRefresh();
+        } finally {
+          endBusy.current = false;
+          setEndRefreshing(false);
+        }
+      })();
+    },
+    [height, onRefresh],
+  );
+
   const advance = useCallback(
     (index: number) => {
       const next = index + 1;
@@ -149,14 +173,17 @@ export function TikTokFeed() {
             scrollEventThrottle={16}
             onScroll={(e: NativeSyntheticEvent<NativeScrollEvent>) => {
               scrollY.current = e.nativeEvent.contentOffset.y;
+              maybeEndRefresh(e.nativeEvent.contentOffset.y);
             }}
             // Position finale fiable après snap/momentum (onScroll throttlé peut
             // rater la dernière frame → le pull-to-refresh volait des swipes).
             onMomentumScrollEnd={(e: NativeSyntheticEvent<NativeScrollEvent>) => {
               scrollY.current = e.nativeEvent.contentOffset.y;
+              maybeEndRefresh(e.nativeEvent.contentOffset.y);
             }}
             onScrollEndDrag={(e: NativeSyntheticEvent<NativeScrollEvent>) => {
               scrollY.current = e.nativeEvent.contentOffset.y;
+              maybeEndRefresh(e.nativeEvent.contentOffset.y);
             }}
             onEndReachedThreshold={0.5}
             onEndReached={loadMore}
@@ -173,7 +200,25 @@ export function TikTokFeed() {
                 commentBump={commentBumps[keyOf(item)] ?? 0}
               />
             )}
-            ListFooterComponent={loadingMore ? <ActivityIndicator style={{ marginVertical: 20 }} color="#fff" /> : null}
+            ListFooterComponent={
+              loadingMore ? (
+                <ActivityIndicator style={{ marginVertical: 20 }} color="#fff" />
+              ) : (
+                // Carte de fin plein écran : y snapper déclenche un nouveau
+                // tirage (maybeEndRefresh) et ramène en haut du flux.
+                <View style={[styles.endCard, { height }]}>
+                  {endRefreshing ? (
+                    <ActivityIndicator color={COLORS.yellow} size="large" />
+                  ) : (
+                    <Feather name="refresh-cw" size={40} color={COLORS.yellow} />
+                  )}
+                  <Text style={styles.endTitle}>Tu as tout vu !</Text>
+                  <Text style={styles.endMsg}>
+                    {endRefreshing ? 'Nouveau tirage en cours…' : 'Continue à glisser pour un nouveau tirage.'}
+                  </Text>
+                </View>
+              )
+            }
           />
         </PullToRefreshView>
       ) : height > 0 ? (
@@ -256,4 +301,7 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
   },
   commentBarText: { color: 'rgba(255,255,255,0.9)', fontFamily: FONTS.regular, fontSize: 14 },
+  endCard: { alignItems: 'center', justifyContent: 'center', gap: 14, backgroundColor: '#0d0d12', paddingHorizontal: 40 },
+  endTitle: { color: '#fff', fontSize: 22, fontFamily: FONTS.extraBold },
+  endMsg: { color: 'rgba(255,255,255,0.7)', fontFamily: FONTS.regular, fontSize: 14, textAlign: 'center' },
 });

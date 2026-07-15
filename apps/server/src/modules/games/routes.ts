@@ -221,10 +221,11 @@ export async function gamesRoutes(app: FastifyInstance): Promise<void> {
   // Flux « JEUX » de l'Explorer TikTok : cartes plein écran (mêmes champs que le
   // feed séries/films), alimentées par IGDB (populaires + à venir).
   app.get('/api/explore/games', async (request) => {
-    const { igdbPopular, igdbUpcoming, igdbImageUrl } = await import('../../services/igdb/index.js');
-    const [popular, upcoming, tracked] = await Promise.all([
+    const { igdbPopular, igdbUpcoming, igdbRecent, igdbImageUrl } = await import('../../services/igdb/index.js');
+    const [popular, upcoming, recent, tracked] = await Promise.all([
       igdbPopular(),
       igdbUpcoming(),
+      igdbRecent(),
       // Jeux déjà suivis par l'utilisateur : exclus du flux (comme le feed
       // séries/films exclut la bibliothèque) — liker un jeu le fait sortir
       // du tirage au prochain rafraîchissement.
@@ -235,9 +236,13 @@ export async function gamesRoutes(app: FastifyInstance): Promise<void> {
     ]);
     const trackedIds = new Set(tracked.map((t) => t.media.igdbId).filter((x): x is string => Boolean(x)));
     const seen = new Set<number>();
-    const pool = [...popular, ...upcoming].filter(
-      (g) => !trackedIds.has(String(g.id)) && (seen.has(g.id) ? false : (seen.add(g.id), true)),
-    );
+    const pool = [...popular, ...recent, ...upcoming]
+      .filter((g) => !trackedIds.has(String(g.id)) && (seen.has(g.id) ? false : (seen.add(g.id), true)))
+      // Mélange PAR REQUÊTE (les requêtes IGDB sont cachées 24 h) : le
+      // pull-to-refresh / nouveau tirage propose un ordre et un échantillon
+      // différents à chaque fois, comme le feed séries/films.
+      .sort(() => Math.random() - 0.5)
+      .slice(0, 60);
     const feed = pool.map((g) => ({
       id: null,
       igdbId: String(g.id),
