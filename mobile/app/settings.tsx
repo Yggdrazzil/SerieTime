@@ -79,6 +79,7 @@ function AccountTab() {
       <SectionTitle>Import & sauvegarde</SectionTitle>
       <Row label="Importer mes données TV Time" onPress={() => router.push('/import')} />
       <Row label="Exporter mes données SerieTime" onPress={exportData} />
+      <ResyncLibraryRow />
       <Divider />
       <SectionTitle>Jeux — Steam</SectionTitle>
       <SteamImportBlock />
@@ -183,6 +184,46 @@ function SteamImportBlock() {
       ) : mut.isError ? (
         <Text style={styles.errMsg}>Impossible de contacter le serveur.</Text>
       ) : null}
+    </View>
+  );
+}
+
+// Rattrape d'un coup les dates de diffusion des épisodes (l'import ne les récupère
+// pas → des séries en cours n'apparaissent pas dans « À voir »). Lance le resync
+// en fond côté serveur ; la liste se remplit sur quelques minutes.
+function ResyncLibraryRow() {
+  const qc = useQueryClient();
+  const mut = useMutation({
+    mutationFn: () => api.post<{ started: boolean; alreadyRunning?: boolean }>('/api/shows/resync-all'),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['shows'] }),
+  });
+  const res = mut.data;
+  return (
+    <View style={{ paddingHorizontal: 24, paddingVertical: 8 }}>
+      <Pressable
+        style={[styles.mBtn, mut.isPending && { opacity: 0.4 }]}
+        disabled={mut.isPending}
+        onPress={() => mut.mutate()}
+      >
+        {mut.isPending ? (
+          <ActivityIndicator color={COLORS.black} />
+        ) : (
+          <Text style={styles.mBtnText}>RESYNCHRONISER MA BIBLIOTHÈQUE</Text>
+        )}
+      </Pressable>
+      {res ? (
+        <Text style={styles.okMsg}>
+          {res.alreadyRunning
+            ? 'Resynchronisation déjà en cours…'
+            : 'Resynchronisation lancée — ta liste « À voir » se met à jour dans quelques minutes.'}
+        </Text>
+      ) : mut.isError ? (
+        <Text style={styles.errMsg}>Impossible de contacter le serveur.</Text>
+      ) : (
+        <Text style={styles.steamHint}>
+          Rattrape les dates de diffusion manquantes après un import (séries qui n'apparaissent pas dans « À voir »).
+        </Text>
+      )}
     </View>
   );
 }

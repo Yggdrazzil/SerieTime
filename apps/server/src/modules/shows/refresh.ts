@@ -55,3 +55,43 @@ export async function refreshStaleContinuingShows(userId: string): Promise<void>
     }
   }
 }
+
+// Réparation COMPLÈTE : resynchronise TOUTES les séries suivies d'un utilisateur
+// (dates de diffusion des épisodes), sans le plafond `MAX_PER_SWEEP` du balayage
+// de fond. Utilisé par le bouton « Resynchroniser ma bibliothèque » (et pertinent
+// après un import, qui crée les épisodes sans dates). Fire-and-forget côté serveur ;
+// throttlé pour ménager TVDB/TMDb ; garde-fou anti-double-exécution par utilisateur.
+// Non destructif : ne touche qu'aux métadonnées (dates), jamais aux épisodes vus.
+const resyncRunning = new Set<string>();
+
+export function isResyncRunning(userId: string): boolean {
+  return resyncRunning.has(userId);
+}
+
+export async function resyncAllUserShows(userId: string): Promise<void> {
+  if (resyncRunning.has(userId)) return;
+  resyncRunning.add(userId);
+  try {
+    const statuses = await prisma.userMediaStatus.findMany({
+      where: { userId, isHidden: false, status: { not: 'abandoned' }, media: { type: 'show' } },
+      include: { media: { include: { show: { select: { id: true } } } } },
+      orderBy: { updatedAt: 'desc' },
+    });
+    for (const s of statuses) {
+      const m = s.media;
+      try {
+        if (m.sourcePriority === 'tvdb' && m.tvdbId) await syncEpisodesFromTvdb(m.id);
+        else if (m.tmdbId) await syncShowEpisodesFromTmdb(m.id);
+        else if (m.tvdbId) await syncEpisodesFromTvdb(m.id);
+        else continue;
+        await prisma.media.update({ where: { id: m.id }, data: { lastSyncedAt: new Date() } });
+        if (m.show) await recalculateShowStatus(userId, m.show.id, null).catch(() => undefined);
+      } catch {
+        /* on continue : une série en échec ne bloque pas les autres */
+      }
+      await new Promise((r) => setTimeout(r, 300)); // throttle TVDB/TMDb
+    }
+  } finally {
+    resyncRunning.delete(userId);
+  }
+}

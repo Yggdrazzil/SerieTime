@@ -7,7 +7,7 @@ import { requireAuth } from '../auth/routes.js';
 import { serializeEpisode, serializeMedia } from '../media/serialize.js';
 import { createWatchEvent, markEpisodeWatched, recalculateShowStatus } from '../media/actions.js';
 import { nextFavoriteOrder } from '../media/favorites.js';
-import { refreshStaleContinuingShows } from './refresh.js';
+import { refreshStaleContinuingShows, resyncAllUserShows, isResyncRunning } from './refresh.js';
 import {
   syncCreditsFromTmdb,
   syncProvidersFromTmdb,
@@ -46,6 +46,15 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // Spec §17 : file "À voir" groupée.
+  // « Resynchroniser ma bibliothèque » : rattrape d'un coup les dates de diffusion
+  // manquantes (l'import crée les épisodes sans dates → séries absentes de « À voir »
+  // tant qu'on n'a pas ouvert leur fiche). Lancé en fond, la réponse n'attend pas.
+  app.post('/api/shows/resync-all', async (request) => {
+    const already = isResyncRunning(request.userId);
+    if (!already) void resyncAllUserShows(request.userId).catch(() => undefined);
+    return { started: true, alreadyRunning: already };
+  });
+
   app.get('/api/shows/queue', async (request) => {
     const userId = request.userId;
     // Balayage d'arrière-plan (fire-and-forget) : les séries en cours périmées
