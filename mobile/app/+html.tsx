@@ -53,6 +53,12 @@ export default function Root({ children }: PropsWithChildren) {
               html, body, #root {
                 touch-action: manipulation;
               }
+              /* Champs de saisie : pas d'anneau de focus navigateur (encadré
+                 orange/bleu incohérent avec le style « soulignement » de l'app).
+                 Le focus reste signalé par le caret + les styles de l'app. */
+              input:focus, textarea:focus {
+                outline: none;
+              }
             `,
           }}
         />

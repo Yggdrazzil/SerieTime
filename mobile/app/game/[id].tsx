@@ -154,7 +154,9 @@ export default function GameDetail() {
             </View>
           )}
           <View style={{ flex: 1 }}>
-            <Text style={styles.title}>{game.title}</Text>
+            {/* 1 ligne comme la fiche série : la 2e ligne tomberait en blanc
+                sur fond blanc (le bloc chevauche la bannière). */}
+            <Text style={styles.title} numberOfLines={1}>{game.title}</Text>
             {game.voteAverage ? <Stars rating10={game.voteAverage} size={19} /> : null}
           </View>
         </View>

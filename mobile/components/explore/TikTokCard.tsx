@@ -16,6 +16,7 @@ export function TikTokCard({
   onOpenComments,
   onAdvance,
   onInvalidateLibrary,
+  onDetailToggle,
   commentBump = 0,
 }: {
   item: FeedItem;
@@ -26,6 +27,9 @@ export function TikTokCard({
   // proposition (❤️ à voir, 👁 déjà vu, 👎 pas intéressé), façon TikTok.
   onAdvance: () => void;
   onInvalidateLibrary: () => void;
+  // Prévient le flux quand l'overlay détails s'ouvre/ferme (il masque alors la
+  // barre « Ajouter un commentaire » qui recouvrait le texte de l'overlay).
+  onDetailToggle?: (open: boolean) => void;
   // Incrément du compteur de commentaires (commentaires publiés depuis la sheet
   // pour cette carte) — le flux le fait remonter, la carte l'ajoute au total serveur.
   commentBump?: number;
@@ -49,8 +53,11 @@ export function TikTokCard({
   // résolution et affichée ENTIÈRE (contain → aucun rognage). Un fond flouté
   // (backdrop, sinon l'affiche) remplit l'écran derrière pour l'immersion.
   const isGame = Boolean(item.igdbId);
-  const poster = tmdbImage(item.posterPath, 'original') ?? tmdbImage(item.backdropPath, 'w1280');
-  const bg = tmdbImage(item.backdropPath, 'w780') ?? tmdbImage(item.posterPath, 'w780');
+  // w780 suffit largement pour un écran de téléphone (l'« original » TMDb fait
+  // plusieurs Mo → 3-4 s de carte noire au chargement). Le fond est flouté à
+  // 30px : w300 est indiscernable et quasi instantané.
+  const poster = tmdbImage(item.posterPath, 'w780') ?? tmdbImage(item.backdropPath, 'w1280');
+  const bg = tmdbImage(item.backdropPath, 'w300') ?? tmdbImage(item.posterPath, 'w300');
   const meta = [
     item.year,
     isGame ? 'Jeu' : item.category === 'anime' ? 'Animé' : item.type === 'show' ? 'Série' : 'Film',
@@ -186,7 +193,15 @@ export function TikTokCard({
       <View style={styles.scrimBottom} pointerEvents="none" />
 
       {/* Zone tap = ouvre/ferme l'overlay de description. */}
-      <Pressable style={StyleSheet.absoluteFill} onPress={() => setDetail((d) => !d)} />
+      <Pressable
+        style={StyleSheet.absoluteFill}
+        onPress={() =>
+          setDetail((d) => {
+            onDetailToggle?.(!d);
+            return !d;
+          })
+        }
+      />
 
       <View style={styles.caption} pointerEvents="box-none">
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -230,7 +245,10 @@ export function TikTokCard({
       <DescriptionOverlay
         item={item}
         visible={detail}
-        onClose={() => setDetail(false)}
+        onClose={() => {
+          setDetail(false);
+          onDetailToggle?.(false);
+        }}
         onOpenFiche={openFiche}
         resolveMedia={resolveMedia}
       />

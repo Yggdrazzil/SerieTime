@@ -40,6 +40,7 @@ export function TikTokFeed() {
   const [activeIndex, setActiveIndex] = useState(0); // carte actuellement à l'écran
   const [commentBumps, setCommentBumps] = useState<Record<string, number>>({}); // +commentaires publiés par carte
   const [endRefreshing, setEndRefreshing] = useState(false); // carte de fin atteinte → nouveau tirage
+  const [detailOpen, setDetailOpen] = useState(false); // overlay détails ouvert (masque la barre commentaire)
   const dryRef = useRef(0); // nombre de fetchs consécutifs sans nouveauté
   const endBusy = useRef(false); // anti double-déclenchement du tirage de fin
 
@@ -197,6 +198,7 @@ export function TikTokFeed() {
                 onOpenComments={setCommentsFor}
                 onAdvance={() => advance(index)}
                 onInvalidateLibrary={invalidateLibrary}
+                onDetailToggle={setDetailOpen}
                 commentBump={commentBumps[keyOf(item)] ?? 0}
               />
             )}
@@ -251,8 +253,9 @@ export function TikTokFeed() {
         />
       </View>
 
-      {/* Barre « Ajouter un commentaire » (comme TikTok) : cible la carte active. */}
-      {deck.length > 0 ? (
+      {/* Barre « Ajouter un commentaire » (comme TikTok) : cible la carte active.
+          Masquée quand l'overlay détails est ouvert (elle recouvrait son texte). */}
+      {deck.length > 0 && !detailOpen ? (
         <Pressable
           style={[styles.commentBar, { bottom: insets.bottom + 12 }]}
           onPress={() => {
