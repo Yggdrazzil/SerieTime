@@ -10,6 +10,7 @@ import { Loading, LoadError } from '@/components/ui';
 import { Pop, SlideUpBar } from '@/components/anim';
 import { Stars } from '@/components/Stars';
 import { shareMedia } from '@/lib/share';
+import { shortDateFr } from '@/lib/format';
 
 // Miroir de la réponse GET /api/games/:id (serveur : apps/server/src/modules/games/routes.ts).
 type GameDetailDto = {
@@ -27,8 +28,11 @@ type GameDetailDto = {
   publisher: string | null;
   gameModes: string | null;
   releaseDate: string | null;
+  genres: string | null;
   isFavorite: boolean;
   videoId: string | null;
+  // Note presse agrégée IGDB (0-100) — équivalent le plus proche de Metacritic.
+  criticScore: number | null;
 };
 
 const GAME_STATUSES = ['wishlist', 'playing', 'completed', 'abandoned'] as const;
@@ -151,9 +155,29 @@ export default function GameDetail() {
           )}
           <View style={{ flex: 1 }}>
             <Text style={styles.title}>{game.title}</Text>
-            <Text style={styles.meta}>{[game.year, game.platforms].filter(Boolean).join(' • ')}</Text>
             {game.voteAverage ? <Stars rating10={game.voteAverage} size={19} /> : null}
           </View>
+        </View>
+
+        {/* Fiche d'identité — bloc dédié SOUS l'en-tête (fond blanc garanti :
+            le headRow chevauche la bannière sombre, texte noir illisible là-haut). */}
+        <View style={styles.factList}>
+          {game.genres ? (
+            <Text style={styles.fact}><Text style={styles.factLabel}>Genre : </Text>{game.genres}</Text>
+          ) : null}
+          {game.releaseDate ? (
+            <Text style={styles.fact}><Text style={styles.factLabel}>Sortie le </Text>{shortDateFr(game.releaseDate)}</Text>
+          ) : null}
+          {game.platforms ? <Text style={styles.fact}>{game.platforms}</Text> : null}
+          {game.developer ? (
+            <Text style={styles.fact}><Text style={styles.factLabel}>Développeur : </Text>{game.developer}</Text>
+          ) : null}
+          {game.publisher ? (
+            <Text style={styles.fact}><Text style={styles.factLabel}>Éditeur : </Text>{game.publisher}</Text>
+          ) : null}
+          {game.criticScore ? (
+            <Text style={styles.fact}><Text style={styles.factLabel}>Note presse : </Text>{game.criticScore}/100</Text>
+          ) : null}
         </View>
 
         {game.videoId ? <TrailerPreview videoId={game.videoId} /> : null}
@@ -165,8 +189,9 @@ export default function GameDetail() {
               <Pressable
                 key={s}
                 style={[styles.statusChip, game.userStatus === s && styles.statusChipSel]}
-                onPress={() => setStatus.mutate(s)}
-                disabled={setStatus.isPending}
+                // Re-taper le statut actif le DÉSÉLECTIONNE (retrait du suivi).
+                onPress={() => (game.userStatus === s ? removeTracking.mutate() : setStatus.mutate(s))}
+                disabled={setStatus.isPending || removeTracking.isPending}
               >
                 <Text style={[styles.statusChipText, game.userStatus === s && styles.statusChipTextSel]}>
                   {STATUS_LABELS[s]}
@@ -185,13 +210,11 @@ export default function GameDetail() {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Informations</Text>
-          {game.developer ? <InfoRow icon="tool" label={`Développeur : ${game.developer}`} /> : null}
-          {game.publisher ? <InfoRow icon="briefcase" label={`Éditeur : ${game.publisher}`} /> : null}
           {game.gameModes ? <InfoRow icon="users" label={game.gameModes} /> : null}
           {game.playtimeMinutes ? (
             <InfoRow icon="clock" label={`Temps de jeu : ${formatPlaytime(game.playtimeMinutes)}`} />
           ) : null}
-          {!game.developer && !game.publisher && !game.gameModes && !game.playtimeMinutes ? (
+          {!game.gameModes && !game.playtimeMinutes ? (
             <Text style={styles.muted}>Non disponible</Text>
           ) : null}
         </View>
@@ -591,6 +614,10 @@ const styles = StyleSheet.create({
   posterEmpty: { alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: 21, fontFamily: FONTS.extraBold, color: '#fff' },
   meta: { fontFamily: FONTS.regular, fontSize: 15, color: 'rgba(255,255,255,0.85)', marginTop: 4 },
+  // Fiche d'identité du jeu (Genre / Sortie / Plateformes / Dev / Éditeur / Note presse).
+  factList: { paddingHorizontal: 20, paddingTop: 2, paddingBottom: 6, gap: 3 },
+  fact: { fontFamily: FONTS.regular, fontSize: 13, lineHeight: 18, color: COLORS.textMuted },
+  factLabel: { fontFamily: FONTS.bold, color: COLORS.black },
   section: { paddingHorizontal: 20, paddingVertical: 18, borderBottomWidth: 1, borderBottomColor: COLORS.borderLight },
   sectionTitle: { fontSize: 18, fontFamily: FONTS.extraBold, marginBottom: 12 },
   statusRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },

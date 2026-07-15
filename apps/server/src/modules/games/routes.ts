@@ -188,17 +188,22 @@ export async function gamesRoutes(app: FastifyInstance): Promise<void> {
     // Bande-annonce : premier id vidéo YouTube IGDB, récupéré « live » (caché
     // par igdbQuery) — pas de nouvelle colonne DB pour ça.
     let videoId: string | null = null;
+    let criticScore: number | null = null;
     if (fresh!.igdbId) {
       const g = await igdbGame(Number(fresh!.igdbId));
       videoId = g?.videos?.[0]?.video_id ?? null;
+      // Note presse agrégée IGDB (0-100) — équivalent le plus proche de Metacritic.
+      criticScore = typeof g?.aggregated_rating === 'number' ? Math.round(g.aggregated_rating) : null;
     }
     return {
       ...serializeGame(fresh!, status),
       overview: fresh!.overview, backdropPath: fresh!.backdropPath,
       developer: fresh!.game?.developer ?? null, publisher: fresh!.game?.publisher ?? null,
       gameModes: fresh!.game?.gameModes ?? null, releaseDate: fresh!.releaseDate?.toISOString() ?? null,
+      genres: fresh!.genres ?? null,
       isFavorite: status?.isFavorite ?? false,
       videoId,
+      criticScore,
     };
   });
 

@@ -83,15 +83,15 @@ function GamesScreenInner() {
   // Ajout depuis la découverte : ajoute (statut « Voulus ») puis ouvre la
   // fiche (recherche déplacée dans l'Explorer, cf. app/(tabs)/explore.tsx).
   const [addingDiscoverId, setAddingDiscoverId] = useState<string | null>(null);
+  // Consultation ≠ suivi (règle produit) : taper une jaquette de la découverte
+  // OUVRE la fiche sans rien ajouter — le suivi se choisit ensuite sur la fiche.
   const addDiscover = async (g: DiscoverGameDto) => {
     if (addingDiscoverId) return;
     setAddingDiscoverId(g.igdbId);
     try {
       const res = await api.post<{ mediaId: string | null }>('/api/games/add-from-igdb', {
         igdbId: g.igdbId,
-        status: 'wishlist',
       });
-      qc.invalidateQueries({ queryKey: ['games', 'library'] });
       if (res.mediaId) router.push(('/game/' + res.mediaId) as Href);
     } finally {
       setAddingDiscoverId(null);
