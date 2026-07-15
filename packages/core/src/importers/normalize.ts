@@ -72,6 +72,11 @@ export function normalizeImportedMedia(record: RawRecord, fileKind: FileKind): N
     if (fileKind === 'watchlist') status = 'watchlist';
     else if (isWatched === true) status = 'watched';
   }
+  // TV Time n'exporte pas de colonne status pour « Arrêter de regarder » :
+  // c'est `active = 0` dans followed_tv_show.csv (vérifié sur un export réel).
+  if (!status && fileKind === 'shows' && parseBoolSafe(pickField(record, 'isActive')) === false) {
+    status = 'stopped_watching';
+  }
   const isFavorite =
     fileKind === 'favorites' || favoriteFromStatus || parseBoolSafe(pickField(record, 'favorite')) === true;
 

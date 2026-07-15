@@ -159,6 +159,7 @@ const FIELD_ALIASES: Record<string, string[]> = {
   type: ['type', 'media_type', 'kind', 'entity_type', 'item_type'],
   listName: ['list', 'list_name', 'list_title'],
   isWatched: ['is_watched', 'watched', 'seen'],
+  isActive: ['active'],
   note: ['comment', 'private_comment', 'notes', 'personal_note'],
 };
 

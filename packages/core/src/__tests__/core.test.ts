@@ -83,6 +83,12 @@ describe('normalizeImportedMedia', () => {
   it('returns null without title nor ids', () => {
     expect(normalizeImportedMedia({ foo: 'bar' }, 'shows')).toBeNull();
   });
+  it("active=0 (followed_tv_show.csv) => série « arrêtée »", () => {
+    const stopped = normalizeImportedMedia({ tv_show_name: 'Koh-Lanta', tv_show_id: '123', active: '0' }, 'shows');
+    expect(stopped?.status).toBe('stopped_watching');
+    const active = normalizeImportedMedia({ tv_show_name: 'Silo', tv_show_id: '456', active: '1' }, 'shows');
+    expect(active?.status).toBeUndefined();
+  });
 });
 
 describe('normalizeImportedEpisode', () => {

@@ -515,6 +515,9 @@ export async function applyMapping(
       ...(normalized.isFavorite ? { isFavorite: true } : {}),
       ...(normalized.rating !== undefined ? { rating: normalized.rating } : {}),
       ...(isMovieWatched ? { status: 'completed', lastWatchedAt: watchedAt, completedAt: watchedAt ?? new Date() } : {}),
+      // « Arrêter de regarder » (active=0) doit gagner même si une autre ligne
+      // du zip a déjà créé la série (le statut n'était posé qu'au create).
+      ...(status === 'abandoned' ? { status: 'abandoned' } : {}),
     },
   });
 
