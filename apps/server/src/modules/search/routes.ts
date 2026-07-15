@@ -23,6 +23,8 @@ type SearchResult = {
   // Signaux sociaux (toute l'app) + état perso — remplis par attachSocialStats sur le flux Explorer.
   stats?: { likes: number; watched: number; comments: number };
   me?: { liked: boolean; watched: boolean };
+  // Note communautaire TMDb (échantillon large, /10) affichée sur la carte du flux TikTok.
+  voteAverage?: number | null;
 };
 
 // Animé = animation (genre TMDb 16) d'origine japonaise.
@@ -243,6 +245,7 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
             backdropPath: r.backdrop_path ?? null,
             overview: r.overview ?? null,
             inLibrary: false,
+            voteAverage: r.vote_average ?? null,
           });
         }
       }
@@ -302,6 +305,7 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
           backdropPath: r.backdrop_path ?? null,
           overview: r.overview ?? null,
           inLibrary: false,
+          voteAverage: r.vote_average ?? null,
         });
       }
     }

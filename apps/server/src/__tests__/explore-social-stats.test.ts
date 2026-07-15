@@ -58,10 +58,10 @@ describe('attachSocialStats', () => {
     await prisma.userMediaStatus.create({ data: { userId: bob.id, mediaId: movie.id, status: 'completed' } });
     await prisma.comment.create({ data: { userId: bob.id, mediaId: movie.id, body: 'Top' } });
 
-    const [enriched] = await attachSocialStats(
+    const enriched = (await attachSocialStats(
       [{ tmdbId: '4242', type: 'movie' as const, title: 'Film Test' }],
       alice.id,
-    );
+    ))[0]!;
 
     expect(enriched.stats).toEqual({ likes: 1, watched: 1, comments: 1 });
     expect(enriched.me).toEqual({ liked: true, watched: false });
@@ -72,7 +72,7 @@ describe('attachSocialStats', () => {
     const alice = (await (await import('../db/client.js')).prisma.user.findFirstOrThrow({
       where: { email: 'alice@test.dev' },
     })).id;
-    const [enriched] = await attachSocialStats([{ tmdbId: '999999', type: 'show' as const }], alice);
+    const enriched = (await attachSocialStats([{ tmdbId: '999999', type: 'show' as const }], alice))[0]!;
     expect(enriched.stats).toEqual({ likes: 0, watched: 0, comments: 0 });
     expect(enriched.me).toEqual({ liked: false, watched: false });
   });
