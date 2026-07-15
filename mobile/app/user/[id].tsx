@@ -87,7 +87,7 @@ export default function UserProfileScreen() {
     <ScrollView style={{ flex: 1, backgroundColor: COLORS.white }} contentContainerStyle={{ paddingBottom: 24 }}>
       {focused ? <StatusBar style="light" /> : null}
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <Pressable onPress={() => router.back()} hitSlop={12} style={styles.back}>
+        <Pressable onPress={() => router.back()} hitSlop={12} style={styles.back} accessibilityRole="button" accessibilityLabel="Retour">
           <Feather name="chevron-left" size={28} color="#fff" />
         </Pressable>
         <View style={styles.avatar}>

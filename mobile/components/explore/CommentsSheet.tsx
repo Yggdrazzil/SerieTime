@@ -46,7 +46,7 @@ export function CommentsSheet({
       <View style={[styles.sheet, { paddingBottom: insets.bottom }]}>
         <View style={styles.head}>
           <Text style={styles.title}>Commentaires</Text>
-          <Pressable onPress={onClose} hitSlop={10}>
+          <Pressable onPress={onClose} hitSlop={10} accessibilityRole="button" accessibilityLabel="Fermer">
             <Feather name="x" size={24} color={COLORS.black} />
           </Pressable>
         </View>
@@ -145,7 +145,13 @@ function CommentsPanel({
           value={text}
           onChangeText={setText}
         />
-        <Pressable style={[styles.composerSend, (!text.trim() || busy) && { opacity: 0.4 }]} onPress={submit} disabled={!text.trim() || busy}>
+        <Pressable
+          style={[styles.composerSend, (!text.trim() || busy) && { opacity: 0.4 }]}
+          onPress={submit}
+          disabled={!text.trim() || busy}
+          accessibilityRole="button"
+          accessibilityLabel="Envoyer"
+        >
           {busy ? <ActivityIndicator color="#000" /> : <Feather name="send" size={18} color={COLORS.black} />}
         </Pressable>
       </View>

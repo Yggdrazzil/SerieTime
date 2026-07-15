@@ -38,7 +38,7 @@ export default function Social() {
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.white, paddingTop: insets.top }}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={12}>
+        <Pressable onPress={() => router.back()} hitSlop={12} accessibilityRole="button" accessibilityLabel="Retour">
           <Feather name="chevron-left" size={28} color={COLORS.black} />
         </Pressable>
         <Text style={styles.title}>Amis</Text>
@@ -169,7 +169,7 @@ function FriendsTab() {
           autoCapitalize="none"
         />
         {q ? (
-          <Pressable onPress={() => setQ('')}>
+          <Pressable onPress={() => setQ('')} accessibilityRole="button" accessibilityLabel="Effacer la recherche">
             <Feather name="x" size={20} color={COLORS.textMuted} />
           </Pressable>
         ) : null}

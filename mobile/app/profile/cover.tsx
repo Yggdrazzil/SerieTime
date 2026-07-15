@@ -76,6 +76,8 @@ export default function CoverPicker() {
         <Pressable
           onPress={() => (picked ? (setPicked(null), setMediaId(null)) : router.back())}
           hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel="Retour"
         >
           <Feather name="chevron-left" size={28} color={COLORS.black} />
         </Pressable>

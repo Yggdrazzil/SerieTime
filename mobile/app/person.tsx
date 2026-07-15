@@ -82,7 +82,14 @@ export default function PersonScreen() {
     <View style={{ flex: 1, backgroundColor: '#16161c' }}>
       {/* Barre TV Time : ‹ › à gauche (membre précédent/suivant), X à droite. */}
       <View style={[styles.topBar, { paddingTop: insets.top + 6 }]}>
-        <Pressable onPress={() => index > 0 && setIndex(index - 1)} hitSlop={10} style={styles.arrow} disabled={index <= 0}>
+        <Pressable
+          onPress={() => index > 0 && setIndex(index - 1)}
+          hitSlop={10}
+          style={styles.arrow}
+          disabled={index <= 0}
+          accessibilityRole="button"
+          accessibilityLabel="Personne précédente"
+        >
           <Feather name="chevron-left" size={26} color={index > 0 ? '#fff' : 'rgba(255,255,255,0.3)'} />
         </Pressable>
         <Pressable
@@ -90,11 +97,13 @@ export default function PersonScreen() {
           hitSlop={10}
           style={styles.arrow}
           disabled={index >= cast.length - 1}
+          accessibilityRole="button"
+          accessibilityLabel="Personne suivante"
         >
           <Feather name="chevron-right" size={26} color={index < cast.length - 1 ? '#fff' : 'rgba(255,255,255,0.3)'} />
         </Pressable>
         <View style={{ flex: 1 }} />
-        <Pressable onPress={() => router.back()} hitSlop={10} style={styles.arrow}>
+        <Pressable onPress={() => router.back()} hitSlop={10} style={styles.arrow} accessibilityRole="button" accessibilityLabel="Fermer">
           <Feather name="x" size={26} color="#fff" />
         </Pressable>
       </View>

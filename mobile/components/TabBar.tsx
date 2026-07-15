@@ -52,7 +52,14 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
           }
         };
         return (
-          <Pressable key={route.key} style={styles.item} onPress={onPress}>
+          <Pressable
+            key={route.key}
+            style={styles.item}
+            onPress={onPress}
+            accessibilityRole="tab"
+            accessibilityLabel={LABELS[route.name] ?? route.name}
+            accessibilityState={{ selected: focused }}
+          >
             <TabIcon
               name={route.name === 'games' ? undefined : ICONS[route.name] ?? 'circle'}
               ionicon={route.name === 'games' ? GAMES_ICON : undefined}

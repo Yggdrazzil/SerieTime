@@ -83,7 +83,7 @@ export default function LibraryShowsScreen() {
       <LibHeader
         title="Séries"
         right={
-          <Pressable style={styles.eye} onPress={() => setSheet(true)}>
+          <Pressable style={styles.eye} onPress={() => setSheet(true)} accessibilityRole="button" accessibilityLabel="Filtres">
             <Feather name="eye" size={20} color={COLORS.black} />
           </Pressable>
         }

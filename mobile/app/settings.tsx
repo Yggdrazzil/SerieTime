@@ -316,7 +316,7 @@ function Sheet({ title, onClose, children }: { title: string; onClose: () => voi
         <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
           <View style={styles.sheetHead}>
             <Text style={styles.sheetTitle}>{title}</Text>
-            <Pressable onPress={onClose} hitSlop={10}>
+            <Pressable onPress={onClose} hitSlop={10} accessibilityRole="button" accessibilityLabel="Fermer">
               <Feather name="x" size={24} color={COLORS.black} />
             </Pressable>
           </View>

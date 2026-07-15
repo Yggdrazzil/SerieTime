@@ -230,7 +230,13 @@ function MediaResults({ query, rawQuery }: { query: string; rawQuery: string }) 
                 <Feather name="check" size={20} color={COLORS.textMuted} />
               </PopIn>
             ) : (
-              <Pressable style={styles.addSquare} onPress={() => add(r, key)} hitSlop={6}>
+              <Pressable
+                style={styles.addSquare}
+                onPress={() => add(r, key)}
+                hitSlop={6}
+                accessibilityRole="button"
+                accessibilityLabel="Ajouter à ma bibliothèque"
+              >
                 <Feather name="plus" size={22} color="#E6B800" />
               </Pressable>
             )}
@@ -324,7 +330,13 @@ function GameResults({ query, rawQuery }: { query: string; rawQuery: string }) {
                   <Feather name="check" size={20} color={COLORS.textMuted} />
                 </PopIn>
               ) : (
-                <Pressable style={styles.addSquare} onPress={() => add(r)} hitSlop={6}>
+                <Pressable
+                  style={styles.addSquare}
+                  onPress={() => add(r)}
+                  hitSlop={6}
+                  accessibilityRole="button"
+                  accessibilityLabel="Ajouter à ma bibliothèque"
+                >
                   <Feather name="plus" size={22} color="#E6B800" />
                 </Pressable>
               )}

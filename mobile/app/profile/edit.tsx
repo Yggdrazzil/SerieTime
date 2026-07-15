@@ -124,7 +124,7 @@ export default function EditProfile() {
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.white, paddingTop: insets.top }}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={12}>
+        <Pressable onPress={() => router.back()} hitSlop={12} accessibilityRole="button" accessibilityLabel="Fermer">
           <Feather name="x" size={26} color={COLORS.black} />
         </Pressable>
         <Text style={styles.title}>Modifier le profil</Text>
@@ -147,7 +147,7 @@ export default function EditProfile() {
             <Text style={styles.link}>Choisir une photo de profil</Text>
           </Pressable>
           {avatarUrl ? (
-            <Pressable onPress={() => setAvatarUrl(null)} hitSlop={8}>
+            <Pressable onPress={() => setAvatarUrl(null)} hitSlop={8} accessibilityRole="button" accessibilityLabel="Supprimer la photo de profil">
               <Feather name="x-circle" size={24} color={COLORS.textMuted} />
             </Pressable>
           ) : null}
@@ -166,7 +166,7 @@ export default function EditProfile() {
             <Text style={styles.link}>Choisir une photo de couverture</Text>
           </Pressable>
           {coverUrl ? (
-            <Pressable onPress={() => setCoverUrl(null)} hitSlop={8}>
+            <Pressable onPress={() => setCoverUrl(null)} hitSlop={8} accessibilityRole="button" accessibilityLabel="Supprimer la photo de couverture">
               <Feather name="x-circle" size={24} color={COLORS.textMuted} />
             </Pressable>
           ) : null}
@@ -228,7 +228,7 @@ export default function EditProfile() {
       <Modal visible={countryOpen} animationType="slide" onRequestClose={() => setCountryOpen(false)}>
         <View style={{ flex: 1, backgroundColor: COLORS.white, paddingTop: insets.top }}>
           <View style={styles.header}>
-            <Pressable onPress={() => setCountryOpen(false)} hitSlop={12}>
+            <Pressable onPress={() => setCountryOpen(false)} hitSlop={12} accessibilityRole="button" accessibilityLabel="Fermer">
               <Feather name="chevron-left" size={28} color={COLORS.black} />
             </Pressable>
             <Text style={styles.title}>Pays</Text>

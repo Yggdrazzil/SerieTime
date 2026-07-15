@@ -65,7 +65,7 @@ export default function ReorderFavoritesScreen() {
   return (
     <Pop style={{ backgroundColor: COLORS.white }}>
       <View style={[styles.topBar, { paddingTop: insets.top + 6 }]}>
-        <Pressable onPress={() => router.back()} hitSlop={10} style={styles.topBtn}>
+        <Pressable onPress={() => router.back()} hitSlop={10} style={styles.topBtn} accessibilityRole="button" accessibilityLabel="Retour">
           <Feather name="chevron-left" size={28} color={COLORS.black} />
         </Pressable>
         <Pressable onPress={() => router.back()} hitSlop={10}>

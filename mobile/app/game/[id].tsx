@@ -10,6 +10,7 @@ import { Loading, LoadError } from '@/components/ui';
 import { Pop, SlideUpBar } from '@/components/anim';
 import { Stars } from '@/components/Stars';
 import { shareMedia } from '@/lib/share';
+import { FicheSkeleton } from '@/components/FicheSkeleton';
 import { shortDateFr } from '@/lib/format';
 
 // Miroir de la réponse GET /api/games/:id (serveur : apps/server/src/modules/games/routes.ts).
@@ -124,7 +125,7 @@ export default function GameDetail() {
     shareMedia(detail.data.title, url);
   };
 
-  if (detail.isLoading) return <Loading />;
+  if (detail.isLoading) return <FicheSkeleton heroHeight={200} />;
   if (!detail.data) return <LoadError onRetry={detail.refetch} busy={detail.isRefetching} />;
   const game = detail.data;
   const heroUri = tmdbImage(game.backdropPath) ?? tmdbImage(game.posterPath);
@@ -136,7 +137,7 @@ export default function GameDetail() {
           {heroUri ? <Image source={{ uri: heroUri }} style={StyleSheet.absoluteFill} resizeMode="cover" /> : null}
           <View style={styles.heroShade} />
           <View style={[styles.heroBtns, { top: insets.top + 8 }]}>
-            <Pressable onPress={() => router.back()} hitSlop={8}>
+            <Pressable onPress={() => router.back()} hitSlop={8} accessibilityRole="button" accessibilityLabel="Retour">
               <Feather name="chevron-down" size={30} color="#fff" />
             </Pressable>
             <Pressable onPress={() => setMenu(true)} hitSlop={8} accessibilityLabel="Options">
@@ -317,7 +318,12 @@ function TrailerPreview({ videoId }: { videoId: string }) {
             allowFullScreen: true,
           })
         ) : (
-          <Pressable style={StyleSheet.absoluteFill} onPress={play}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={play}
+            accessibilityRole="button"
+            accessibilityLabel="Lire la bande-annonce"
+          >
             <Image source={{ uri: thumbUri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
             <View style={styles.trailerPlayShade}>
               <View style={styles.trailerPlayBtn}>
@@ -451,7 +457,7 @@ function ArtworkPicker({
     <Modal visible={mode !== null} animationType="slide" onRequestClose={onClose}>
       <View style={{ flex: 1, backgroundColor: COLORS.white }}>
         <View style={pstyles.header}>
-          <Pressable onPress={onClose} hitSlop={12}>
+          <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button" accessibilityLabel="Fermer">
             <Feather name="arrow-left" size={24} color={COLORS.black} />
           </Pressable>
           <Text style={pstyles.title}>{isPoster ? "Modifier l'affiche" : 'Changer la bannière'}</Text>

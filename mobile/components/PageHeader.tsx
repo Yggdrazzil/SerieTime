@@ -11,7 +11,7 @@ export function PageHeader({ title, right }: { title: string; right?: React.Reac
   return (
     <View style={[styles.wrap, { paddingTop: insets.top }]}>
       <View style={styles.bar}>
-        <Pressable style={styles.back} onPress={() => router.back()} hitSlop={8}>
+        <Pressable style={styles.back} onPress={() => router.back()} hitSlop={8} accessibilityRole="button" accessibilityLabel="Retour">
           <Feather name="chevron-left" size={28} color={COLORS.black} />
         </Pressable>
         <Text style={styles.title}>{title}</Text>

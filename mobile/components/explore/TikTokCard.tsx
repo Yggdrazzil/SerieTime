@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { View, Text, StyleSheet, Image, Pressable, Platform } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, type Href } from 'expo-router';
 import { api, tmdbImage } from '@/lib/api';
 import { COLORS, FONTS } from '@/lib/theme';
@@ -189,8 +190,18 @@ export function TikTokCard({
           <Feather name="image" size={48} color="#555" />
         </View>
       )}
-      <View style={styles.scrimTop} pointerEvents="none" />
-      <View style={styles.scrimBottom} pointerEvents="none" />
+      {/* Scrims en DÉGRADÉ : les blocs unis créaient une bande grise à bord net
+          sur les fonds clairs (limite du flou). */}
+      <LinearGradient
+        colors={['rgba(0,0,0,0.55)', 'rgba(0,0,0,0)']}
+        style={styles.scrimTop}
+        pointerEvents="none"
+      />
+      <LinearGradient
+        colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.6)']}
+        style={styles.scrimBottom}
+        pointerEvents="none"
+      />
 
       {/* Zone tap = ouvre/ferme l'overlay de description. */}
       <Pressable
@@ -261,8 +272,8 @@ const styles = StyleSheet.create({
   noImg: { alignItems: 'center', justifyContent: 'center' },
   // Assombrit le fond flouté pour faire ressortir l'affiche + le texte.
   bgDim: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.45)' },
-  scrimTop: { position: 'absolute', top: 0, left: 0, right: 0, height: 140, backgroundColor: 'rgba(0,0,0,0.35)' },
-  scrimBottom: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 260, backgroundColor: 'rgba(0,0,0,0.45)' },
+  scrimTop: { position: 'absolute', top: 0, left: 0, right: 0, height: 150 },
+  scrimBottom: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 280 },
   caption: { position: 'absolute', left: 18, right: 84, bottom: 96 },
   title: { color: '#fff', fontSize: 24, fontFamily: FONTS.extraBold, flexShrink: 1 },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 },

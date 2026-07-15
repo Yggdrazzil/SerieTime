@@ -24,7 +24,7 @@ export default function FavoriteGamesScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.white, paddingTop: insets.top }}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={10} style={styles.headSide}>
+        <Pressable onPress={() => router.back()} hitSlop={10} style={styles.headSide} accessibilityRole="button" accessibilityLabel="Retour">
           <Feather name="chevron-left" size={26} color={COLORS.black} />
         </Pressable>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>

@@ -35,14 +35,21 @@ export function CommentCard(props: {
           <Text style={styles.date}>{dateFr(c.createdAt)}</Text>
         </View>
         {c.isMine ? (
-          <Pressable onPress={() => onRemove(c)} hitSlop={8}>
+          <Pressable onPress={() => onRemove(c)} hitSlop={8} accessibilityRole="button" accessibilityLabel="Supprimer">
             <Feather name="trash-2" size={18} color={COLORS.textMuted} />
           </Pressable>
         ) : null}
       </View>
       <Text style={styles.body}>{c.body}</Text>
       <View style={styles.footer}>
-        <Pressable style={styles.footBtn} onPress={() => onHeart(c)} hitSlop={8}>
+        <Pressable
+          style={styles.footBtn}
+          onPress={() => onHeart(c)}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={c.reactions.mine.includes('❤️') ? "Retirer le j'aime" : "J'aime"}
+          accessibilityState={{ selected: c.reactions.mine.includes('❤️') }}
+        >
           {c.reactions.mine.includes('❤️') ? (
             <PopIn><Ionicons name="heart" size={22} color={COLORS.red} /></PopIn>
           ) : (
@@ -50,12 +57,18 @@ export function CommentCard(props: {
           )}
           {c.reactions.total > 0 ? <Text style={styles.footCount}>{c.reactions.total}</Text> : null}
         </Pressable>
-        <Pressable style={styles.footBtn} onPress={onToggleReplies} hitSlop={8}>
+        <Pressable
+          style={styles.footBtn}
+          onPress={onToggleReplies}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={replyOpen ? 'Masquer les réponses' : 'Afficher les réponses'}
+        >
           <Feather name="message-circle" size={21} color={COLORS.black} />
           {(c.replies?.length ?? 0) > 0 ? <Text style={styles.footCount}>{c.replies!.length}</Text> : null}
         </Pressable>
         <View style={{ flex: 1 }} />
-        <Pressable onPress={() => onShare(c)} hitSlop={8}>
+        <Pressable onPress={() => onShare(c)} hitSlop={8} accessibilityRole="button" accessibilityLabel="Partager">
           <Feather name="share" size={20} color={COLORS.black} />
         </Pressable>
       </View>
@@ -71,7 +84,7 @@ export function CommentCard(props: {
                 <Text style={styles.replyBody}>{r.body}</Text>
               </View>
               {r.isMine ? (
-                <Pressable onPress={() => onRemove(r)} hitSlop={8}>
+                <Pressable onPress={() => onRemove(r)} hitSlop={8} accessibilityRole="button" accessibilityLabel="Supprimer">
                   <Feather name="trash-2" size={15} color={COLORS.textMuted} />
                 </Pressable>
               ) : null}

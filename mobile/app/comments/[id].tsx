@@ -55,7 +55,7 @@ export default function CommentsScreen() {
     <Pop style={{ backgroundColor: COLORS.white }}>
       {/* En-tête TV Time : titre + compteur centrés. */}
       <View style={[styles.header, { paddingTop: insets.top + 6 }]}>
-        <Pressable onPress={() => router.back()} hitSlop={10} style={styles.headSide}>
+        <Pressable onPress={() => router.back()} hitSlop={10} style={styles.headSide} accessibilityRole="button" accessibilityLabel="Retour">
           <Feather name="chevron-left" size={28} color={COLORS.black} />
         </Pressable>
         <View style={{ flex: 1, alignItems: 'center' }}>
@@ -96,7 +96,12 @@ export default function CommentsScreen() {
       )}
 
       {/* FAB crayon jaune (TV Time) : écrire un commentaire. */}
-      <Pressable style={[styles.fab, { bottom: insets.bottom + 22 }]} onPress={() => setComposer(true)}>
+      <Pressable
+        style={[styles.fab, { bottom: insets.bottom + 22 }]}
+        onPress={() => setComposer(true)}
+        accessibilityRole="button"
+        accessibilityLabel="Écrire un commentaire"
+      >
         <Feather name="edit-2" size={24} color={COLORS.black} />
       </Pressable>
 

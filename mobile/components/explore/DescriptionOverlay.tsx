@@ -82,7 +82,7 @@ export function DescriptionOverlay({
 
   return (
     <SlideUpBar visible={visible} style={styles.sheet} distance={160}>
-      <Pressable style={styles.grip} onPress={onClose} hitSlop={10}>
+      <Pressable style={styles.grip} onPress={onClose} hitSlop={10} accessibilityRole="button" accessibilityLabel="Fermer">
         <Feather name="chevron-down" size={26} color="#fff" />
       </Pressable>
       <ScrollView

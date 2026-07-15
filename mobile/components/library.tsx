@@ -30,7 +30,7 @@ export function LibHeader({ title, right }: { title: string; right?: React.React
   const insets = useSafeAreaInsets();
   return (
     <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-      <Pressable onPress={() => router.back()} hitSlop={10} style={styles.headerSide}>
+      <Pressable onPress={() => router.back()} hitSlop={10} style={styles.headerSide} accessibilityRole="button" accessibilityLabel="Retour">
         <Feather name="chevron-left" size={26} color={COLORS.black} />
       </Pressable>
       <Text style={styles.headerTitle} numberOfLines={1}>

@@ -133,10 +133,16 @@ export function FavoritesPage({ kind }: { kind: FavKind }) {
     <Pop style={{ backgroundColor: COLORS.white }}>
       {/* En-tête TV Time : chevron à gauche, « ... » à droite, pas de titre centré. */}
       <View style={[styles.topBar, { paddingTop: insets.top + 6 }]}>
-        <Pressable onPress={() => router.back()} hitSlop={10} style={styles.topBtn}>
+        <Pressable onPress={() => router.back()} hitSlop={10} style={styles.topBtn} accessibilityRole="button" accessibilityLabel="Retour">
           <Feather name="chevron-left" size={28} color={COLORS.black} />
         </Pressable>
-        <Pressable onPress={() => setMenuOpen(true)} hitSlop={10} style={[styles.topBtn, { alignItems: 'flex-end' }]}>
+        <Pressable
+          onPress={() => setMenuOpen(true)}
+          hitSlop={10}
+          style={[styles.topBtn, { alignItems: 'flex-end' }]}
+          accessibilityRole="button"
+          accessibilityLabel="Options"
+        >
           <Feather name="more-horizontal" size={24} color={COLORS.black} />
         </Pressable>
       </View>
@@ -366,7 +372,7 @@ function FavPicker({
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <View style={{ flex: 1, backgroundColor: COLORS.white, paddingTop: insets.top }}>
         <View style={styles.pickerHead}>
-          <Pressable onPress={onClose} hitSlop={10} style={styles.topBtn}>
+          <Pressable onPress={onClose} hitSlop={10} style={styles.topBtn} accessibilityRole="button" accessibilityLabel="Fermer">
             <Feather name="chevron-left" size={28} color={COLORS.black} />
           </Pressable>
           <Text style={styles.pickerTitle}>{w.pickerTitle}</Text>
@@ -383,7 +389,7 @@ function FavPicker({
             autoCapitalize="none"
           />
           {q ? (
-            <Pressable onPress={() => setQ('')} hitSlop={8}>
+            <Pressable onPress={() => setQ('')} hitSlop={8} accessibilityRole="button" accessibilityLabel="Effacer la recherche">
               <Feather name="x" size={18} color={COLORS.textMuted} />
             </Pressable>
           ) : null}

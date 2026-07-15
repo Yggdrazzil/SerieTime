@@ -97,7 +97,12 @@ function ProfileScreenInner() {
             <View style={styles.coverShade} />
           </>
         ) : null}
-        <Pressable style={[styles.bell, { top: insets.top + 8 }]} onPress={() => router.push('/notifications')}>
+        <Pressable
+          style={[styles.bell, { top: insets.top + 8 }]}
+          onPress={() => router.push('/notifications')}
+          accessibilityRole="button"
+          accessibilityLabel="Notifications"
+        >
           <Feather name="bell" size={20} color={COLORS.black} />
           {unread > 0 ? (
             // La pastille de non-lus arrive avec un petit rebond.
@@ -106,7 +111,12 @@ function ProfileScreenInner() {
             </PopIn>
           ) : null}
         </Pressable>
-        <Pressable style={[styles.dots, { top: insets.top + 8 }]} onPress={() => router.push('/settings')}>
+        <Pressable
+          style={[styles.dots, { top: insets.top + 8 }]}
+          onPress={() => router.push('/settings')}
+          accessibilityRole="button"
+          accessibilityLabel="Paramètres"
+        >
           <Feather name="more-horizontal" size={24} color="#fff" />
         </Pressable>
         <View style={styles.headRow}>

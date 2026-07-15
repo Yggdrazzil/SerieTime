@@ -71,6 +71,18 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
 
 ## Journal des modifications
 
+### 2026-07-16 — Finitions UX : accessibilité, squelettes de fiches, scrims dégradés
+- **Accessibilité** : ~49 boutons icône-seule (rail Explorer, chevrons retour,
+  ⋯, cœur, coches, X de modals, onglets…) reçoivent `accessibilityLabel`
+  français + `accessibilityRole` (24 fichiers, labels dynamiques sur les
+  toggles favori/vu/like). Zéro changement visuel.
+- **Fiches série/jeu** : le flash blanc + spinner au chargement est remplacé
+  par un écran squelette (`mobile/components/FicheSkeleton.tsx`, silhouette
+  bannière + jaquette + lignes de texte, basé sur `Skeleton` d'anim.tsx).
+- **Explorer** : les scrims haut/bas des cartes plein écran passent de blocs
+  `rgba` unis (bande grise à bord net sur fonds clairs) à des dégradés
+  `expo-linear-gradient` (~15.0.8, nouvelle dépendance mobile).
+
 ### 2026-07-15 — Recherche jeux déplacée dans l'Explorer (onglet JEUX)
 - `mobile/app/(tabs)/games.tsx` : retrait de la barre de recherche IGDB
   (redondante) et du composant `GameSearchResults` ; l'onglet Jeux ouvre

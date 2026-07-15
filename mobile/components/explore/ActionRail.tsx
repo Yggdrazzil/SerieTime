@@ -21,16 +21,27 @@ function RailButton({
   activeColor,
   count,
   onPress,
+  label,
+  selected,
 }: {
   icon: keyof typeof Feather.glyphMap;
   active?: boolean;
   activeColor?: string;
   count?: number;
   onPress: () => void;
+  label: string;
+  selected?: boolean;
 }) {
   const color = active ? activeColor ?? COLORS.yellow : '#fff';
   return (
-    <Pressable style={styles.btn} onPress={onPress} hitSlop={8}>
+    <Pressable
+      style={styles.btn}
+      onPress={onPress}
+      hitSlop={8}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={selected != null ? { selected } : undefined}
+    >
       <PopIn key={String(active)} style={styles.iconWrap}>
         <Feather name={icon} size={30} color={color} />
       </PopIn>
@@ -61,7 +72,13 @@ export function ActionRail({
   const poster = tmdbImage(item.posterPath, 'w185');
   return (
     <View style={styles.rail}>
-      <Pressable style={styles.posterBtn} onPress={onFiche} hitSlop={6}>
+      <Pressable
+        style={styles.posterBtn}
+        onPress={onFiche}
+        hitSlop={6}
+        accessibilityRole="button"
+        accessibilityLabel="Voir la fiche"
+      >
         {poster ? (
           <Image source={{ uri: poster }} style={styles.poster} resizeMode="cover" />
         ) : (
@@ -70,11 +87,27 @@ export function ActionRail({
           </View>
         )}
       </Pressable>
-      <RailButton icon="heart" active={state.liked} activeColor={COLORS.yellow} count={state.likes} onPress={onLike} />
-      <RailButton icon="thumbs-down" activeColor={COLORS.red} onPress={onDislike} />
-      <RailButton icon="eye" active={state.watched} activeColor={COLORS.green} count={state.watchedCount} onPress={onWatched} />
-      <RailButton icon="message-circle" count={state.comments} onPress={onComment} />
-      <RailButton icon="share-2" onPress={onShare} />
+      <RailButton
+        icon="heart"
+        active={state.liked}
+        activeColor={COLORS.yellow}
+        count={state.likes}
+        onPress={onLike}
+        label={state.liked ? 'Retirer de la liste à voir' : 'Ajouter à la liste à voir'}
+        selected={state.liked}
+      />
+      <RailButton icon="thumbs-down" activeColor={COLORS.red} onPress={onDislike} label="Je n'aime pas" />
+      <RailButton
+        icon="eye"
+        active={state.watched}
+        activeColor={COLORS.green}
+        count={state.watchedCount}
+        onPress={onWatched}
+        label={state.watched ? 'Marquer comme non vu' : 'Marquer comme vu'}
+        selected={state.watched}
+      />
+      <RailButton icon="message-circle" count={state.comments} onPress={onComment} label="Commentaires" />
+      <RailButton icon="share-2" onPress={onShare} label="Partager" />
     </View>
   );
 }
