@@ -143,4 +143,32 @@ export async function gamesRoutes(app: FastifyInstance): Promise<void> {
     }
     return { groups: [...groups.entries()].map(([label, items]) => ({ label, items })) };
   });
+
+  // Import bibliothèque Steam (jeux possédés + temps de jeu). Ne remplace jamais un statut déjà posé
+  // par l'utilisateur : l'upsert `update` ne touche que playtimeMinutes.
+  app.post('/api/games/steam/import', async (request) => {
+    const { steamId } = z.object({ steamId: z.string().min(2) }).parse(request.body);
+    const { steamResolveVanity, steamOwnedGames, steamGameToMedia } = await import('../../services/steam/steam.js');
+    const id64 = await steamResolveVanity(steamId);
+    if (!id64) return { imported: 0, error: 'steam_id_invalide' };
+    const owned = await steamOwnedGames(id64);
+    let imported = 0;
+    for (const g of owned) {
+      const mapped = steamGameToMedia(g);
+      // Un jeu par steamAppId (via Game). Cherche l'existant, sinon crée.
+      const existingGame = await prisma.game.findFirst({ where: { steamAppId: mapped.game.steamAppId } });
+      let mediaId = existingGame?.mediaId ?? null;
+      if (!mediaId) {
+        const created = await prisma.media.create({ data: { ...mapped.media, game: { create: mapped.game } } });
+        mediaId = created.id;
+      }
+      await prisma.userMediaStatus.upsert({
+        where: { userId_mediaId: { userId: request.userId, mediaId } },
+        create: { userId: request.userId, mediaId, status: mapped.status, playtimeMinutes: mapped.playtimeMinutes },
+        update: { playtimeMinutes: mapped.playtimeMinutes },
+      });
+      imported += 1;
+    }
+    return { imported };
+  });
 }
