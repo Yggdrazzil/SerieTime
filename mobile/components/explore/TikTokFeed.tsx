@@ -168,7 +168,7 @@ export function TikTokFeed() {
                 height={height}
                 resolveMedia={resolveMedia}
                 onOpenComments={setCommentsFor}
-                onDisliked={() => advance(index)}
+                onAdvance={() => advance(index)}
                 onInvalidateLibrary={invalidateLibrary}
                 commentBump={commentBumps[keyOf(item)] ?? 0}
               />

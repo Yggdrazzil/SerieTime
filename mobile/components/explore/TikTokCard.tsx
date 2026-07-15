@@ -14,7 +14,7 @@ export function TikTokCard({
   height,
   resolveMedia,
   onOpenComments,
-  onDisliked,
+  onAdvance,
   onInvalidateLibrary,
   commentBump = 0,
 }: {
@@ -22,7 +22,9 @@ export function TikTokCard({
   height: number;
   resolveMedia: (item: FeedItem) => Promise<string>;
   onOpenComments: (item: FeedItem) => void;
-  onDisliked: () => void;
+  // Passe à la carte suivante — appelé dès qu'une action « traite » la
+  // proposition (❤️ à voir, 👁 déjà vu, 👎 pas intéressé), façon TikTok.
+  onAdvance: () => void;
   onInvalidateLibrary: () => void;
   // Incrément du compteur de commentaires (commentaires publiés depuis la sheet
   // pour cette carte) — le flux le fait remonter, la carte l'ajoute au total serveur.
@@ -81,6 +83,9 @@ export function TikTokCard({
       watched: wasLiked ? prev.watched : false,
       watchedCount: prev.watchedCount - (!wasLiked && prev.watched ? 1 : 0),
     });
+    // Proposition traitée → carte suivante tout de suite (la requête continue
+    // en arrière-plan). Un dé-like (toggle off) ne fait pas avancer.
+    if (!wasLiked) onAdvance();
     try {
       const id = await resolveMedia(item);
       if (wasLiked) {
@@ -114,6 +119,7 @@ export function TikTokCard({
       liked: wasWatched ? prev.liked : false,
       likes: prev.likes - (!wasWatched && prev.liked ? 1 : 0),
     });
+    if (!wasWatched) onAdvance();
     try {
       const id = await resolveMedia(item);
       if (wasWatched) {
@@ -136,18 +142,20 @@ export function TikTokCard({
     }
   };
 
-  const onDislike = async () => {
+  const onDislike = () => {
     if (actionPending.current) return;
     actionPending.current = true;
-    try {
-      const id = await resolveMedia(item);
-      await api.post(`/api/disliked/${id}`, { hidden: true });
-    } catch {
-      /* best-effort */
-    } finally {
-      actionPending.current = false;
-    }
-    onDisliked(); // avance à la carte suivante (comportement « pas intéressé » TikTok)
+    onAdvance(); // carte suivante immédiatement, la requête part en arrière-plan
+    void (async () => {
+      try {
+        const id = await resolveMedia(item);
+        await api.post(`/api/disliked/${id}`, { hidden: true });
+      } catch {
+        /* best-effort */
+      } finally {
+        actionPending.current = false;
+      }
+    })();
   };
 
   return (

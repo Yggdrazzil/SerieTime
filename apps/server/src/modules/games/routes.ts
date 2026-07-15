@@ -215,11 +215,24 @@ export async function gamesRoutes(app: FastifyInstance): Promise<void> {
 
   // Flux « JEUX » de l'Explorer TikTok : cartes plein écran (mêmes champs que le
   // feed séries/films), alimentées par IGDB (populaires + à venir).
-  app.get('/api/explore/games', async () => {
+  app.get('/api/explore/games', async (request) => {
     const { igdbPopular, igdbUpcoming, igdbImageUrl } = await import('../../services/igdb/index.js');
-    const [popular, upcoming] = await Promise.all([igdbPopular(), igdbUpcoming()]);
+    const [popular, upcoming, tracked] = await Promise.all([
+      igdbPopular(),
+      igdbUpcoming(),
+      // Jeux déjà suivis par l'utilisateur : exclus du flux (comme le feed
+      // séries/films exclut la bibliothèque) — liker un jeu le fait sortir
+      // du tirage au prochain rafraîchissement.
+      prisma.userMediaStatus.findMany({
+        where: { userId: request.userId, media: { type: 'game' } },
+        select: { media: { select: { igdbId: true } } },
+      }),
+    ]);
+    const trackedIds = new Set(tracked.map((t) => t.media.igdbId).filter((x): x is string => Boolean(x)));
     const seen = new Set<number>();
-    const pool = [...popular, ...upcoming].filter((g) => (seen.has(g.id) ? false : (seen.add(g.id), true)));
+    const pool = [...popular, ...upcoming].filter(
+      (g) => !trackedIds.has(String(g.id)) && (seen.has(g.id) ? false : (seen.add(g.id), true)),
+    );
     const feed = pool.map((g) => ({
       id: null,
       igdbId: String(g.id),
@@ -229,7 +242,9 @@ export async function gamesRoutes(app: FastifyInstance): Promise<void> {
       category: 'jeux' as const,
       title: g.name,
       year: g.first_release_date ? new Date(g.first_release_date * 1000).getFullYear() : null,
-      posterPath: g.cover ? igdbImageUrl(g.cover.image_id) : null,
+      // Jaquette en t_1080p : t_cover_big (264 px) affichée plein écran était
+      // très pixélisée — 1080p est le maximum servi par IGDB.
+      posterPath: g.cover ? igdbImageUrl(g.cover.image_id, 't_1080p') : null,
       backdropPath: g.artworks?.length
         ? igdbImageUrl(g.artworks[0]!.image_id, 't_1080p')
         : g.cover
