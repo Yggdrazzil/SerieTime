@@ -10,6 +10,7 @@ import {
   applyMapping,
   confirmImport,
   isZipBuffer,
+  resumeStalledImport,
   saveUpload,
   sha256,
 } from './service.js';
@@ -95,6 +96,9 @@ export async function importTvtimeRoutes(app: FastifyInstance): Promise<void> {
       include: { mappings: { select: { matchStatus: true } } },
     });
     if (!importRow) return reply.code(404).send({ error: 'not_found' });
+    // Auto-reprise : si l'import est « importing » sans job vivant (crash /
+    // redémarrage serveur), le polling du statut le relance où il en était.
+    if (importRow.status === 'importing') resumeStalledImport(request.userId, importRow.id);
     const counts = { matched_auto: 0, matched_manual: 0, unresolved: 0, ignored: 0 };
     for (const m of importRow.mappings) counts[m.matchStatus as keyof typeof counts]++;
     return {

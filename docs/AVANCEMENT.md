@@ -71,6 +71,23 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
 
 ## Journal des modifications
 
+### 2026-07-15 — Import robuste (reprise + dates de diffusion) & densité UI
+- **Import TV Time — étape 3/3 rétablie** : après statuts/affiches, le job de fond
+  synchronise désormais les **listes d'épisodes + dates de diffusion** des séries
+  importées (throttlé, statut recalculé par série). C'était l'étape supprimée qui
+  vidait « À voir » (la file filtre sur `airDate <= maintenant`).
+- **Reprise automatique** : un import resté « importing » sans job vivant (crash /
+  redémarrage serveur) est relancé là où sa progression s'était arrêtée, dès que
+  l'app re-consulte le statut (`resumeStalledImport`, upserts idempotents).
+- L'écran d'import affiche la phase 3 et rappelle qu'on peut fermer la page
+  (tout tourne côté serveur, progression en temps réel au retour).
+- **Bouton « Resynchroniser ma bibliothèque »** (réglages) + `POST /api/shows/resync-all`
+  pour rattraper les comptes déjà importés (utilisé pour réparer le compte pilote :
+  339+ séries revenues dans « À voir »).
+- **Densité recalée sur TV Time** (comparaison px des captures) : cartes « À voir » /
+  « À venir » (code 20→17, cartes 104→96dp) et Profil (nom 24→20, sections 21→18,
+  stats 23→19) — plus d'infos visibles par écran.
+
 > Entrée type : `### AAAA-MM-JJ — Auteur` puis une liste courte de ce qui a changé.
 
 ### 2026-07-15 — Jeux vidéo : parité fiche avec séries/films (Claude)

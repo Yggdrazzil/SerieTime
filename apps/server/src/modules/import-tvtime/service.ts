@@ -28,6 +28,8 @@ import {
   ensureMediaFromTmdb,
   tmdbFindByExternalId,
 } from '../../services/tmdb/index.js';
+import { syncShowEpisodesFromTmdb } from '../../services/tmdb/index.js';
+import { syncEpisodesFromTvdb, tvdbEnabled } from '../../services/tvdb/index.js';
 import { markEpisodeWatched, recalculateShowStatus } from '../media/actions.js';
 
 const IMPORTS_DIR = path.resolve('data/imports');
@@ -591,7 +593,7 @@ export async function applyMapping(
 }
 
 export type ImportProgress = {
-  phase: 'apply' | 'artwork' | 'done';
+  phase: 'apply' | 'artwork' | 'sync' | 'done';
   done: number;
   total: number;
 };
@@ -675,45 +677,133 @@ export async function confirmImport(userId: string, importId: string): Promise<{
   return { status: 'importing', total };
 }
 
-async function runImportJob(userId: string, importId: string, mappingIds: string[]): Promise<void> {
-  const episodesIndex = await loadEpisodesIndex(importId);
+// Auto-réparation : un import « importing » en base SANS job vivant dans ce
+// process (crash / redémarrage serveur) est repris là où sa dernière
+// progression s'était arrêtée. Appelé au polling du statut (GET :id) — le
+// simple fait de rouvrir l'écran d'import relance donc un import interrompu.
+export function resumeStalledImport(userId: string, importId: string): void {
+  if (runningImportJobs.has(importId)) return;
+  void (async () => {
+    const row = await prisma.import.findUnique({ where: { id: importId } });
+    if (!row || row.userId !== userId || row.status !== 'importing') return;
+    const summary = fromJson<Record<string, unknown>>(row.summaryJson ?? null, {});
+    const resume = (summary.progress as ImportProgress | undefined) ?? undefined;
+    const mappings = await prisma.importMapping.findMany({
+      where: { importId, matchStatus: { in: ['matched_auto', 'matched_manual'] } },
+      select: { id: true },
+    });
+    await runImportJob(userId, importId, mappings.map((m) => m.id), resume);
+  })().catch(async (err) => {
+    const message = err instanceof Error ? err.message : String(err);
+    await prisma.import
+      .update({ where: { id: importId }, data: { status: 'failed', errorJson: toJson({ message }) } })
+      .catch(() => undefined);
+  });
+}
+
+// Jobs d'import en cours DANS CE process : permet de détecter un import resté
+// « importing » en base sans job vivant (crash / redémarrage serveur) et de le
+// reprendre là où il s'était arrêté (cf. resumeStalledImport).
+const runningImportJobs = new Set<string>();
+
+async function runImportJob(
+  userId: string,
+  importId: string,
+  mappingIds: string[],
+  resume?: ImportProgress,
+): Promise<void> {
+  if (runningImportJobs.has(importId)) return;
+  runningImportJobs.add(importId);
+  try {
+    await runImportJobInner(userId, importId, mappingIds, resume);
+  } finally {
+    runningImportJobs.delete(importId);
+  }
+}
+
+async function runImportJobInner(
+  userId: string,
+  importId: string,
+  mappingIds: string[],
+  resume?: ImportProgress,
+): Promise<void> {
   const errors: { mappingId: string; title: string; error: string }[] = [];
   const total = mappingIds.length;
   // S'arrête si l'import a été remplacé par un nouveau (anti-relance) ou annulé.
   const stillRunning = async () =>
     (await prisma.import.findUnique({ where: { id: importId }, select: { status: true } }))?.status === 'importing';
 
-  // Étape 1/2 — statuts, favoris, épisodes vus (depuis le CSV, aucun appel réseau).
-  let done = 0;
-  for (const mappingId of mappingIds) {
-    try {
-      await applyMapping(userId, importId, mappingId, episodesIndex);
-    } catch (err) {
-      const mapping = await prisma.importMapping.findUnique({ where: { id: mappingId } }).catch(() => null);
-      errors.push({ mappingId, title: mapping?.sourceTitle ?? '?', error: err instanceof Error ? err.message : String(err) });
-    }
-    if (++done % 20 === 0 || done === total) {
-      if (!(await stillRunning())) return;
-      await setProgress(importId, { phase: 'apply', done, total });
+  // Reprise : les upserts étant idempotents, on saute simplement ce qui est déjà
+  // fait (index `done` de la dernière progression écrite) et les phases passées.
+  const resumePhase = resume?.phase ?? 'apply';
+  const phaseRank: Record<ImportProgress['phase'], number> = { apply: 0, artwork: 1, sync: 2, done: 3 };
+
+  // Étape 1/3 — statuts, favoris, épisodes vus (depuis le CSV, aucun appel réseau).
+  if (phaseRank[resumePhase] <= 0) {
+    const episodesIndex = await loadEpisodesIndex(importId);
+    let done = resumePhase === 'apply' ? Math.max(0, (resume?.done ?? 0) - 20) : 0; // marge : la dernière tranche peut être partielle
+    for (const mappingId of mappingIds.slice(done)) {
+      try {
+        await applyMapping(userId, importId, mappingId, episodesIndex);
+      } catch (err) {
+        const mapping = await prisma.importMapping.findUnique({ where: { id: mappingId } }).catch(() => null);
+        errors.push({ mappingId, title: mapping?.sourceTitle ?? '?', error: err instanceof Error ? err.message : String(err) });
+      }
+      if (++done % 20 === 0 || done === total) {
+        if (!(await stillRunning())) return;
+        await setProgress(importId, { phase: 'apply', done, total });
+      }
     }
   }
 
-  // Étape 2/2 — affiches (séries ET films). Pas de synchro des listes d'épisodes
-  // ici (trop lourd, ça bloquait l'app) : elles se chargent à l'ouverture.
   const mediaMappings = await prisma.importMapping.findMany({
     where: { importId, matchStatus: { in: ['matched_auto', 'matched_manual'] }, matchedMediaId: { not: null } },
     select: { matchedMediaId: true },
   });
   const mediaIds = [...new Set(mediaMappings.map((m) => m.matchedMediaId).filter((x): x is string => !!x))];
 
-  if (tmdbEnabled() && mediaIds.length > 0) {
-    done = 0;
-    for (const mediaId of mediaIds) {
+  // Étape 2/3 — affiches (séries ET films).
+  if (phaseRank[resumePhase] <= 1 && tmdbEnabled() && mediaIds.length > 0) {
+    let done = resumePhase === 'artwork' ? Math.max(0, (resume?.done ?? 0) - 10) : 0;
+    for (const mediaId of mediaIds.slice(done)) {
       await enrichImportedMedia(mediaId).catch(() => undefined);
       if (++done % 10 === 0 || done === mediaIds.length) {
         if (!(await stillRunning())) return;
         await setProgress(importId, { phase: 'artwork', done, total: mediaIds.length });
       }
+    }
+  }
+
+  // Étape 3/3 — listes d'épisodes + DATES DE DIFFUSION des séries importées.
+  // C'était l'étape supprimée « trop lourde » : sans elle, la file « À voir »
+  // ignorait les séries importées (elle filtre sur airDate <= maintenant).
+  // Ici elle tourne en tâche de fond (l'app n'attend pas), throttlée, et le
+  // statut de chaque série est recalculé une fois ses épisodes connus.
+  if (phaseRank[resumePhase] <= 2) {
+    const shows = await prisma.media.findMany({
+      where: { id: { in: mediaIds }, type: 'show' },
+      select: { id: true, tvdbId: true, tmdbId: true, sourcePriority: true, show: { select: { id: true } } },
+    });
+    let done = resumePhase === 'sync' ? Math.max(0, (resume?.done ?? 0) - 10) : 0;
+    for (const m of shows.slice(done)) {
+      try {
+        if (m.sourcePriority === 'tvdb' && m.tvdbId && tvdbEnabled()) await syncEpisodesFromTvdb(m.id);
+        else if (m.tmdbId && tmdbEnabled()) await syncShowEpisodesFromTmdb(m.id);
+        else if (m.tvdbId && tvdbEnabled()) await syncEpisodesFromTvdb(m.id);
+        else {
+          done++;
+          continue;
+        }
+        await prisma.media.update({ where: { id: m.id }, data: { lastSyncedAt: new Date() } });
+        if (m.show) await recalculateShowStatus(userId, m.show.id, null).catch(() => undefined);
+      } catch {
+        /* best-effort : une série en échec n'arrête pas l'import */
+      }
+      if (++done % 10 === 0 || done === shows.length) {
+        if (!(await stillRunning())) return;
+        await setProgress(importId, { phase: 'sync', done, total: shows.length });
+      }
+      await new Promise((r) => setTimeout(r, 150)); // throttle TVDB/TMDb
     }
   }
 
