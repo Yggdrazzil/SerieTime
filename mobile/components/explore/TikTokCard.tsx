@@ -56,30 +56,50 @@ export function TikTokCard({
     }
   };
 
-  // Like = ajoute à « À voir » (watchlist). Action à SENS UNIQUE : une fois dans
-  // ta watchlist, un nouveau tap ne fait rien (le retrait se gère dans la
-  // bibliothèque). Les endpoints n'ont pas de retrait, et re-poster spammerait
-  // le fil d'activité — d'où le garde-fou. Optimiste avec rollback si échec.
+  // Like = « À voir » (watchlist), vrai TOGGLE réversible. Le retrait « untrack »
+  // est sûr ici : le flux exclut déjà les œuvres en bibliothèque, donc l'item ne
+  // porte que l'état posé dans cette session. Statut unique côté serveur : passer
+  // en « à voir » annule un éventuel « déjà vu ». Optimiste avec rollback.
   const onLike = async () => {
-    if (state.liked) return;
-    setState((s) => ({ ...s, liked: true, likes: s.likes + 1 }));
+    const prev = state;
+    const wasLiked = prev.liked;
+    setState({
+      ...prev,
+      liked: !wasLiked,
+      likes: prev.likes + (wasLiked ? -1 : 1),
+      watched: wasLiked ? prev.watched : false,
+      watchedCount: prev.watchedCount - (!wasLiked && prev.watched ? 1 : 0),
+    });
     try {
       const id = await resolveMedia(item);
-      await api.post(item.type === 'movie' ? `/api/movies/${id}/watchlist` : `/api/shows/${id}/watchlater`);
+      if (wasLiked) {
+        await api.del(item.type === 'movie' ? `/api/movies/${id}/tracking` : `/api/shows/${id}/tracking`);
+      } else {
+        await api.post(item.type === 'movie' ? `/api/movies/${id}/watchlist` : `/api/shows/${id}/watchlater`);
+      }
       onInvalidateLibrary();
     } catch {
-      setState((s) => ({ ...s, liked: false, likes: s.likes - 1 }));
+      setState(prev);
     }
   };
 
-  // Déjà vu = marque comme vu (sens unique, comme le like : mark-all-watched
-  // n'est pas réversible proprement ici).
+  // Déjà vu = « vu » (completed), vrai TOGGLE réversible. Passer en « déjà vu »
+  // annule un éventuel « à voir » ; untrack pour dé-marquer.
   const onWatched = async () => {
-    if (state.watched) return;
-    setState((s) => ({ ...s, watched: true, watchedCount: s.watchedCount + 1 }));
+    const prev = state;
+    const wasWatched = prev.watched;
+    setState({
+      ...prev,
+      watched: !wasWatched,
+      watchedCount: prev.watchedCount + (wasWatched ? -1 : 1),
+      liked: wasWatched ? prev.liked : false,
+      likes: prev.likes - (!wasWatched && prev.liked ? 1 : 0),
+    });
     try {
       const id = await resolveMedia(item);
-      if (item.type === 'movie') {
+      if (wasWatched) {
+        await api.del(item.type === 'movie' ? `/api/movies/${id}/tracking` : `/api/shows/${id}/tracking`);
+      } else if (item.type === 'movie') {
         await api.post(`/api/movies/${id}/watched`, {});
       } else {
         await api.post(`/api/shows/${id}/mark-all-watched`, {});
@@ -87,7 +107,7 @@ export function TikTokCard({
       }
       onInvalidateLibrary();
     } catch {
-      setState((s) => ({ ...s, watched: false, watchedCount: s.watchedCount - 1 }));
+      setState(prev);
     }
   };
 

@@ -7,7 +7,8 @@ import {
   FlatList,
   Image as RNImage,
   ActivityIndicator,
-  RefreshControl,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
   type ViewToken,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
@@ -18,6 +19,7 @@ import { COLORS, FONTS } from '@/lib/theme';
 import { EmptyState, Loading } from '@/components/ui';
 import { TikTokCard } from './TikTokCard';
 import { CommentsSheet } from './CommentsSheet';
+import { PullToRefreshView } from './PullToRefreshView';
 import { useResolveMedia } from './useResolveMedia';
 import { FEED_CATEGORIES, catOf, type FeedCategory, type FeedItem } from './types';
 
@@ -28,6 +30,7 @@ export function TikTokFeed() {
   const queryClient = useQueryClient();
   const resolveMedia = useResolveMedia();
   const listRef = useRef<FlatList<FeedItem>>(null);
+  const scrollY = useRef(0); // offset vertical courant du flux (pour le pull-to-refresh web+natif)
 
   const [height, setHeight] = useState(0);
   const [cat, setCat] = useState<FeedCategory>('tout');
@@ -115,35 +118,40 @@ export function TikTokFeed() {
   return (
     <View style={styles.wrap} onLayout={(e) => setHeight(e.nativeEvent.layout.height)}>
       {height > 0 && deck.length > 0 ? (
-        <FlatList
-          ref={listRef}
-          data={deck}
-          keyExtractor={keyOf}
-          pagingEnabled
-          showsVerticalScrollIndicator={false}
-          decelerationRate="fast"
-          getItemLayout={(_, index) => ({ length: height, offset: height * index, index })}
-          initialNumToRender={2}
-          maxToRenderPerBatch={3}
-          windowSize={3}
-          onEndReachedThreshold={0.5}
-          onEndReached={loadMore}
-          onViewableItemsChanged={onViewable}
-          viewabilityConfig={{ itemVisiblePercentThreshold: 60 }}
-          refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={onRefresh} tintColor="#fff" colors={[COLORS.yellow]} />}
-          renderItem={({ item, index }) => (
-            <TikTokCard
-              item={item}
-              height={height}
-              resolveMedia={resolveMedia}
-              onOpenComments={setCommentsFor}
-              onDisliked={() => advance(index)}
-              onInvalidateLibrary={invalidateLibrary}
-              commentBump={commentBumps[keyOf(item)] ?? 0}
-            />
-          )}
-          ListFooterComponent={loadingMore ? <ActivityIndicator style={{ marginVertical: 20 }} color="#fff" /> : null}
-        />
+        <PullToRefreshView refreshing={isRefetching} onRefresh={onRefresh} scrollYRef={scrollY}>
+          <FlatList
+            ref={listRef}
+            data={deck}
+            keyExtractor={keyOf}
+            pagingEnabled
+            showsVerticalScrollIndicator={false}
+            decelerationRate="fast"
+            getItemLayout={(_, index) => ({ length: height, offset: height * index, index })}
+            initialNumToRender={2}
+            maxToRenderPerBatch={3}
+            windowSize={3}
+            scrollEventThrottle={16}
+            onScroll={(e: NativeSyntheticEvent<NativeScrollEvent>) => {
+              scrollY.current = e.nativeEvent.contentOffset.y;
+            }}
+            onEndReachedThreshold={0.5}
+            onEndReached={loadMore}
+            onViewableItemsChanged={onViewable}
+            viewabilityConfig={{ itemVisiblePercentThreshold: 60 }}
+            renderItem={({ item, index }) => (
+              <TikTokCard
+                item={item}
+                height={height}
+                resolveMedia={resolveMedia}
+                onOpenComments={setCommentsFor}
+                onDisliked={() => advance(index)}
+                onInvalidateLibrary={invalidateLibrary}
+                commentBump={commentBumps[keyOf(item)] ?? 0}
+              />
+            )}
+            ListFooterComponent={loadingMore ? <ActivityIndicator style={{ marginVertical: 20 }} color="#fff" /> : null}
+          />
+        </PullToRefreshView>
       ) : height > 0 ? (
         <View style={styles.emptyWrap}>
           <EmptyState title="Rien dans cette catégorie" message="Change de catégorie ou actualise." />
