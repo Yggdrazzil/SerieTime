@@ -6,7 +6,7 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
-Dernière mise à jour : **2026-07-15** (Claude) — Jeux vidéo : onglet Jeux — découverte + à venir + connexion Steam (Task 9)
+Dernière mise à jour : **2026-07-15** (Claude) — Jeux vidéo : notifications de sortie + journal V1 (Task 10)
 
 ---
 
@@ -50,6 +50,8 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
 | Jeux vidéo — module API | ✅ Fait | `apps/server/src/modules/games/routes.ts` : `GET /api/games/search`, `POST /api/games/add-from-igdb`, `GET /api/games` (bibliothèque groupée par statut wishlist/playing/completed/abandoned), `POST /api/games/:id/status`, `GET /api/games/:id` (enrichissement paresseux), `GET /api/games/discover`, `GET /api/games/upcoming`, `POST /api/games/steam/import`, `DELETE /api/games/:id/tracking` |
 | Jeux vidéo — onglet Jeux (mobile) | ✅ Fait | `mobile/app/(tabs)/games.tsx` : bibliothèque par statut, recherche IGDB, carrousels « Populaires »/« À venir » (découverte, tap = ajoute + ouvre la fiche), « Sorties à venir » (jeux suivis, groupés par mois) |
 | Jeux vidéo — connexion Steam (mobile) | ✅ Fait | Bloc « Jeux — Steam » dans `mobile/app/settings.tsx` (onglet Compte) : SteamID/URL de profil → import bibliothèque possédée |
+| Jeux vidéo — fiche jeu (mobile) | ✅ Fait | `mobile/app/game/[id].tsx` : miroir simplifié de la fiche série (jaquette, infos, sélecteur de statut wishlist/playing/completed/abandoned, temps de jeu, commentaires), suivi optimiste avec rollback |
+| Jeux vidéo — notifications de sortie | ✅ Fait | Passe du worker de fond (`apps/server/src/services/sync-worker.ts`) : `Notification` de type `game_release` quand `Media.releaseDate` d'un jeu suivi (non masqué) tombe aujourd'hui, dédupliquée par `(userId, mediaId, type)` |
 
 ## Prochaines étapes (par priorité)
 
@@ -70,6 +72,23 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
 ## Journal des modifications
 
 > Entrée type : `### AAAA-MM-JJ — Auteur` puis une liste courte de ce qui a changé.
+
+### 2026-07-15 — Onglet Jeux vidéo (V1)
+- Domaine jeux calqué sur séries : Media.type=game + sous-table Game + provider IGDB + module games + UserMediaStatus (Voulus/En cours/Terminés/Abandonnés, temps de jeu).
+- Fiche jeu, recherche/ajout IGDB, découverte (populaires/à venir), sorties & DLC à venir, import bibliothèque Steam, notifications de sortie.
+- Config : TWITCH_CLIENT_ID/SECRET (IGDB), STEAM_API_KEY. HowLongToBeat & PlayStation = V2.
+- Notifications de sortie (Task 10) : passe ajoutée au worker de fond
+  (`apps/server/src/services/sync-worker.ts`, fonction
+  `notifyGameReleasesToday`, appelée à chaque `tick()`) — pour chaque
+  `UserMediaStatus` d'un jeu suivi (non masqué) dont `Media.releaseDate`
+  tombe aujourd'hui (bornes `setHours(0,0,0,0)` → +24h), crée une
+  `Notification` (`type: 'game_release'`, titre « <titre> sort aujourd'hui »),
+  même schéma que les notifications sociales (`modules/social/notify.ts` :
+  `userId`/`type`/`title`/`date`/`metadataJson`). Dédup `(userId, mediaId,
+  type)` via une recherche `contains` sur `metadataJson` (pas de colonne
+  `mediaId` dédiée sur `Notification`). Passe légère, hors chemin critique des
+  requêtes utilisateur.
+- Typecheck serveur : 0 erreur. Suite complète : 80/80 sans régression.
 
 ### 2026-07-15 — Jeux vidéo : découverte + à venir + connexion Steam (Task 9)
 - `mobile/app/(tabs)/games.tsx` : sous la bibliothèque, sections **« Sorties à

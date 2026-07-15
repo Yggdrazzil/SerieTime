@@ -16,6 +16,7 @@ import { recalculateShowStatus } from '../modules/media/actions.js';
 const TICK_MS = 12_000; // un lot toutes les 12 s
 const BATCH = 3; // 3 séries par lot → ~900/h, gentil pour l'API et la base
 const STALE_MS = 3 * 24 * 3_600_000; // rafraîchir une série déjà synchro tous les 3 j
+const DAY_MS = 86_400_000;
 
 let running = false;
 
@@ -56,6 +57,46 @@ async function syncOne(media: {
   }
 }
 
+// Notifications de sortie jeux : pour chaque UserMediaStatus d'un jeu suivi
+// (non masqué) dont media.releaseDate tombe aujourd'hui, crée une
+// Notification de type `game_release` — même schéma que les notifs sociales
+// (cf. modules/social/notify.ts : userId/type/title/date/metadataJson).
+// Notification n'a pas de colonne mediaId dédiée (mediaId vit dans
+// metadataJson, cf. notify.ts), donc la dédup (userId, mediaId, type) se fait
+// via une recherche `contains` sur le JSON — même approche que le reste du
+// code (aucune colonne relationnelle pour ce cas).
+async function notifyGameReleasesToday(): Promise<void> {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start.getTime() + DAY_MS);
+  const rows = await prisma.userMediaStatus.findMany({
+    where: {
+      isHidden: false,
+      media: { type: 'game', releaseDate: { gte: start, lt: end } },
+    },
+    select: { userId: true, media: { select: { id: true, title: true } } },
+  });
+  for (const r of rows) {
+    const marker = `"mediaId":"${r.media.id}"`;
+    const already = await prisma.notification.findFirst({
+      where: { userId: r.userId, type: 'game_release', metadataJson: { contains: marker } },
+      select: { id: true },
+    });
+    if (already) continue;
+    await prisma.notification
+      .create({
+        data: {
+          userId: r.userId,
+          type: 'game_release',
+          title: `${r.media.title} sort aujourd'hui`,
+          date: new Date(),
+          metadataJson: JSON.stringify({ mediaId: r.media.id, mediaType: 'game' }),
+        },
+      })
+      .catch(() => undefined);
+  }
+}
+
 async function tick(): Promise<void> {
   if (running) return;
   running = true;
@@ -74,6 +115,9 @@ async function tick(): Promise<void> {
       select: { id: true, tmdbId: true, tvdbId: true, sourcePriority: true, show: { select: { id: true } } },
     });
     for (const m of shows) await syncOne(m);
+    // Passe légère, indépendante de la synchro des séries : ne bloque pas le
+    // reste si elle échoue.
+    await notifyGameReleasesToday().catch(() => undefined);
   } catch {
     /* on retentera au prochain tick */
   } finally {
