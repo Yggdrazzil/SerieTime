@@ -306,7 +306,7 @@ export async function tmdbTranslations(
 // ramenait « porco » (Porco Rosso). On excluait donc EN SILENCE des animés
 // légitimes. Désormais on n'accepte QUE les correspondances de NOM EXACT
 // (insensible casse/espaces) contre une liste curée de noms pornographiques.
-const ADULT_KEYWORD_QUERIES = ['hentai', 'pornography', 'pornographic', 'porn', 'porno', 'softcore', 'hardcore', 'eroge', 'sex film', 'erotic'];
+const ADULT_KEYWORD_QUERIES = ['hentai', 'pornography', 'pornographic', 'porn', 'porno', 'softcore', 'hardcore', 'eroge', 'sex film', 'erotic', 'ecchi'];
 // Noms EXACTS acceptés (normalisés : casse, espaces réduits). « erotic » seul
 // N'EST PAS ici (grand public — cf. « erotic thriller ») : il est traité à part
 // et n'est appliqué qu'aux viviers ANIMÉS.
@@ -314,26 +314,30 @@ const ADULT_KEYWORD_EXACT = new Set([
   'hentai', 'pornography', 'pornographic', 'pornographic video', 'pornographic animation',
   'porn', 'porno', 'softcore', 'hardcore porn', 'sex film', 'erotic movie', 'eroge',
 ]);
-const EROTIC_EXACT = 'erotic';
+// Mots-clés appliqués aux VIVIERS ANIMÉS uniquement (pas au live-action) :
+// « erotic » (le hentai y est souvent taggé sans l'être « hentai ») et « ecchi »
+// (fan-service 18+). Traités à part car « erotic » seul est grand public hors
+// anime (« erotic thriller »).
+const ANIME_ONLY_EXACT = new Set(['erotic', 'ecchi']);
 const normKeyword = (s: string): string => s.trim().toLowerCase().replace(/\s+/g, ' ');
 
-type AdultKeywords = { pornIds: string[]; eroticId: string | null };
+type AdultKeywords = { pornIds: string[]; animeOnlyIds: string[] };
 let adultKeywordCache: { data: AdultKeywords; expiresAt: number } | null = null;
 
 async function loadAdultKeywords(): Promise<AdultKeywords> {
-  if (!tmdbEnabled()) return { pornIds: [], eroticId: null };
+  if (!tmdbEnabled()) return { pornIds: [], animeOnlyIds: [] };
   if (adultKeywordCache && adultKeywordCache.expiresAt > Date.now()) return adultKeywordCache.data;
   const pornIds = new Set<string>();
-  let eroticId: string | null = null;
+  const animeOnlyIds = new Set<string>();
   for (const term of ADULT_KEYWORD_QUERIES) {
     const data = await cachedFetch<{ results?: { id: number; name?: string }[] }>('/search/keyword', { query: term }, 30 * DAY);
     for (const k of data?.results ?? []) {
       const name = normKeyword(k.name ?? '');
       if (ADULT_KEYWORD_EXACT.has(name)) pornIds.add(String(k.id));
-      if (name === EROTIC_EXACT) eroticId = String(k.id);
+      if (ANIME_ONLY_EXACT.has(name)) animeOnlyIds.add(String(k.id));
     }
   }
-  const result: AdultKeywords = { pornIds: [...pornIds], eroticId };
+  const result: AdultKeywords = { pornIds: [...pornIds], animeOnlyIds: [...animeOnlyIds] };
   adultKeywordCache = { data: result, expiresAt: Date.now() + 30 * DAY };
   return result;
 }
@@ -343,10 +347,11 @@ export async function getAdultKeywordIds(): Promise<string[]> {
   return (await loadAdultKeywords()).pornIds;
 }
 
-// Id du mot-clé EXACT « erotic » — ajouté au `without_keywords` des viviers
-// ANIMÉS uniquement (le hentai est souvent taggé « erotic » sans l'être « hentai »).
+// Ids des mots-clés réservés aux viviers ANIMÉS (« erotic » + « ecchi »),
+// ajoutés à leur `without_keywords`. Le premier est renvoyé pour rétro-compat
+// des tests ; l'exclusion réelle utilise `animeOnlyIds` dans tmdbDiscover.
 export async function getEroticKeywordId(): Promise<string | null> {
-  return (await loadAdultKeywords()).eroticId;
+  return (await loadAdultKeywords()).animeOnlyIds[0] ?? null;
 }
 
 // Noms des mots-clés d'une fiche (vérification par item du hentai) : /tv/{id}/keywords
@@ -397,9 +402,11 @@ export async function tmdbDiscover(
     params.include_adult = 'true';
   } else {
     // Exclusion à la source du porno : /discover supporte `without_keywords`.
-    const { pornIds, eroticId } = await loadAdultKeywords();
+    const { pornIds, animeOnlyIds } = await loadAdultKeywords();
     const adultKw = [...pornIds];
-    if (opts.excludeErotic && eroticId) adultKw.push(eroticId);
+    // Viviers animés : on écarte aussi « erotic » et « ecchi » (18+ suggestif),
+    // jamais sur le live-action (pas d'`excludeErotic` là-bas).
+    if (opts.excludeErotic) adultKw.push(...animeOnlyIds);
     if (adultKw.length) params.without_keywords = adultKw.join(',');
   }
   const dateField = type === 'tv' ? 'first_air_date' : 'primary_release_date';

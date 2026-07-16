@@ -35,6 +35,11 @@ function isAdultContent(r: AdultCheckable): boolean {
 const ADULT_ITEM_KEYWORDS = new Set([
   'hentai', 'erotic', 'pornographic animation', 'pornographic video', 'pornography',
   'porno', 'erotic movie', 'softcore', 'hardcore',
+  // « ecchi » : fan-service très suggestif, classé 18+ dans de nombreux pays
+  // (ex. « Takamine-san » : BR 18, KR 19, IT VM18…). Écarté par défaut, comme
+  // le reste du 18+ ; l'interrupteur « Contenu 18+ » le fait réapparaître.
+  // N'affecte que les animés (dropHentaiAnime est gardé par isAnime).
+  'ecchi',
 ]);
 async function dropHentaiAnime<T extends { tmdbId: string | null; type: 'show' | 'movie' }>(
   items: T[],
