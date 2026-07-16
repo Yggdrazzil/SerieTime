@@ -105,6 +105,18 @@ export const CJK_ADULT_MARKERS: readonly string[] = [
   '成人映画', // film pour adultes
   'エロアニメ', // ero-anime (compound non ambigu)
   'エロゲ', // eroge (jeu érotique)
+  // Termes hardcore japonais SANS ambiguïté (jamais dans un titre grand public).
+  // Volontairement PAS inclus les termes à double sens : 調教 (dressage d'animaux),
+  // 牝犬 (chienne), 潮吹き (jet de baleine), ぶっかけ (plat d'udon).
+  '陵辱', // viol / humiliation
+  '輪姦', // viol collectif
+  '中出し', // creampie
+  '痴女', // « nymphomane » (JAV)
+  '巨乳', // gros seins (JAV / porno)
+  // Coréen : compounds « adulte » non ambigus + classification R19.
+  '성인만화', // manhwa pour adultes
+  '성인애니', // animation pour adultes
+  '19금', // interdit -19 (classification adulte coréenne)
 ];
 
 // Liste noire d'IDENTIFIANTS TMDb — filet pour les rares œuvres pornographiques
