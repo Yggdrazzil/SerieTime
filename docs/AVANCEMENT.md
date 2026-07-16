@@ -53,7 +53,7 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
 | Jeux vidéo — fiche jeu (mobile) | ✅ Fait | `mobile/app/game/[id].tsx` : parité avec la fiche série/film — menu « … » (Personnaliser affiche/bannière via `GET/POST /api/games/:id/images|poster|banner`, Favoris `POST /api/games/:id/favorite`, Ajouter à une liste, Partager, Retirer), aperçu bande-annonce 16:9 (miniature YouTube + iframe autoplay sur web / ouverture YouTube sur natif, `videoId` IGDB), sélecteur de statut, temps de jeu, commentaires ; suivi optimiste avec rollback |
 | Jeux vidéo — notifications de sortie | ✅ Fait | Passe du worker de fond (`apps/server/src/services/sync-worker.ts`) : `Notification` de type `game_release` quand `Media.releaseDate` d'un jeu suivi (non masqué) tombe aujourd'hui, dédupliquée par `(userId, mediaId, type)` |
 | Gamification — serveur (XP, badges, streaks, défis, classement) | ✅ Fait | Modèles `UserProgress`/`UserBadge`/`UserChallenge`, `modules/gamification/` (recompute idempotent débouncé + backfill au boot), `GET /api/gamification/me` + `/leaderboard`, items `badge` dans le fil social, XP rétroactif à l'import |
-| Gamification — mobile (page Trophées, toasts, pastille niveau) | ⏳ À faire | Spec §10 de `docs/superpowers/specs/2026-07-16-gamification-design.md` — l'API `/api/gamification/me` est prête |
+| Gamification — mobile (page Trophées, toasts, pastille niveau) | ✅ Fait | Page `/trophies` (niveau + XP, streak, défis du mois, grille de badges à paliers, classement hebdo), pastille niveau + rangée Trophées sur le profil, items badge dans le fil, toasts de déblocage globaux (`GamificationToastHost`) |
 
 ## Prochaines étapes (par priorité)
 

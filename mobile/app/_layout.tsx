@@ -14,6 +14,7 @@ import {
   Mulish_800ExtraBold,
 } from '@expo-google-fonts/mulish';
 import { COLORS } from '@/lib/theme';
+import { GamificationToastHost } from '@/lib/useGamificationToasts';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 60_000, retry: 1 } },
@@ -67,7 +68,11 @@ export default function RootLayout() {
             <Stack.Screen name="library/favorite-shows" />
             <Stack.Screen name="library/favorite-movies" />
             <Stack.Screen name="import" />
+            <Stack.Screen name="trophies" />
           </Stack>
+          {/* Toast global de déblocage (niveau/badge) — monté une fois, visible
+              quel que soit l'écran (spec 2026-07-16 §10). */}
+          <GamificationToastHost />
         </QueryClientProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

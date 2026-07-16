@@ -222,6 +222,7 @@ function EpisodePage({
       qc.invalidateQueries({ queryKey: ['shows'] });
       qc.invalidateQueries({ queryKey: ['show', mediaId, 'episodes'] });
       qc.invalidateQueries({ queryKey: ['profile'] });
+      qc.invalidateQueries({ queryKey: ['gamification'] }); // XP/badges/streak (spec 2026-07-16 §10)
     },
   });
   // OUI de la pop-up : coche tous les épisodes diffusés avant celui-ci
@@ -253,6 +254,7 @@ function EpisodePage({
       qc.invalidateQueries({ queryKey: ['shows'] });
       qc.invalidateQueries({ queryKey: ['show', mediaId, 'episodes'] });
       qc.invalidateQueries({ queryKey: ['profile'] });
+      qc.invalidateQueries({ queryKey: ['gamification'] }); // XP/badges/streak (spec 2026-07-16 §10)
     },
   });
   const pressCheck = () => {

@@ -81,6 +81,7 @@ export default function GameDetail() {
   const refresh = () => {
     qc.invalidateQueries({ queryKey: detailKey });
     qc.invalidateQueries({ queryKey: ['games', 'library'] });
+    qc.invalidateQueries({ queryKey: ['gamification'] }); // XP/badges/streak (spec 2026-07-16 §10)
   };
 
   // Mise à jour optimiste du cache de la fiche (même recette que show/[id].tsx) :

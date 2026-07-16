@@ -53,6 +53,7 @@ export default function ShowDetail() {
     qc.invalidateQueries({ queryKey: ['shows'] });
     qc.invalidateQueries({ queryKey: ['movies'] });
     qc.invalidateQueries({ queryKey: ['profile'] });
+    qc.invalidateQueries({ queryKey: ['gamification'] }); // XP/badges/streak (spec 2026-07-16 §10)
   };
 
   // Progression globale de la série (même cache que l'onglet Épisodes) pour la
@@ -999,6 +1000,7 @@ function EpisodesTab({ showId, posterPath, onChange, onScroll }: { showId: strin
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ['show', showId, 'episodes'] });
     qc.invalidateQueries({ queryKey: ['show', showId] });
+    qc.invalidateQueries({ queryKey: ['gamification'] }); // XP/badges/streak (spec 2026-07-16 §10)
     onChange();
   };
   const toggleEp = useMutation({

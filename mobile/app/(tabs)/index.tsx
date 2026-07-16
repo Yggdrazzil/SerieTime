@@ -100,6 +100,7 @@ function QueueView() {
     onSettled: () => {
       qc.invalidateQueries({ queryKey: ['shows'] });
       qc.invalidateQueries({ queryKey: ['profile'] });
+      qc.invalidateQueries({ queryKey: ['gamification'] }); // XP/badges/streak (spec 2026-07-16 §10)
     },
   });
   // Décocher depuis l'historique : l'épisode redevient « à voir ». Mise à jour
@@ -122,6 +123,7 @@ function QueueView() {
     onSettled: () => {
       qc.invalidateQueries({ queryKey: ['shows'] });
       qc.invalidateQueries({ queryKey: ['profile'] });
+      qc.invalidateQueries({ queryKey: ['gamification'] }); // XP/badges/streak (spec 2026-07-16 §10)
     },
   });
 

@@ -7,7 +7,7 @@ import { useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery } from '@tanstack/react-query';
 import { api, tmdbImage } from '@/lib/api';
-import type { MediaDto, ProfileStatsDto } from '@/lib/types';
+import type { GamificationMeDto, MediaDto, ProfileStatsDto } from '@/lib/types';
 import { watchTime } from '@/lib/format';
 import { COLORS, FONTS } from '@/lib/theme';
 import { Loading, LoadError, Poster } from '@/components/ui';
@@ -71,6 +71,12 @@ function ProfileScreenInner() {
     refetchInterval: 30_000,
   });
   const unread = unreadData?.unreadCount ?? 0;
+  // Gamification (spec 2026-07-16 §10) : pastille de niveau sur l'avatar + rangée Trophées.
+  const { data: gamification } = useQuery({
+    queryKey: ['gamification', 'me'],
+    queryFn: () => api.get<GamificationMeDto>('/api/gamification/me'),
+    staleTime: 30_000,
+  });
 
   const { refreshing, onRefresh } = usePullRefresh([refetch]);
 
@@ -120,13 +126,20 @@ function ProfileScreenInner() {
           <Feather name="more-horizontal" size={24} color="#fff" />
         </Pressable>
         <View style={styles.headRow}>
-          {user.avatarUrl ? (
-            <Image source={{ uri: tmdbImage(user.avatarUrl, 'w185') ?? user.avatarUrl }} style={styles.avatar} resizeMode="cover" />
-          ) : (
-            <View style={[styles.avatar, styles.avatarEmpty]}>
-              <Text style={styles.avatarInit}>{user.displayName.slice(0, 1).toUpperCase()}</Text>
-            </View>
-          )}
+          <View>
+            {user.avatarUrl ? (
+              <Image source={{ uri: tmdbImage(user.avatarUrl, 'w185') ?? user.avatarUrl }} style={styles.avatar} resizeMode="cover" />
+            ) : (
+              <View style={[styles.avatar, styles.avatarEmpty]}>
+                <Text style={styles.avatarInit}>{user.displayName.slice(0, 1).toUpperCase()}</Text>
+              </View>
+            )}
+            {gamification ? (
+              <View style={styles.levelPill}>
+                <Text style={styles.levelPillText}>{gamification.level}</Text>
+              </View>
+            ) : null}
+          </View>
           <View>
             <Text style={styles.name}>{user.displayName}</Text>
             <Pressable style={styles.modif} onPress={() => router.push('/profile/edit')}>
@@ -166,6 +179,21 @@ function ProfileScreenInner() {
           <AppearItem index={4}><StatCard ionicon="game-controller-outline" title="Jeux joués" values={[[stats.gamesPlayed ?? 0, 'JEUX']]} /></AppearItem>
         </ScrollView>
       </Section>
+
+      <Pressable style={styles.trophiesRow} onPress={() => router.push('/trophies' as Href)}>
+        <View style={styles.trophiesIconWrap}>
+          <Feather name="award" size={20} color={COLORS.black} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.trophiesTitle}>Trophées</Text>
+          {gamification ? (
+            <Text style={styles.trophiesSub}>
+              Niveau {gamification.level} · {gamification.levelTitle}
+            </Text>
+          ) : null}
+        </View>
+        <Feather name="chevron-right" size={22} color={COLORS.black} />
+      </Pressable>
 
       {data.lists.length > 0 ? (
         <Section title="Listes">
@@ -340,6 +368,23 @@ const styles = StyleSheet.create({
   avatar: { width: 56, height: 56, borderRadius: 28, borderWidth: 2, borderColor: '#fff', backgroundColor: '#555' },
   avatarEmpty: { alignItems: 'center', justifyContent: 'center' },
   avatarInit: { color: '#fff', fontSize: 23, fontFamily: FONTS.extraBold },
+  // Pastille de niveau (gamification) : coin bas-droit de l'avatar, jaune, bord blanc.
+  levelPill: {
+    position: 'absolute', bottom: -2, right: -2, minWidth: 22, height: 22, borderRadius: 11,
+    backgroundColor: COLORS.yellow, borderWidth: 2, borderColor: '#fff',
+    alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3,
+  },
+  levelPillText: { color: COLORS.black, fontSize: 11, fontFamily: FONTS.extraBold },
+  trophiesRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12, marginHorizontal: 16, marginTop: 4,
+    padding: 14, borderRadius: 12, borderWidth: 1, borderColor: COLORS.borderLight,
+  },
+  trophiesIconWrap: {
+    width: 38, height: 38, borderRadius: 19, backgroundColor: COLORS.yellow,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  trophiesTitle: { fontSize: 16, fontFamily: FONTS.extraBold },
+  trophiesSub: { fontSize: 13, fontFamily: FONTS.regular, color: COLORS.textMuted, marginTop: 1 },
   emptyRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16 },
   emptyPoster: { width: 64, aspectRatio: 2 / 3, borderRadius: 4, backgroundColor: '#eee', alignItems: 'center', justifyContent: 'center' },
   emptyRowText: { color: COLORS.textMuted, fontFamily: FONTS.regular, fontSize: 14 },

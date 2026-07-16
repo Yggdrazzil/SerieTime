@@ -68,3 +68,43 @@ export type ProfileStatsDto = {
   gamesCount: number;
   gamesPlayed: number;
 };
+
+// Gamification (spec 2026-07-16 §9/§10) — miroir de GET /api/gamification/me.
+export type BadgeDto = {
+  id: string;
+  label: string;
+  description: string;
+  // Nom d'icône Feather (parfois Ionicons côté catalogue serveur, ex. « game-controller »,
+  // « flame » : à faire passer par un fallback « award » côté rendu, cf. mobile/app/trophies.tsx).
+  icon: string;
+  tier: number; // 0 = pas encore débloqué, sinon index du palier atteint
+  tierCount: number;
+  unlockedAt: string | null;
+  progress: number;
+  nextThreshold: number | null; // null = palier max atteint
+};
+
+export type ChallengeDto = {
+  id: string;
+  label: string;
+  target: number;
+  progress: number;
+  completed: boolean;
+};
+
+export type GamificationMeDto = {
+  xp: number;
+  level: number;
+  levelTitle: string;
+  nextLevelXp: number;
+  currentStreak: number;
+  bestStreak: number;
+  badges: BadgeDto[];
+  challenges: ChallengeDto[];
+};
+
+export type LeaderboardRowDto = {
+  user: { id: string; displayName: string; avatarUrl: string | null; level: number };
+  weeklyXp: number;
+  rank: number;
+};

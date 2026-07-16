@@ -11,16 +11,20 @@ import { EmptyState, Loading, LoadError } from '@/components/ui';
 import { AppearItem, FadeSwitch, PressableScale } from '@/components/anim';
 
 type PublicUser = { id: string; displayName: string; avatarUrl: string | null; isFollowing?: boolean };
+// Gamification (spec 2026-07-16 §10) : items `kind: 'badge'` sans média associé.
 type FeedItem = {
-  kind: 'watch' | 'comment';
+  kind: 'watch' | 'comment' | 'badge';
   id: string;
   date: string;
   eventType: string;
   user: PublicUser;
-  media: { id: string; title: string; posterPath: string | null; type: string };
-  episode: { seasonNumber: number; episodeNumber: number; title: string } | null;
+  media?: { id: string; title: string; posterPath: string | null; type: string };
+  episode?: { seasonNumber: number; episodeNumber: number; title: string } | null;
   body?: string;
+  badge?: { id: string; label: string; tier: number };
 };
+
+const TIER_LABELS: Record<number, string> = { 1: 'bronze', 2: 'argent', 3: 'or', 4: 'platine' };
 
 function actionText(item: FeedItem): string {
   if (item.kind === 'comment') return 'a commenté';
@@ -82,13 +86,36 @@ function FeedTab() {
   return (
     <ScrollView contentContainerStyle={{ paddingVertical: 8, paddingBottom: 24 }}>
       {items.map((it, i) => {
+        // Déblocage de badge (gamification) : pas de média associé, rendu dédié.
+        if (it.kind === 'badge' && it.badge) {
+          const tierLabel = TIER_LABELS[it.badge.tier] ?? `palier ${it.badge.tier}`;
+          return (
+            <AppearItem key={`badge-${it.id}`} index={i}>
+              <View style={styles.feedRow}>
+                <Pressable style={styles.avatar} onPress={() => router.push(`/user/${it.user.id}`)}>
+                  <Text style={styles.avatarInit}>{it.user.displayName.slice(0, 1).toUpperCase()}</Text>
+                </Pressable>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.feedText}>
+                    <Text style={styles.feedName}>{it.user.displayName}</Text> a débloqué le badge{' '}
+                    <Text style={styles.feedMedia}>{it.badge.label}</Text> 🏆
+                  </Text>
+                  <Text style={styles.feedSub} numberOfLines={1}>
+                    Palier {tierLabel}
+                  </Text>
+                </View>
+              </View>
+            </AppearItem>
+          );
+        }
+        if (!it.media) return null;
         const poster = tmdbImage(it.media.posterPath, 'w185');
         return (
           <AppearItem key={`${it.kind}-${it.id}`} index={i}>
           <PressableScale
             style={styles.feedRow}
             scaleTo={0.98}
-            onPress={() => router.push(`/show/${it.media.id}${it.media.type === 'movie' ? '?type=movie' : ''}`)}
+            onPress={() => router.push(`/show/${it.media!.id}${it.media!.type === 'movie' ? '?type=movie' : ''}`)}
           >
             <Pressable style={styles.avatar} onPress={() => router.push(`/user/${it.user.id}`)}>
               <Text style={styles.avatarInit}>{it.user.displayName.slice(0, 1).toUpperCase()}</Text>
