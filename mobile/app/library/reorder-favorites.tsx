@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, tmdbImage } from '@/lib/api';
 import type { MediaDto } from '@/lib/types';
-import { COLORS, FONTS } from '@/lib/theme';
+import { COLORS, FONTS, YELLOW_TRACK } from '@/lib/theme';
 import { CELL_W, type LibraryShow } from '@/components/library';
 import { DragGrid } from '@/components/DragGrid';
 import { AnimatedFill, Pop } from '@/components/anim';
@@ -143,6 +143,6 @@ const styles = StyleSheet.create({
   posterBox: { flex: 1, borderRadius: 6, overflow: 'hidden', backgroundColor: COLORS.imagePlaceholder },
   posterEmpty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6, gap: 6 },
   posterTitle: { fontSize: 11, fontFamily: FONTS.bold, color: COLORS.textMuted, textAlign: 'center' },
-  barTrack: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 4, backgroundColor: 'rgba(255,212,0,0.30)' },
+  barTrack: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 4, backgroundColor: YELLOW_TRACK },
   barFill: { position: 'absolute', left: 0, bottom: 0, top: 0 },
 });

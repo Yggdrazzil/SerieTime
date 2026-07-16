@@ -80,6 +80,16 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
 
 ## Journal des modifications
 
+### 2026-07-17 — Claude : thème Sombre — TOUT le jaune unifié sur le jaune du logo
+- Suite de la demande pastilles : plusieurs jaunes cohabitaient en Sombre
+  (pastilles #FBAE00 vs FILTRES/œil/barres #FFD400). Le rôle `yellow` de la
+  palette SOMBRE passe au jaune du logo `#FBAE00` (FILTRES, œil, FAB, onglet
+  actif, coches, tirer-pour-actualiser… suivent automatiquement), ainsi que
+  la barre de progression « En cours » (`STATUS_BAR.watching` par thème) et
+  les pistes jaunes pâles codées en dur (nouvel export `YELLOW_TRACK`).
+  Clair/Sunset/Nuit inchangés — relevé au pixel (Sombre : œil, pastille et
+  barre à rgb(251,174,0) ; Clair : #FFD400 intact).
+
 ### 2026-07-17 — Claude : thème Sombre — pastilles de section en jaune du logo
 - Dans le thème SOMBRE uniquement : les pastilles « En cours », « À voir »,
   « Pas regardé depuis un moment », « Voulus »… passent au jaune du logo

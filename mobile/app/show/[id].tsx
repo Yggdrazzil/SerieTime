@@ -9,7 +9,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, tmdbImage } from '@/lib/api';
 import type { EpisodeDto, MediaDto } from '@/lib/types';
 import { episodeCode } from '@/lib/format';
-import { COLORS, RADIUS, SHADOW, FONTS, STATUS_BAR } from '@/lib/theme';
+import { COLORS, RADIUS, SHADOW, FONTS, STATUS_BAR, YELLOW_TRACK } from '@/lib/theme';
 import { TopTabs, CheckCircle, Loading, LoadError, EmptyState } from '@/components/ui';
 import { AnimatedFill, Pop, SlideUpBar, FadeSwitch, PressableScale } from '@/components/anim';
 import { Stars } from '@/components/Stars';
@@ -1421,7 +1421,7 @@ const styles = StyleSheet.create({
   progressTrack: {
     position: 'absolute', left: 0, right: 0, bottom: 0, height: 5,
     borderBottomLeftRadius: 5, borderBottomRightRadius: 5, overflow: 'hidden',
-    backgroundColor: 'rgba(255,212,0,0.30)', // piste jaune pâle toujours visible (réf. 35)
+    backgroundColor: YELLOW_TRACK, // piste jaune pâle toujours visible (réf. 35)
   },
   progressFill: { position: 'absolute', left: 0, bottom: 0, top: 0, borderBottomLeftRadius: 5 },
   // Barre de progression globale de la série, au bas de la bannière (TV Time).
