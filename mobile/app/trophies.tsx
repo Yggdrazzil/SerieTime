@@ -308,7 +308,7 @@ function TrophiesSkeleton() {
 const styles = StyleSheet.create({
   list: { padding: 12, gap: 12, paddingBottom: 32 },
   card: { backgroundColor: COLORS.white, borderRadius: 12, padding: 18, borderWidth: 1, borderColor: COLORS.borderLight },
-  cardTitle: { fontSize: 19, fontFamily: FONTS.extraBold },
+  cardTitle: { fontSize: 19, fontFamily: FONTS.extraBold, color: COLORS.text },
 
   levelWrap: { alignItems: 'center', gap: 6 },
   levelCircle: {
@@ -326,7 +326,7 @@ const styles = StyleSheet.create({
   streakSub: { fontSize: 13, fontFamily: FONTS.regular, color: COLORS.textMuted, marginTop: 2 },
 
   challengeHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
-  challengeLabel: { flex: 1, fontSize: 14, fontFamily: FONTS.semiBold },
+  challengeLabel: { flex: 1, fontSize: 14, fontFamily: FONTS.semiBold, color: COLORS.text },
   challengeCount: { fontSize: 13, fontFamily: FONTS.bold, color: COLORS.textMuted },
   challengeCheck: { width: 20, height: 20, borderRadius: 10, backgroundColor: COLORS.green, alignItems: 'center', justifyContent: 'center' },
   challengeTrack: { height: 8, borderRadius: 999, backgroundColor: COLORS.chipGrey, marginTop: 8, overflow: 'hidden' },
@@ -336,7 +336,7 @@ const styles = StyleSheet.create({
   badgeCell: { width: '33.333%', paddingVertical: 10, paddingHorizontal: 4 },
   badgePressable: { alignItems: 'center' },
   badgeCircle: { width: 58, height: 58, borderRadius: 29, alignItems: 'center', justifyContent: 'center' },
-  badgeLabel: { fontSize: 12, fontFamily: FONTS.bold, textAlign: 'center', marginTop: 6 },
+  badgeLabel: { fontSize: 12, fontFamily: FONTS.bold, textAlign: 'center', marginTop: 6, color: COLORS.text },
   badgeProgress: { fontSize: 10.5, fontFamily: FONTS.regular, color: COLORS.textMuted, textAlign: 'center', marginTop: 2 },
 
   modalOverlay: { flex: 1, backgroundColor: COLORS.overlay, alignItems: 'center', justifyContent: 'center', padding: 30 },
@@ -359,6 +359,6 @@ const styles = StyleSheet.create({
   leaderAvatar: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#20202a' },
   leaderAvatarEmpty: { alignItems: 'center', justifyContent: 'center' },
   leaderAvatarInit: { color: '#fff', fontSize: 15, fontFamily: FONTS.extraBold },
-  leaderName: { flex: 1, fontSize: 15, fontFamily: FONTS.bold },
+  leaderName: { flex: 1, fontSize: 15, fontFamily: FONTS.bold, color: COLORS.text },
   leaderXp: { fontSize: 14, fontFamily: FONTS.extraBold },
 });

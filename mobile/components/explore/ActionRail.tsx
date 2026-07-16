@@ -22,6 +22,7 @@ function RailButton({
   count,
   onPress,
   label,
+  caption,
   selected,
 }: {
   icon: keyof typeof Feather.glyphMap;
@@ -30,6 +31,7 @@ function RailButton({
   count?: number;
   onPress: () => void;
   label: string;
+  caption: string;
   selected?: boolean;
 }) {
   const color = active ? activeColor ?? COLORS.yellow : '#fff';
@@ -43,9 +45,12 @@ function RailButton({
       accessibilityState={selected != null ? { selected } : undefined}
     >
       <PopIn key={String(active)} style={styles.iconWrap}>
-        <Feather name={icon} size={30} color={color} />
+        <Feather name={icon} size={28} color={color} />
       </PopIn>
-      {count != null ? <Text style={styles.count}>{formatCount(count)}</Text> : null}
+      {count != null && count > 0 ? <Text style={styles.count}>{formatCount(count)}</Text> : null}
+      {/* Mini-libellé permanent : cœur/œil/pouce n'étaient pas compréhensibles
+          sans lui (retour utilisateur). Coloré quand l'action est active. */}
+      <Text style={[styles.caption, active ? { color } : null]}>{caption}</Text>
     </Pressable>
   );
 }
@@ -94,9 +99,9 @@ export function ActionRail({
         count={state.likes}
         onPress={onLike}
         label={state.liked ? 'Retirer de la liste à voir' : 'Ajouter à la liste à voir'}
+        caption="À voir"
         selected={state.liked}
       />
-      <RailButton icon="thumbs-down" activeColor={COLORS.red} onPress={onDislike} label="Je n'aime pas" />
       <RailButton
         icon="eye"
         active={state.watched}
@@ -104,20 +109,23 @@ export function ActionRail({
         count={state.watchedCount}
         onPress={onWatched}
         label={state.watched ? 'Marquer comme non vu' : 'Marquer comme vu'}
+        caption="Déjà vu"
         selected={state.watched}
       />
-      <RailButton icon="message-circle" count={state.comments} onPress={onComment} label="Commentaires" />
-      <RailButton icon="share-2" onPress={onShare} label="Partager" />
+      <RailButton icon="thumbs-down" activeColor={COLORS.red} onPress={onDislike} label="Pas intéressé, passer" caption="Passer" />
+      <RailButton icon="message-circle" count={state.comments} onPress={onComment} label="Commentaires" caption="Avis" />
+      <RailButton icon="share-2" onPress={onShare} label="Partager" caption="Partager" />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  rail: { position: 'absolute', right: 10, bottom: 120, alignItems: 'center', gap: 20 },
+  rail: { position: 'absolute', right: 10, bottom: 96, alignItems: 'center', gap: 16 },
   posterBtn: { marginBottom: 4 },
   poster: { width: 46, height: 46, borderRadius: 23, borderWidth: 2, borderColor: '#fff', backgroundColor: '#26262e' },
   posterEmpty: { alignItems: 'center', justifyContent: 'center' },
   btn: { alignItems: 'center', gap: 4 },
   iconWrap: { alignItems: 'center', justifyContent: 'center' },
   count: { color: '#fff', fontFamily: FONTS.bold, fontSize: 12, textShadowColor: 'rgba(0,0,0,0.6)', textShadowRadius: 3 },
+  caption: { color: '#fff', fontFamily: FONTS.semiBold, fontSize: 10, textShadowColor: 'rgba(0,0,0,0.7)', textShadowRadius: 3, marginTop: -2 },
 });

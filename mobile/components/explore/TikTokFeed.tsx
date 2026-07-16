@@ -40,7 +40,6 @@ export function TikTokFeed() {
   const [activeIndex, setActiveIndex] = useState(0); // carte actuellement à l'écran
   const [commentBumps, setCommentBumps] = useState<Record<string, number>>({}); // +commentaires publiés par carte
   const [endRefreshing, setEndRefreshing] = useState(false); // carte de fin atteinte → nouveau tirage
-  const [detailOpen, setDetailOpen] = useState(false); // overlay détails ouvert (masque la barre commentaire)
   const dryRef = useRef(0); // nombre de fetchs consécutifs sans nouveauté
   const endBusy = useRef(false); // anti double-déclenchement du tirage de fin
 
@@ -198,7 +197,6 @@ export function TikTokFeed() {
                 onOpenComments={setCommentsFor}
                 onAdvance={() => advance(index)}
                 onInvalidateLibrary={invalidateLibrary}
-                onDetailToggle={setDetailOpen}
                 commentBump={commentBumps[keyOf(item)] ?? 0}
               />
             )}
@@ -253,20 +251,9 @@ export function TikTokFeed() {
         />
       </View>
 
-      {/* Barre « Ajouter un commentaire » (comme TikTok) : cible la carte active.
-          Masquée quand l'overlay détails est ouvert (elle recouvrait son texte). */}
-      {deck.length > 0 && !detailOpen ? (
-        <Pressable
-          style={[styles.commentBar, { bottom: insets.bottom + 12 }]}
-          onPress={() => {
-            const current = deck[activeIndex];
-            if (current) setCommentsFor(current);
-          }}
-        >
-          <Feather name="message-circle" size={18} color="rgba(255,255,255,0.9)" />
-          <Text style={styles.commentBarText}>Ajouter un commentaire…</Text>
-        </Pressable>
-      ) : null}
+      {/* La barre « Ajouter un commentaire » a été retirée : redondante avec le
+          bouton Avis du rail (retour utilisateur 2026-07-16), elle chargeait le bas
+          de l'écran et chevauchait l'overlay détails. */}
 
       <CommentsSheet
         item={commentsFor}
@@ -291,19 +278,6 @@ const styles = StyleSheet.create({
   chipOn: { backgroundColor: COLORS.yellow },
   chipText: { fontFamily: FONTS.extraBold, fontSize: 12, letterSpacing: 0.2, color: '#fff' },
   chipTextOn: { color: COLORS.onAccent },
-  commentBar: {
-    position: 'absolute',
-    left: 14,
-    right: 84,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: 'rgba(255,255,255,0.16)',
-    borderRadius: 999,
-    paddingHorizontal: 16,
-    paddingVertical: 11,
-  },
-  commentBarText: { color: 'rgba(255,255,255,0.9)', fontFamily: FONTS.regular, fontSize: 14 },
   endCard: { alignItems: 'center', justifyContent: 'center', gap: 14, backgroundColor: '#0d0d12', paddingHorizontal: 40 },
   endTitle: { color: '#fff', fontSize: 22, fontFamily: FONTS.extraBold },
   endMsg: { color: 'rgba(255,255,255,0.7)', fontFamily: FONTS.regular, fontSize: 14, textAlign: 'center' },

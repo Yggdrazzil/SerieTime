@@ -394,7 +394,7 @@ const styles = StyleSheet.create({
     width: 38, height: 38, borderRadius: 19, backgroundColor: COLORS.yellow,
     alignItems: 'center', justifyContent: 'center',
   },
-  trophiesTitle: { fontSize: 16, fontFamily: FONTS.extraBold },
+  trophiesTitle: { fontSize: 16, fontFamily: FONTS.extraBold, color: COLORS.text },
   trophiesSub: { fontSize: 13, fontFamily: FONTS.regular, color: COLORS.textMuted, marginTop: 1 },
   emptyRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16 },
   emptyPoster: { width: 64, aspectRatio: 2 / 3, borderRadius: 4, backgroundColor: '#eee', alignItems: 'center', justifyContent: 'center' },
