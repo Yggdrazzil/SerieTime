@@ -129,6 +129,7 @@ export const KNOWN_ADULT_TMDB_IDS: ReadonlySet<string> = new Set<string>([
   '233071', //  変態 (sans mot-clé)
   '306449', //  変態植物倶楽部 (sans mot-clé)
   '1262147', // 変態肉濡れバイブ
+  '898237', //  変態牝犬調教 (JAV, mot-clé parasite)
 ]);
 
 // `true` si l'id TMDb est explicitement banni (contenu adulte confirmé).
