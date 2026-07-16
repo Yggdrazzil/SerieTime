@@ -15,6 +15,7 @@ export type IgdbGame = {
   platforms?: { name: string }[];
   involved_companies?: { developer: boolean; publisher: boolean; company: { name: string } }[];
   game_modes?: { name: string }[];
+  rating?: number; // note des JOUEURS IGDB (0-100)
   total_rating?: number;
   total_rating_count?: number;
   release_dates?: { date?: number; human?: string; platform?: { name: string } }[];
@@ -57,7 +58,7 @@ const FIELDS =
   'fields name,summary,first_release_date,cover.image_id,artworks.image_id,genres.name,' +
   'platforms.name,involved_companies.developer,involved_companies.publisher,involved_companies.company.name,' +
   'game_modes.name,total_rating,total_rating_count,release_dates.date,release_dates.human,release_dates.platform.name,' +
-  'dlcs.name,expansions.name,videos.video_id,videos.name,screenshots.image_id,game_type,version_parent,parent_game,aggregated_rating,themes.id,themes.name,hypes';
+  'dlcs.name,expansions.name,videos.video_id,videos.name,screenshots.image_id,game_type,version_parent,parent_game,rating,aggregated_rating,themes.id,themes.name,hypes';
 
 // « Vrai jeu » pour la recherche/découverte : exclut les rééditions (Deluxe,
 // GOTY… = version_parent), les DLC/extensions/bundles/updates (game_type 1, 2,

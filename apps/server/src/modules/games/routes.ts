@@ -264,6 +264,7 @@ export async function gamesRoutes(app: FastifyInstance): Promise<void> {
     // par igdbQuery) — pas de nouvelle colonne DB pour ça.
     let videoId: string | null = null;
     let criticScore: number | null = null;
+    let playerScore: number | null = null;
     // Éditions (Deluxe, GOTY…) et extensions/DLC du jeu — section à défilement
     // latéral de la fiche (façon app Xbox), croisée avec la bibliothèque.
     type RelatedOut = {
@@ -275,8 +276,10 @@ export async function gamesRoutes(app: FastifyInstance): Promise<void> {
     if (fresh!.igdbId) {
       const g = await igdbGame(Number(fresh!.igdbId));
       videoId = g?.videos?.[0]?.video_id ?? null;
-      // Note presse agrégée IGDB (0-100) — équivalent le plus proche de Metacritic.
+      // Deux notes IGDB sur le MÊME barème /100 : joueurs (rating) et presse
+      // (aggregated_rating, ≈ Metacritic). Fini l'étoile combinée en doublon.
       criticScore = typeof g?.aggregated_rating === 'number' ? Math.round(g.aggregated_rating) : null;
+      playerScore = typeof g?.rating === 'number' ? Math.round(g.rating) : null;
       // Rattrapage : les jeux importés avant le marquage isDlc sont recalés
       // ici (une édition déjà en base disparaît alors de la recherche).
       if (g && fresh!.game && fresh!.game.isDlc !== !isMainGame(g)) {
@@ -312,6 +315,7 @@ export async function gamesRoutes(app: FastifyInstance): Promise<void> {
       genres: fresh!.genres ?? null,
       isFavorite: status?.isFavorite ?? false,
       videoId,
+      playerScore,
       criticScore,
       related,
     };

@@ -9,7 +9,6 @@ import { api, tmdbImage } from '@/lib/api';
 import { COLORS, FONTS } from '@/lib/theme';
 import { Loading, LoadError } from '@/components/ui';
 import { Pop, PressableScale, SlideUpBar } from '@/components/anim';
-import { Stars } from '@/components/Stars';
 import { shareMedia } from '@/lib/share';
 import { FicheSkeleton } from '@/components/FicheSkeleton';
 import { ReportModal } from '@/components/ReportModal';
@@ -38,7 +37,8 @@ type GameDetailDto = {
   genres: string | null;
   isFavorite: boolean;
   videoId: string | null;
-  // Note presse agrégée IGDB (0-100) — équivalent le plus proche de Metacritic.
+  // Notes IGDB sur le même barème /100 : joueurs (rating) et presse (aggregated).
+  playerScore: number | null;
   criticScore: number | null;
   // Éditions (Deluxe, GOTY…) et extensions/DLC — section latérale de la fiche.
   related?: RelatedGameDto[];
@@ -210,16 +210,18 @@ export default function GameDetail() {
             {/* 1 ligne comme la fiche série : la 2e ligne tomberait en blanc
                 sur fond blanc (le bloc chevauche la bannière). */}
             <Text style={styles.title} numberOfLines={1}>{game.title}</Text>
-            {game.voteAverage ? <Stars rating10={game.voteAverage} size={19} /> : null}
-            {/* Infos compactes À CÔTÉ de la jaquette (remplit le vide à droite) :
-                Genre / Sortie / Note presse — retirées du factList du bas pour
-                ne pas doubler. Sous les étoiles = déjà sur fond blanc. */}
+            {/* Infos compactes À CÔTÉ de la jaquette (remplit le vide à droite).
+                Deux notes DISTINCTES sur le MÊME barème /100 (décision 2026-07-17,
+                façon jv.com) — plus d'étoiles combinées en doublon. */}
             <View style={styles.headFacts}>
               {game.genres ? (
                 <Text style={styles.headFact} numberOfLines={2}><Text style={styles.factLabel}>Genre : </Text>{game.genres}</Text>
               ) : null}
               {game.releaseDate ? (
                 <Text style={styles.headFact}><Text style={styles.factLabel}>Sortie le </Text>{shortDateFr(game.releaseDate)}</Text>
+              ) : null}
+              {game.playerScore ? (
+                <Text style={styles.headFact}><Text style={styles.factLabel}>Note joueurs : </Text>{game.playerScore}/100</Text>
               ) : null}
               {game.criticScore ? (
                 <Text style={styles.headFact}><Text style={styles.factLabel}>Note presse : </Text>{game.criticScore}/100</Text>
