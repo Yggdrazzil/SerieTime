@@ -29,14 +29,28 @@ export type IgdbGame = {
   parent_game?: number;
   // Note presse agrégée (0-100) — le plus proche d'un Metacritic via IGDB.
   aggregated_rating?: number;
+  // Thèmes IGDB : sert à exclure le thème « Erotic » (id 42) — contenu sexuel.
+  themes?: { id: number; name?: string }[];
 };
+
+// Thème IGDB « Erotic » = id 42. Clause Apicalypse ajoutée à chaque `where` de
+// découverte/recherche : on garde les jeux SANS thème (`themes = null`).
+const SAFE_THEMES = '(themes != (42) | themes = null)';
+
+// Garde applicative (ceinture + bretelles au filtre Apicalypse) : exclut un jeu
+// dont un thème est « Erotic » (id 42 ou nom contenant « erotic »/« sexual »).
+// Appliquée APRÈS isMainGame dans les listes de découverte/recherche.
+export function isSafeGame(g: IgdbGame): boolean {
+  if (!g.themes || g.themes.length === 0) return true;
+  return !g.themes.some((t) => t.id === 42 || (t.name != null && /erotic|sexual/i.test(t.name)));
+}
 
 // Champs demandés à IGDB (Apicalypse). Réutilisé par search/game/popular/upcoming.
 const FIELDS =
   'fields name,summary,first_release_date,cover.image_id,artworks.image_id,genres.name,' +
   'platforms.name,involved_companies.developer,involved_companies.publisher,involved_companies.company.name,' +
   'game_modes.name,total_rating,total_rating_count,release_dates.date,release_dates.human,release_dates.platform.name,' +
-  'dlcs.name,expansions.name,videos.video_id,videos.name,screenshots.image_id,game_type,version_parent,parent_game,aggregated_rating';
+  'dlcs.name,expansions.name,videos.video_id,videos.name,screenshots.image_id,game_type,version_parent,parent_game,aggregated_rating,themes.id,themes.name';
 
 // « Vrai jeu » pour la recherche/découverte : exclut les rééditions (Deluxe,
 // GOTY… = version_parent), les DLC/extensions/bundles/updates (game_type 1, 2,
@@ -58,11 +72,13 @@ export function igdbImageUrl(imageId: string, size = 't_cover_big'): string {
 export function searchQueryBody(q: string): string {
   // NB : le champ IGDB `category` a été déprécié (migré vers `game_type`) et
   // `where category = 0` ne matche plus RIEN → on ne filtre plus par type ici.
-  return `search "${q.replace(/"/g, '')}"; ${FIELDS}; limit 30;`;
+  return `search "${q.replace(/"/g, '')}"; ${FIELDS}; where ${SAFE_THEMES}; limit 30;`;
 }
 
 export async function igdbSearch(q: string): Promise<IgdbGame[]> {
-  return ((await igdbQuery<IgdbGame[]>('games', searchQueryBody(q), DAY)) ?? []).filter(isMainGame);
+  return ((await igdbQuery<IgdbGame[]>('games', searchQueryBody(q), DAY)) ?? [])
+    .filter(isMainGame)
+    .filter(isSafeGame);
 }
 
 export async function igdbGame(id: number): Promise<IgdbGame | null> {
@@ -79,8 +95,8 @@ export async function igdbGame(id: number): Promise<IgdbGame | null> {
 const offsetClause = (offset?: number) => (offset ? ` offset ${offset};` : '');
 
 export async function igdbPopular(opts: { offset?: number } = {}): Promise<IgdbGame[]> {
-  const body = `${FIELDS}; where total_rating_count > 200; sort total_rating desc; limit 50;${offsetClause(opts.offset)}`;
-  return ((await igdbQuery<IgdbGame[]>('games', body, DAY)) ?? []).filter(isMainGame);
+  const body = `${FIELDS}; where total_rating_count > 200 & ${SAFE_THEMES}; sort total_rating desc; limit 50;${offsetClause(opts.offset)}`;
+  return ((await igdbQuery<IgdbGame[]>('games', body, DAY)) ?? []).filter(isMainGame).filter(isSafeGame);
 }
 
 // Sorties récentes bien notées (2 dernières années) : élargit le vivier du
@@ -88,25 +104,27 @@ export async function igdbPopular(opts: { offset?: number } = {}): Promise<IgdbG
 export async function igdbRecent(opts: { offset?: number } = {}): Promise<IgdbGame[]> {
   const now = Math.floor(Date.now() / 1000);
   const twoYearsAgo = now - 2 * 365 * 86_400;
-  const body = `${FIELDS}; where first_release_date > ${twoYearsAgo} & first_release_date < ${now} & total_rating_count > 20; sort total_rating desc; limit 50;${offsetClause(opts.offset)}`;
-  return ((await igdbQuery<IgdbGame[]>('games', body, DAY)) ?? []).filter(isMainGame);
+  const body = `${FIELDS}; where first_release_date > ${twoYearsAgo} & first_release_date < ${now} & total_rating_count > 20 & ${SAFE_THEMES}; sort total_rating desc; limit 50;${offsetClause(opts.offset)}`;
+  return ((await igdbQuery<IgdbGame[]>('games', body, DAY)) ?? []).filter(isMainGame).filter(isSafeGame);
 }
 
 // Vivier par genres IGDB (profil de goût du flux Explorer jeux). Corps exposé
 // pour les tests (pré-remplissage du cache ApiCache adressé par ce corps).
 export function genresQueryBody(genreIds: number[], opts: { offset?: number } = {}): string {
-  return `${FIELDS}; where genres = (${genreIds.join(',')}) & total_rating_count > 50; sort total_rating desc; limit 50;${offsetClause(opts.offset)}`;
+  return `${FIELDS}; where genres = (${genreIds.join(',')}) & total_rating_count > 50 & ${SAFE_THEMES}; sort total_rating desc; limit 50;${offsetClause(opts.offset)}`;
 }
 
 export async function igdbByGenres(genreIds: number[], opts: { offset?: number } = {}): Promise<IgdbGame[]> {
   if (genreIds.length === 0) return [];
-  return ((await igdbQuery<IgdbGame[]>('games', genresQueryBody(genreIds, opts), DAY)) ?? []).filter(isMainGame);
+  return ((await igdbQuery<IgdbGame[]>('games', genresQueryBody(genreIds, opts), DAY)) ?? [])
+    .filter(isMainGame)
+    .filter(isSafeGame);
 }
 
 export async function igdbUpcoming(): Promise<IgdbGame[]> {
   const now = Math.floor(Date.now() / 1000);
-  const body = `${FIELDS}; where first_release_date > ${now}; sort first_release_date asc; limit 30;`;
-  return ((await igdbQuery<IgdbGame[]>('games', body, DAY)) ?? []).filter(isMainGame);
+  const body = `${FIELDS}; where first_release_date > ${now} & ${SAFE_THEMES}; sort first_release_date asc; limit 30;`;
+  return ((await igdbQuery<IgdbGame[]>('games', body, DAY)) ?? []).filter(isMainGame).filter(isSafeGame);
 }
 
 export function igdbToMedia(g: IgdbGame) {

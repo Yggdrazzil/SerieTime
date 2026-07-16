@@ -10,7 +10,10 @@ export function tmdbEnabled(): boolean {
 // Spec §16.4 : jamais d'appel live à chaque affichage — cache ApiCache obligatoire.
 async function cachedFetch<T>(path: string, params: Record<string, string>, ttlMs: number): Promise<T | null> {
   if (!tmdbEnabled()) return null;
-  const search = new URLSearchParams({ language: env.DEFAULT_LANGUAGE, ...params });
+  // include_adult=false par défaut sur TOUTES les requêtes (TMDb ignore le
+  // paramètre là où il ne s'applique pas). Ceinture ; les bretelles = filtrage
+  // `adult === true` côté mapping (search/feed).
+  const search = new URLSearchParams({ include_adult: 'false', language: env.DEFAULT_LANGUAGE, ...params });
   if (env.TMDB_API_KEY) search.set('api_key', env.TMDB_API_KEY);
   const cacheKey = `${path}?${search.toString()}`;
 
@@ -83,6 +86,8 @@ export type TmdbSearchResult = {
   genre_ids?: number[];
   original_language?: string;
   origin_country?: string[];
+  // Contenu pour adultes (porno) : exclu du flux et de la recherche.
+  adult?: boolean;
 };
 
 export async function tmdbSearch(

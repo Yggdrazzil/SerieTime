@@ -5,7 +5,7 @@ import { requireAuth } from '../auth/routes.js';
 import { mediaTitle, serializeMedia } from '../media/serialize.js';
 import { getUserLang } from '../media/userLang.js';
 import { notifyFollowers, notifyUser } from './notify.js';
-import { BADGES } from '@serietime/core';
+import { BADGES, findBlockedTerm } from '@serietime/core';
 import { scheduleRecompute } from '../gamification/service.js';
 
 type PublicUser = { id: string; displayName: string; avatarUrl: string | null; isPrivate: boolean };
@@ -304,6 +304,17 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
         parentId: z.string().optional(),
       })
       .parse(request.body);
+    // Modération : rejette les commentaires ET réponses (même route) contenant
+    // des termes haineux/gravement injurieux. On ne journalise QUE la catégorie,
+    // jamais le texte complet du commentaire.
+    const blocked = findBlockedTerm(body.body);
+    if (blocked) {
+      request.log.info({ category: blocked.category }, 'comment blocked by moderation');
+      return reply.code(400).send({
+        error: 'comment_blocked',
+        message: 'Ce commentaire enfreint les règles de la communauté et ne peut pas être publié.',
+      });
+    }
     const media = await prisma.media.findUnique({ where: { id } });
     if (!media) return reply.code(404).send({ error: 'not_found' });
     if (body.episodeId) {

@@ -34,6 +34,8 @@ export default function CommentsScreen() {
     setReplyText,
     post,
     postReply,
+    postError,
+    clearPostError,
     heart,
     remove,
     shareComment,
@@ -43,9 +45,11 @@ export default function CommentsScreen() {
     if (!text.trim() || busy) return;
     setBusy(true);
     try {
-      await post(text);
-      setText('');
-      setComposer(false);
+      const ok = await post(text);
+      if (ok) {
+        setText('');
+        setComposer(false);
+      }
     } finally {
       setBusy(false);
     }
@@ -114,10 +118,12 @@ export default function CommentsScreen() {
             placeholder="Partager un avis…"
             placeholderTextColor={COLORS.textMuted}
             value={text}
-            onChangeText={setText}
+            onChangeText={(t) => { setText(t); if (postError) clearPostError(); }}
             multiline
             autoFocus
           />
+          {/* Message de modération : commentaire rejeté (règles communauté). */}
+          {postError ? <Text style={styles.blocked}>{postError}</Text> : null}
           <Pressable style={[styles.send, (!text.trim() || busy) && { opacity: 0.4 }]} onPress={submit} disabled={!text.trim() || busy}>
             {busy ? <ActivityIndicator color={COLORS.onAccent} /> : <Text style={styles.sendText}>PUBLIER</Text>}
           </Pressable>
@@ -140,6 +146,7 @@ const styles = StyleSheet.create({
   sheet: { position: 'absolute', left: 8, right: 8, bottom: 8, backgroundColor: COLORS.white, borderRadius: 14, padding: 16 },
   sheetTitle: { color: COLORS.text, fontSize: 18, fontFamily: FONTS.extraBold, marginBottom: 10 },
   input: { color: COLORS.text, borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, minHeight: 80, padding: 12, fontFamily: FONTS.regular, fontSize: 16, textAlignVertical: 'top' },
+  blocked: { fontFamily: FONTS.regular, fontSize: 13, color: COLORS.red, marginTop: 10 },
   send: { alignSelf: 'flex-end', marginTop: 12, backgroundColor: COLORS.yellow, borderRadius: 999, paddingHorizontal: 22, paddingVertical: 10 },
   sendText: { color: COLORS.onAccent, fontFamily: FONTS.extraBold, fontSize: 13, letterSpacing: 0.4 },
 });

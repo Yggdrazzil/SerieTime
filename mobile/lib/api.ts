@@ -5,10 +5,14 @@ import { CONFIGURED_SERVER_URL } from './config';
 export class ApiError extends Error {
   status: number;
   code: string;
-  constructor(status: number, code: string) {
+  // Message lisible renvoyé par le serveur (champ `message`), quand il existe —
+  // ex. modération d'un commentaire bloqué. `undefined` sinon.
+  serverMessage?: string;
+  constructor(status: number, code: string, serverMessage?: string) {
     super(code);
     this.status = status;
     this.code = code;
+    this.serverMessage = serverMessage;
   }
 }
 
@@ -42,7 +46,8 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     }
     throw new ApiError(401, (data && data.error) || 'unauthorized');
   }
-  if (!res.ok) throw new ApiError(res.status, (data && data.error) || 'request_failed');
+  if (!res.ok)
+    throw new ApiError(res.status, (data && data.error) || 'request_failed', data && data.message);
   return data as T;
 }
 

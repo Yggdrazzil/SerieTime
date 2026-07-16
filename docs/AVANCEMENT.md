@@ -6,7 +6,7 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
-Dernière mise à jour : **2026-07-16** (Claude) — Flux Explorer réellement varié et personnalisé : mémoire des items servis (`ExploreImpression`, 3 j) + profil de goût par genres (TMDb/IGDB) + viviers élargis (pages 1..8, 2 décennies, offsets IGDB aléatoires)
+Dernière mise à jour : **2026-07-16** (Claude) — Modération en deux volets : filtrage des commentaires haineux/gravement injurieux (module pur multilingue) + exclusion du contenu pour adultes des suggestions (TMDb `adult`, IGDB thème « Erotic »)
 
 ---
 
@@ -19,7 +19,7 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
 
 - **Branche de référence : `main`** (à cloner / puller). Le développement passe
   par des branches courtes fusionnées via pull request.
-- Tests : `pnpm test` (194 tests au 2026-07-16 : 62 core + 132 serveur).
+- Tests : `pnpm test` (235 tests au 2026-07-16 : 99 core + 136 serveur).
 - Lancement local : voir `README.md` (serveur `pnpm dev:server`, mobile `npx expo start -c`).
 
 ## État par domaine
@@ -55,6 +55,8 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
 | Gamification — serveur (XP, badges, streaks, défis, classement) | ✅ Fait | Modèles `UserProgress`/`UserBadge`/`UserChallenge`, `modules/gamification/` (recompute idempotent débouncé + backfill au boot), `GET /api/gamification/me` + `/leaderboard`, items `badge` dans le fil social, XP rétroactif à l'import |
 | Gamification — mobile (page Trophées, toasts, pastille niveau) | ✅ Fait | Page `/trophies` (niveau + XP, streak, défis du mois, grille de badges à paliers, classement hebdo), pastille niveau + rangée Trophées sur le profil, items badge dans le fil, toasts de déblocage globaux (`GamificationToastHost`) |
 | Flux Explorer — variété + personnalisation (serveur) | ✅ Fait | `GET /api/explore/feed` + `GET /api/explore/games` : mémoire des impressions (`ExploreImpression`, exclusion 3 j, garde anti-famine, purge 14 j), profil de goût par genres (favoris ×3, watchlist/en cours ×2, terminés ×1, dislikés ×−2) → viviers TMDb Discover/IGDB par genre, recs tirées parmi 30 graines, pages 1..8, 2 décennies, offsets IGDB aléatoires (`modules/explore/`, testé) |
+| Modération — commentaires (haine/insultes graves) | ✅ Fait | Module pur `packages/core/src/moderation/` (blocklist curée multilingue fr/en/es/de/it/pt × racisme/antisémitisme/homophobie/sexisme/injures sexuelles/violence + filtre tolérant leetspeak/répétitions/séparateurs/accents, frontière de mot pour termes courts) ; `POST /api/media/:id/comments` rejette (400 `comment_blocked`) commentaires **et** réponses ; mobile affiche le message renvoyé (testé, 0 faux positif sur la batterie légitime) |
+| Modération — suggestions (contenu adulte / porno) | ✅ Fait | TMDb : `include_adult=false` par défaut sur toutes les requêtes + exclusion `adult === true` du flux Explorer et de la recherche ; IGDB : exclusion du thème « Erotic » (id 42) sur chaque clause `where` de découverte/recherche + garde `isSafeGame` (testé) |
 | Langue de contenu par utilisateur | ✅ Fait | Paramètres > Langue (fr/en/es/de/it/pt) : titres/résumés des séries et films traduits partout (À voir, À venir, bibliothèque, profil, fiches, recherche, explorer, fil social, listes) via TMDb `/translations` (`Media.translationsJson`, une requête par média, backfill en fond au changement de langue) ; jeux IGDB hors périmètre (nom international) |
 
 ## Prochaines étapes (par priorité)
@@ -74,6 +76,41 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
 6. Publication native optionnelle (EAS Build APK, puis stores).
 
 ## Journal des modifications
+
+### 2026-07-16 — Modération en deux volets (commentaires haineux + contenu adulte)
+Deux garde-fous de communauté, sans changement visuel hors le message d'erreur.
+- **Volet A — Commentaires (haine/insultes graves, multilingue).** Nouveau
+  module PUR `packages/core/src/moderation/` :
+  - `blocklist.ts` : liste **curée** de slurs/injures haineuses, organisée par
+    catégorie (`racism`, `antisemitism`, `homophobia`, `sexism`, `sexual_slur`,
+    `violent_slur`) et couvrant fr/en/es/de/it/pt. Volontairement **sans termes
+    ambigus** (exclus : « negro » = couleur ES/PT/IT, « chink » idiome EN, « fag »
+    = cigarette UK, « viado » ≈ « enviado » PT, « retard » = en retard FR…).
+    Extensible.
+  - `filter.ts` : `normalizeForModeration` (minuscules, accents NFD, leetspeak
+    `0→o 1→i 3→e 4→a 5→s 7→t @→a $→s`, répétitions réduites, séparateurs → espace)
+    + `findBlockedTerm` (frontière de mot pour termes < 5 lettres → évite
+    « Scunthorpe »/« assassin » ; sous-chaîne pour slurs longs ; patterns
+    tolérants aux répétitions).
+  - Serveur : `POST /api/media/:id/comments` (commentaires **et** réponses, même
+    route) rejette en `400 { error: 'comment_blocked', message }` avant création ;
+    seule la **catégorie** est journalisée, jamais le texte.
+  - Mobile : `useComments` remonte le message de modération (`postError`) ;
+    `CommentsSheet` et `app/comments/[id]` l'affichent sous la barre de saisie ;
+    `ApiError.serverMessage` expose le `message` serveur.
+- **Volet B — Suggestions (porno/hentai/contenu sexuel).**
+  - TMDb : `include_adult=false` par défaut dans `cachedFetch` (toutes requêtes)
+    + exclusion `adult === true` dans le mapping du flux Explorer (recommandations
+    + viviers) et de la recherche (`TmdbSearchResult.adult` ajouté).
+  - IGDB : exclusion du thème **« Erotic » (id 42)** ajoutée à chaque clause
+    `where` (recherche/populaire/récents/genres/upcoming), `themes.id,themes.name`
+    ajoutés aux `FIELDS`, garde `isSafeGame(g)` appliquée après `isMainGame`
+    (le champ déprécié `category` n'est pas touché).
+- **Tests** : +37 core (chaque catégorie × plusieurs langues, contournements
+  leet/répétitions/séparateurs/accents, batterie de non-régression à **0 faux
+  positif**) et +4 serveur (rejet commentaire/réponse, exclusion TMDb `adult`,
+  exclusion IGDB thème 42). Total **235** (99 core + 136 serveur), les 194
+  existants intacts ; `typecheck` serveur + mobile OK.
 
 ### 2026-07-16 — Checkup complet : sécurité, correction, perf, infra (invisible)
 Lot de durcissement issu d'un audit à 4 volets, **sans changement visible** pour

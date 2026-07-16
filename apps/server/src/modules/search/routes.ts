@@ -136,6 +136,7 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
     if (tmdbEnabled()) {
       const remote = await tmdbSearch(q, 'multi', undefined, lang);
       for (const r of remote.slice(0, 20)) {
+        if (r.adult) continue; // exclut le contenu pour adultes (porno)
         add({
           id: null,
           tmdbId: String(r.id),
@@ -260,6 +261,7 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
         // favoris pèsent plus lourd (plus de suggestions issues d'eux).
         const picks = [...recs].sort(() => Math.random() - 0.5).slice(0, status.isFavorite ? 5 : 3);
         for (const r of picks) {
+          if (r.adult) continue; // exclut le contenu pour adultes (porno)
           const recType = status.media.type === 'show' ? 'show' : 'movie';
           const recTitle = r.name ?? r.title ?? '';
           const recYear = (r.first_air_date ?? r.release_date)
@@ -316,6 +318,7 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
       ]);
       const pool = pools.flat().sort(() => Math.random() - 0.5);
       for (const r of pool) {
+        if (r.adult) continue; // exclut le contenu pour adultes (porno)
         const trendType = r.title ? 'movie' : 'show';
         const trendTitle = r.name ?? r.title ?? '';
         const trendYear = (r.first_air_date ?? r.release_date)
@@ -380,7 +383,10 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
       posterPath: r.poster_path ?? null,
       backdropPath: r.backdrop_path ?? null,
     });
-    return { shows: tv.map((r) => map(r, 'show')), movies: movies.map((r) => map(r, 'movie')) };
+    return {
+      shows: tv.filter((r) => !r.adult).map((r) => map(r, 'show')),
+      movies: movies.filter((r) => !r.adult).map((r) => map(r, 'movie')),
+    };
   });
 
   app.get('/api/recommendations', async (request) => {

@@ -93,6 +93,8 @@ function CommentsPanel({
     setReplyText,
     post,
     postReply,
+    postError,
+    clearPostError,
     heart,
     remove,
     shareComment,
@@ -102,9 +104,11 @@ function CommentsPanel({
     if (!text.trim() || busy) return;
     setBusy(true);
     try {
-      await post(text);
-      setText('');
-      onCommentPosted?.();
+      const ok = await post(text);
+      if (ok) {
+        setText('');
+        onCommentPosted?.();
+      }
     } finally {
       setBusy(false);
     }
@@ -136,6 +140,8 @@ function CommentsPanel({
           ))}
         </ScrollView>
       )}
+      {/* Message de modération : commentaire/réponse rejeté (règles communauté). */}
+      {postError ? <Text style={styles.blocked}>{postError}</Text> : null}
       {/* Barre de composition TikTok : en bas, inline (pas de FAB flottant ici). */}
       <View style={styles.composer}>
         <TextInput
@@ -143,7 +149,7 @@ function CommentsPanel({
           placeholder="Ajouter un commentaire…"
           placeholderTextColor={COLORS.textMuted}
           value={text}
-          onChangeText={setText}
+          onChangeText={(t) => { setText(t); if (postError) clearPostError(); }}
         />
         <Pressable
           style={[styles.composerSend, (!text.trim() || busy) && { opacity: 0.4 }]}
@@ -184,6 +190,7 @@ const styles = StyleSheet.create({
   title: { fontFamily: FONTS.extraBold, fontSize: 18, color: COLORS.black },
   center: { padding: 40, alignItems: 'center' },
   err: { fontFamily: FONTS.regular, fontSize: 15, color: COLORS.textMuted },
+  blocked: { fontFamily: FONTS.regular, fontSize: 13, color: COLORS.red, paddingHorizontal: 16, paddingTop: 8 },
   composer: {
     flexDirection: 'row',
     alignItems: 'center',

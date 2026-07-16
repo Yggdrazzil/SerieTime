@@ -11,3 +11,5 @@ export * from './gamification/xp.js';
 export * from './gamification/badges.js';
 export * from './gamification/streak.js';
 export * from './gamification/challenges.js';
+export * from './moderation/blocklist.js';
+export * from './moderation/filter.js';
