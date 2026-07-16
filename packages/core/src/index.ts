@@ -6,3 +6,8 @@ export * from './matching/score.js';
 export * from './media/episodes.js';
 export * from './dates/groups.js';
 export * from './stats/watchTime.js';
+export * from './gamification/types.js';
+export * from './gamification/xp.js';
+export * from './gamification/badges.js';
+export * from './gamification/streak.js';
+export * from './gamification/challenges.js';
