@@ -187,10 +187,17 @@ export default function ShowDetail() {
   const isFollowed = media.userStatus != null;
   const HERO_MAX = 240;
   const HERO_MIN = insets.top + 54;
-  const heroH = scrollY.interpolate({ inputRange: [0, 150], outputRange: [HERO_MAX, HERO_MIN], extrapolate: 'clamp' });
-  const bigOpacity = scrollY.interpolate({ inputRange: [0, 90], outputRange: [1, 0], extrapolate: 'clamp' });
-  const smallOpacity = scrollY.interpolate({ inputRange: [90, 150], outputRange: [0, 1], extrapolate: 'clamp' });
+  // Plage de repli = exactement la hauteur perdue par l'en-tête : le bord bas
+  // de l'en-tête en surimpression suit alors le contenu au pixel près (aucun
+  // écart pendant le repli, cf. structure « overlay » plus bas).
+  const HERO_RANGE = HERO_MAX - HERO_MIN;
+  const heroH = scrollY.interpolate({ inputRange: [0, HERO_RANGE], outputRange: [HERO_MAX, HERO_MIN], extrapolate: 'clamp' });
+  const bigOpacity = scrollY.interpolate({ inputRange: [0, HERO_RANGE * 0.6], outputRange: [1, 0], extrapolate: 'clamp' });
+  const smallOpacity = scrollY.interpolate({ inputRange: [HERO_RANGE * 0.6, HERO_RANGE], outputRange: [0, 1], extrapolate: 'clamp' });
   const onScroll = Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false });
+  // Hauteur de la barre d'onglets À PROPOS / ÉPISODES (TopTabs, ui.tsx).
+  const TABS_H = 42;
+  const topPad = HERO_MAX + (isMovie ? 0 : TABS_H);
 
   // Barre de progression globale : épisodes diffusés vus / diffusés (hors
   // spéciaux), colorée par STATUT comme dans les bibliothèques du profil :
@@ -220,6 +227,31 @@ export default function ShowDetail() {
 
   return (
     <Pop style={{ backgroundColor: COLORS.white }}>
+      {/* Contenu EN FLUX : il défile sous l'en-tête en surimpression (padding
+          haut constant = place de l'en-tête déployé + onglets). */}
+      {isMovie ? (
+        <MovieBody
+          media={media}
+          detail={detail.data}
+          mediaId={String(id)}
+          onToggle={() => markMovie.mutate(media.userStatus !== 'completed')}
+          onScroll={onScroll}
+          topPad={topPad}
+        />
+      ) : (
+        <FadeSwitch trigger={tab}>
+          {tab === 'À PROPOS' ? (
+            <AboutTab media={media} detail={detail.data} mediaId={String(id)} interest={interest} setInterest={setInterest} onScroll={onScroll} topPad={topPad} />
+          ) : (
+            <EpisodesTab showId={String(id)} title={media.title} posterPath={media.posterPath} onChange={refresh} onScroll={onScroll} topPad={topPad} />
+          )}
+        </FadeSwitch>
+      )}
+
+      {/* En-tête en SURIMPRESSION (hors flux) : sa hauteur animée ne re-layoute
+          que lui-même — auparavant l'en-tête était dans le flux et chaque frame
+          de repli re-layoutait TOUTE la fiche (saccades au défilement, web). */}
+      <View style={styles.headerOverlay}>
       <Animated.View style={[styles.hero, { height: heroH }]}>
         {(() => {
           const heroUri = tmdbImage(media.backdropPath, 'w780') ?? tmdbImage(media.posterPath, 'w500');
@@ -264,28 +296,9 @@ export default function ShowDetail() {
           </View>
         ) : null}
       </Animated.View>
-
-      {isMovie ? (
-        <MovieBody
-          media={media}
-          detail={detail.data}
-          mediaId={String(id)}
-          onToggle={() => markMovie.mutate(media.userStatus !== 'completed')}
-          onScroll={onScroll}
-        />
-      ) : (
-        <>
-          {/* Comme TV Time : deux onglets, les commentaires vivent au bas de « À propos ». */}
-          <TopTabs tabs={['À PROPOS', 'ÉPISODES']} active={tab} onChange={setTab} />
-          <FadeSwitch trigger={tab}>
-            {tab === 'À PROPOS' ? (
-              <AboutTab media={media} detail={detail.data} mediaId={String(id)} interest={interest} setInterest={setInterest} onScroll={onScroll} />
-            ) : (
-              <EpisodesTab showId={String(id)} title={media.title} posterPath={media.posterPath} onChange={refresh} onScroll={onScroll} />
-            )}
-          </FadeSwitch>
-        </>
-      )}
+      {/* Comme TV Time : deux onglets, les commentaires vivent au bas de « À propos ». */}
+      {!isMovie ? <TopTabs tabs={['À PROPOS', 'ÉPISODES']} active={tab} onChange={setTab} /> : null}
+      </View>
 
       {/* Barre du bas façon TV Time : + AJOUTER, puis ✓ AJOUTÉE ! pendant 2 s. */}
       {!isFollowed && !justAdded && !toast ? (
@@ -922,9 +935,9 @@ function yearRange(media: MediaDto, endYear?: number | null) {
 // Onglet « À propos » — ordre des sections calqué sur la fiche TV Time :
 // où regarder, question d'intérêt, similaire à, informations (méta + étoiles +
 // synopsis + rangées), distribution, également regardé, notes, commentaires.
-function AboutTab({ media, detail, mediaId, interest, setInterest, onScroll }: any) {
+function AboutTab({ media, detail, mediaId, interest, setInterest, onScroll, topPad }: any) {
   return (
-    <ScrollView onScroll={onScroll} scrollEventThrottle={16} contentContainerStyle={{ paddingBottom: 90 }}>
+    <ScrollView onScroll={onScroll} scrollEventThrottle={16} contentContainerStyle={{ paddingTop: topPad, paddingBottom: 90 }}>
       <WhereToWatch providers={detail.providers ?? []} />
 
       <View style={styles.section}>
@@ -962,10 +975,10 @@ function AboutTab({ media, detail, mediaId, interest, setInterest, onScroll }: a
   );
 }
 
-function MovieBody({ media, detail, mediaId, onToggle, onScroll }: any) {
+function MovieBody({ media, detail, mediaId, onToggle, onScroll, topPad }: any) {
   const seen = media.userStatus === 'completed';
   return (
-    <ScrollView onScroll={onScroll} scrollEventThrottle={16} contentContainerStyle={{ paddingBottom: 90 }}>
+    <ScrollView onScroll={onScroll} scrollEventThrottle={16} contentContainerStyle={{ paddingTop: topPad, paddingBottom: 90 }}>
       <View style={[styles.section, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <Feather name="eye" size={18} color={COLORS.black} />
@@ -1013,7 +1026,7 @@ function EpThumb({ stillPath, fallback }: { stillPath?: string | null; fallback?
   );
 }
 
-function EpisodesTab({ showId, title, posterPath, onChange, onScroll }: { showId: string; title: string; posterPath?: string | null; onChange: () => void; onScroll?: any }) {
+function EpisodesTab({ showId, title, posterPath, onChange, onScroll, topPad }: { showId: string; title: string; posterPath?: string | null; onChange: () => void; onScroll?: any; topPad?: number }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState<Record<number, boolean>>({});
   // Pop-up « Cocher aussi les épisodes précédents ? » : proposée quand on
@@ -1153,9 +1166,10 @@ function EpisodesTab({ showId, title, posterPath, onChange, onScroll }: { showId
     onSettled: refresh,
   });
 
-  if (isLoading) return <Loading />;
-  if (!data) return <LoadError onRetry={refetch} busy={isRefetching} />;
-  if (data.seasons.length === 0) return <EmptyState title="Aucun épisode" />;
+  // Les états intermédiaires descendent sous l'en-tête en surimpression.
+  if (isLoading) return <View style={{ paddingTop: topPad }}><Loading /></View>;
+  if (!data) return <View style={{ paddingTop: topPad }}><LoadError onRetry={refetch} busy={isRefetching} /></View>;
+  if (data.seasons.length === 0) return <View style={{ paddingTop: topPad }}><EmptyState title="Aucun épisode" /></View>;
 
   // Épisodes spéciaux (saison 0) toujours en bas de la liste (façon TV Time).
   const isSpecial = (s: SeasonData) => s.seasonNumber === 0;
@@ -1181,7 +1195,7 @@ function EpisodesTab({ showId, title, posterPath, onChange, onScroll }: { showId
     <View style={{ flex: 1 }}>
     <ScrollView
       style={{ backgroundColor: COLORS.pageMuted }}
-      contentContainerStyle={{ paddingBottom: 40 }}
+      contentContainerStyle={{ paddingTop: topPad, paddingBottom: 40 }}
       onScroll={onScroll}
       scrollEventThrottle={16}
     >
@@ -1334,6 +1348,9 @@ function EpisodesTab({ showId, title, posterPath, onChange, onScroll }: { showId
 }
 
 const styles = StyleSheet.create({
+  // En-tête (bannière + onglets) en surimpression : hors flux, sa hauteur
+  // animée ne re-layoute pas le contenu qui défile dessous.
+  headerOverlay: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20, backgroundColor: COLORS.white },
   hero: { height: 240, backgroundColor: '#1a1a22', justifyContent: 'flex-end', overflow: 'hidden' },
   heroShade: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.35)' },
   addBar: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: COLORS.yellow, paddingTop: 18, alignItems: 'center' },
