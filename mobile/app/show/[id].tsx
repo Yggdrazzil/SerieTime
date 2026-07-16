@@ -141,14 +141,14 @@ export default function ShowDetail() {
     onSettled: refresh,
   });
   const share = () => {
-    const message = `Regarde « ${detail.data?.media?.title} » — suivi avec SerieTime 📺`;
+    const message = `Regarde « ${detail.data?.media?.title} » — suivi avec PlotTime 📺`;
     const url = typeof window !== 'undefined' ? window.location.href : undefined;
     // Web app (plateforme principale) : Share natif RN n'existe pas → Web Share
     // API si dispo (Safari iOS / Chrome Android), sinon copie dans le presse-papier.
     if (Platform.OS === 'web') {
       const nav = typeof navigator !== 'undefined' ? (navigator as Navigator & { share?: (d: object) => Promise<void> }) : undefined;
       if (nav?.share) {
-        nav.share({ title: 'SerieTime', text: message, url }).catch(() => undefined);
+        nav.share({ title: 'PlotTime', text: message, url }).catch(() => undefined);
       } else if (nav?.clipboard) {
         nav.clipboard.writeText(`${message}${url ? ` ${url}` : ''}`).then(() => showToast('Lien copié'), () => undefined);
       }

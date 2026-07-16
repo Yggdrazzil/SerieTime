@@ -1,4 +1,4 @@
-# Bienvenue sur SerieTime — guide de démarrage
+# Bienvenue sur PlotTime (ex-SerieTime) — guide de démarrage
 
 Guide pas à pas pour installer le projet et commencer à contribuer.
 Temps estimé : ~15 minutes.

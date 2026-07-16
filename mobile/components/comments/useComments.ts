@@ -132,7 +132,7 @@ export function useComments(mediaId: string, title?: string) {
     }
   };
   const shareComment = (c: CommentDto) => {
-    const message = `« ${c.body} » — ${c.user.displayName} à propos de ${title ?? 'cette série'} (SerieTime)`;
+    const message = `« ${c.body} » — ${c.user.displayName} à propos de ${title ?? 'cette série'} (PlotTime)`;
     if (Platform.OS === 'web') {
       const nav = typeof navigator !== 'undefined' ? (navigator as Navigator & { share?: (d: object) => Promise<void> }) : undefined;
       if (nav?.share) nav.share({ text: message }).catch(() => undefined);

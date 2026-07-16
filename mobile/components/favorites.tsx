@@ -121,7 +121,7 @@ export function FavoritesPage({ kind }: { kind: FavKind }) {
 
   const share = async () => {
     const lines = sortFavorites(favs, 'user').map((m, i) => `${i + 1}. ${m.title}`);
-    const message = `${w.shareTitle} sur SerieTime :\n${lines.join('\n')}`;
+    const message = `${w.shareTitle} sur PlotTime :\n${lines.join('\n')}`;
     try {
       await Share.share({ message });
     } catch {

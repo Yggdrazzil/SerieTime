@@ -1,4 +1,4 @@
-# SerieTime
+# PlotTime
 
 Application de suivi de séries, animés et films — pensée pour remplacer TV Time après la fermeture
 du service. Une **app mobile cross-platform React Native + Expo** (Android & iOS, visualisable avec
@@ -41,7 +41,7 @@ pnpm --filter @serietime/server db:deploy   # crée la base SQLite et applique l
 pnpm dev:server                             # démarre l'API sur http://localhost:4000
 ```
 
-Vérifier : `curl http://localhost:4000/health` → `{"ok":true,"app":"SerieTime","version":"1.0.0"}`.
+Vérifier : `curl http://localhost:4000/health` → `{"ok":true,"app":"PlotTime","version":"1.0.0"}`.
 
 L'authentification est **multi-comptes par e-mail + mot de passe** : au premier lancement l'app
 propose de **créer un compte** (nom d'affichage + e-mail + mot de passe) ou de **se connecter**.

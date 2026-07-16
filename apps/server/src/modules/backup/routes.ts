@@ -26,7 +26,7 @@ export async function backupRoutes(app: FastifyInstance): Promise<void> {
     // Jamais de secret dans l'export (le fichier circule hors de l'app).
     const { passwordHash: _passwordHash, ...safeUser } = user ?? ({} as Record<string, unknown>);
     return {
-      app: 'SerieTime',
+      app: 'PlotTime',
       version: APP_VERSION,
       exportedAt: new Date().toISOString(),
       data: { user: safeUser, media, shows, seasons, episodes, mediaStatuses, episodeStatuses, watchEvents, lists, listItems },
@@ -36,7 +36,8 @@ export async function backupRoutes(app: FastifyInstance): Promise<void> {
   app.post('/api/backup/import', async (request, reply) => {
     const body = z
       .object({
-        app: z.literal('SerieTime'),
+        // Les sauvegardes exportées avant le renommage disent encore « SerieTime ».
+        app: z.union([z.literal('PlotTime'), z.literal('SerieTime')]),
         version: z.string(),
         data: z.object({
           media: z.array(z.record(z.unknown())),

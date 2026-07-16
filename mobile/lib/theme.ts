@@ -1,4 +1,4 @@
-// Design tokens SerieTime (spec §10) — thèmes Clair / Sombre / Sunset.
+// Design tokens PlotTime (spec §10) — thèmes Clair / Sombre / Sunset.
 import { Appearance, Platform } from 'react-native';
 
 // Police unique de l'app (native + web) : Mulish — sans-serif humaniste fine,
@@ -86,13 +86,12 @@ const DARK: Palette = {
   overlay: 'rgba(0,0,0,0.72)',
   provider: '#00A8E1',
   onAccent: '#101014',
-  // THÈME NUIT UNIQUEMENT : rose du logo (éclairci pour rester vif sur le
-  // charbon) sur les pastilles, notifications et compteurs — casse le
-  // monochrome (demande produit 16/07).
-  pillBg: '#FF4D97',
-  pillFg: '#FFFFFF',
-  notif: '#FF4D97',
-  plusCount: '#FF4D97',
+  // « Sombre » reste sobre : le rose du logo est réservé au thème NUIT
+  // (midnight) — demande produit 16/07.
+  pillBg: '#6A6A76',
+  pillFg: '#1B1B22',
+  notif: '#E36067',
+  plusCount: '#9C9CA8',
   imagePlaceholder: '#2A2A32',
 };
 
@@ -128,7 +127,7 @@ const SUNSET: Palette = {
   imagePlaceholder: '#E7DBCB',
 };
 
-// Nuit : les couleurs du logo SerieTime — fond bleu nuit #0B075A, accents
+// Nuit : les couleurs du logo PlotTime — fond bleu nuit #0B075A, accents
 // jaune #FBAE00 / rose #E6027F / violet #6401F0 (éclaircis pour la lisibilité
 // sur fond sombre). Le texte posé sur l'accent jaune est bleu nuit, comme le
 // motif de l'icône.
@@ -155,13 +154,13 @@ const MIDNIGHT: Palette = {
   overlay: 'rgba(3,2,34,0.74)',
   provider: '#7A2BFF', // violet du logo (bouton « où regarder »)
   onAccent: '#0B075A', // bleu nuit sur les boutons jaunes, comme l'icône
-  imagePlaceholder: '#221B8A',
-  // Rose du logo en accent secondaire (thème Nuit) : pastilles, notifications,
-  // compteurs — cf. commits 2026-07-17 d'Étienne (fusion des 4 palettes).
+  // ROSE du logo sur les pastilles de section, notifications et compteurs
+  // « +N » : casse le monochrome bleu du thème Nuit (demande produit 16/07).
   pillBg: '#FF4D9E',
   pillFg: '#FFFFFF',
   notif: '#FF4D9E',
   plusCount: '#FF4D9E',
+  imagePlaceholder: '#221B8A',
 };
 
 // NB : si un `bg` change ici, reporter la valeur dans le script pré-peinture

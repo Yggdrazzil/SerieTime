@@ -87,7 +87,7 @@ function AccountTab() {
       <Divider />
       <SectionTitle>Import & sauvegarde</SectionTitle>
       <Row label="Importer mes données TV Time" onPress={() => router.push('/import')} />
-      <Row label="Exporter mes données SerieTime" onPress={exportData} />
+      <Row label="Exporter mes données PlotTime" onPress={exportData} />
       <ResyncLibraryRow />
       <Divider />
       <SectionTitle>Jeux — Steam</SectionTitle>
@@ -333,7 +333,7 @@ function ResetPasswordSheet({ cfg, linked, onClose }: { cfg: SsoProviders; linke
     } catch (e) {
       setError(
         e instanceof ApiError && e.code === 'no_account_for_identity'
-          ? 'Ce compte Google/Discord n’est lié à aucun compte SerieTime.'
+          ? 'Ce compte Google/Discord n’est lié à aucun compte PlotTime.'
           : 'Vérification impossible. Réessaie.',
       );
     } finally {
@@ -552,7 +552,7 @@ function AppTab() {
           ['light', 'Thème clair'],
           ['dark', 'Thème sombre'],
           ['sunset', 'Thème Sunset'],
-          ['midnight', 'Thème Nuit — les couleurs SerieTime'],
+          ['midnight', 'Thème Nuit — les couleurs PlotTime'],
         ] as [ThemePreference, string][]
       ).map(([v, l]) => (
         <RadioRow key={v} label={l} on={themePref === v} onPress={() => pickTheme(v)} />

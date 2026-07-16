@@ -123,7 +123,7 @@ export default function Setup() {
       {/* Logo de marque au-dessus du titre (icône ronde du pack). */}
       <View style={styles.brandRow}>
         <Image source={require('../assets/branding/pwa-icon-192.png')} style={styles.brandLogo} resizeMode="cover" />
-        <Text style={styles.brand}>SerieTime</Text>
+        <Text style={styles.brand}>PlotTime</Text>
       </View>
 
       {step === 'server' ? (

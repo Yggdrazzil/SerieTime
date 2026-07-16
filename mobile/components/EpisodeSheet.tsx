@@ -265,7 +265,7 @@ function EpisodePage({
   };
 
   const share = () => {
-    const message = `« ${mediaTitle} » ${episodeCode(episode.seasonNumber, episode.episodeNumber)} — suivi avec SerieTime 📺`;
+    const message = `« ${mediaTitle} » ${episodeCode(episode.seasonNumber, episode.episodeNumber)} — suivi avec PlotTime 📺`;
     if (Platform.OS === 'web') {
       const nav = typeof navigator !== 'undefined' ? (navigator as Navigator & { share?: (d: object) => Promise<void> }) : undefined;
       if (nav?.share) nav.share({ text: message }).catch(() => undefined);

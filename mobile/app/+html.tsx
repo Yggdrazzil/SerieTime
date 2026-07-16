@@ -16,11 +16,11 @@ export default function Root({ children }: PropsWithChildren) {
           name="viewport"
           content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
         />
-        <title>SerieTime</title>
+        <title>PlotTime</title>
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="apple-mobile-web-app-title" content="SerieTime" />
+        <meta name="apple-mobile-web-app-title" content="PlotTime" />
         {/* Barre de statut : blanc pour se fondre avec le haut de l'app (le jaune
             de marque tranchait trop, notamment en PWA installée sur Android).
             Le script ci-dessous remplace cette valeur par le fond du thème actif

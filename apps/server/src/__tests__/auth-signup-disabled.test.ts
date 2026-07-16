@@ -1,5 +1,16 @@
-// Doit être défini AVANT tout import qui charge `config/env.ts` (parsé au load).
+import { execSync } from 'node:child_process';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+
+// Doit être défini AVANT tout import qui charge `config/env.ts` (parsé au
+// load). Comme les autres tests, on pointe une base SQLite temporaire —
+// sans ça, le test ne passait que sur les machines ayant un `.env` local
+// (Environment variable not found: DATABASE_URL).
 process.env.ALLOW_EMAIL_SIGNUP = 'false';
+const tmp = mkdtempSync(path.join(tmpdir(), 'serietime-test-'));
+process.env.DATABASE_URL = `file:${path.join(tmp, 'test.sqlite')}`;
+process.env.NODE_ENV = 'test';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
@@ -7,6 +18,11 @@ import type { FastifyInstance } from 'fastify';
 let app: FastifyInstance;
 
 beforeAll(async () => {
+  execSync('pnpm exec prisma migrate deploy', {
+    cwd: path.resolve(import.meta.dirname, '../..'),
+    env: process.env,
+    stdio: 'pipe',
+  });
   const { buildApp } = await import('../app.js');
   app = await buildApp();
 }, 120_000);

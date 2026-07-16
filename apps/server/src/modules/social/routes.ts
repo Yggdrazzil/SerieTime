@@ -377,7 +377,7 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
       return reply.code(400).send({
         error: 'comment_blocked',
         message:
-          'Hop hop hop ! 🙅 La politesse est de mise sur SerieTime, chenapan. Reformule ça sans insulte et réessaie 😇',
+          'Hop hop hop ! 🙅 La politesse est de mise sur PlotTime, chenapan. Reformule ça sans insulte et réessaie 😇',
       });
     }
     const media = await prisma.media.findUnique({ where: { id } });

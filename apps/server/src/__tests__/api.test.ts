@@ -79,11 +79,11 @@ afterAll(async () => {
 
 const auth = () => ({ authorization: `Bearer ${token}` });
 
-describe('SerieTime API', () => {
+describe('PlotTime API', () => {
   it('GET /health répond avec le nom de l’app', async () => {
     const res = await app.inject({ method: 'GET', url: '/health' });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toMatchObject({ ok: true, app: 'SerieTime', version: '1.0.0' });
+    expect(res.json()).toMatchObject({ ok: true, app: 'PlotTime', version: '1.0.0' });
   });
 
   it('register crée un compte et retourne un token', async () => {
@@ -399,11 +399,11 @@ describe('SerieTime API', () => {
     expect(detail.json().media.backdropPath).toBe('/mickey-banner.jpg');
   });
 
-  it('exporte une sauvegarde SerieTime', async () => {
+  it('exporte une sauvegarde PlotTime', async () => {
     const res = await app.inject({ method: 'POST', url: '/api/backup/export', headers: auth() });
     expect(res.statusCode).toBe(200);
     const backup = res.json();
-    expect(backup.app).toBe('SerieTime');
+    expect(backup.app).toBe('PlotTime');
     expect(backup.data.media.length).toBeGreaterThanOrEqual(5);
     expect(backup.data.episodeStatuses.length).toBeGreaterThanOrEqual(3);
   });

@@ -84,7 +84,7 @@ export default function LinkedAccountsScreen() {
       ) : (
         <ScrollView contentContainerStyle={{ padding: 24, gap: 14 }}>
           <Text style={styles.lead}>
-            Lie un réseau pour te connecter à SerieTime en un clic.
+            Lie un réseau pour te connecter à PlotTime en un clic.
           </Text>
           {cfg.google ? (
             linked.google ? (

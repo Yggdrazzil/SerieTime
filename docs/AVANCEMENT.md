@@ -1,4 +1,4 @@
-# État d'avancement — SerieTime
+# État d'avancement — PlotTime (ex-SerieTime)
 
 > **Ce fichier est la source de vérité de l'avancement du projet.**
 > Merci de le mettre à jour **après chaque modification ou ajout de fonctionnalité** :
@@ -6,7 +6,7 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
-Dernière mise à jour : **2026-07-17** (Claude) — Jeux : « Je possède » en interrupteur + fiche réorganisée + rose du logo en accent secondaire (thème Nuit) d'Étienne
+Dernière mise à jour : **2026-07-17** (Claude) — Renommage complet en **PlotTime** + icône PWA maskable (Étienne), fiche jeu : deux notes /100, interrupteur « Je possède »
 
 ---
 
@@ -79,6 +79,48 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
 6. Publication native optionnelle (EAS Build APK, puis stores).
 
 ## Journal des modifications
+
+### 2026-07-17 — Claude : renommage PlotTime + icône PWA « maskable »
+- **L'application s'appelle désormais PlotTime** (ex-SerieTime). Renommé
+  partout où le nom est visible : titre et meta de la web app (`+html.tsx`),
+  manifest PWA (`name`/`short_name`), `app.json` (`name`), écran de
+  connexion, Paramètres (export, comptes liés, libellé du thème Nuit),
+  messages de partage (fiches, épisodes, favoris, commentaires), message de
+  modération, docs (README, ONBOARDING, ce fichier). Compatibilité conservée :
+  le client accepte `app: SerieTime` OU `PlotTime` au `/health` (serveur pas
+  encore redéployé) et l'import de sauvegardes accepte les anciens exports ;
+  `APP_NAME` par défaut passe à PlotTime (⚠ si le `.env` du VPS force
+  `APP_NAME=SerieTime`, le mettre à jour). NON renommés (identifiants
+  techniques, cassants) : slug/scheme Expo, `com.serietime.app`, clés
+  localStorage `serietime-*`, nom du repo GitHub, domaine
+  serietime.studio-vives.fr (infra Benjamin).
+- **Icône zoomée sur l'écran d'accueil Android (PWA)** : le manifest servait
+  la même image bord-à-bord en `purpose: any` ET `maskable` — le lanceur
+  rogne l'icône maskable à sa zone sûre (~80 %), d'où l'effet « zoomé » sans
+  le fond bleu (le multitâche, lui, affiche l'icône `any`, correcte).
+  Nouvelles `public/maskable-192/512.png` composées depuis les assets
+  adaptive (fond bleu plein + motif avec marges, motif mesuré à 21-78 % du
+  canevas) ; le manifest pointe `maskable` dessus. L'icône d'accueil se met
+  à jour à la re-création du raccourci / mise à jour du WebAPK.
+- Correctif au passage : `auth-signup-disabled.test.ts` (main) ne définissait
+  pas `DATABASE_URL` et ne passait que sur les machines avec `.env` local →
+  aligné sur le motif des autres tests (SQLite temporaire + migrate deploy).
+  **152 tests serveur verts** post-merge.
+
+### 2026-07-16 — Claude (10)
+- **Rose du logo en accent secondaire du THÈME NUIT — uniquement** (demande
+  produit : casser le monochrome du sombre avec le rose + le jaune du logo ;
+  les thèmes Clair et Sunset ne devaient PAS bouger — corrigé après une
+  première passe trop large). Rôles par thème `pillBg`/`pillFg`/`notif`/
+  `plusCount` : Nuit = rose `#FF4D97`, Clair/Sunset = valeurs TV Time
+  d'origine (pastilles grises/taupe, points rouges, compteurs gris).
+- En Nuit : **pastilles de section roses** (onglet Séries, bibliothèques,
+  Jeux, pastille flottante), **points de notification roses** (Explorer,
+  cloche du profil), **compteurs « +N » roses** sur les cartes À voir. Le
+  jaune de marque reste le premier accent (FILTRES, FAB, onglet actif,
+  barres En cours).
+- Vérifié au banc dans les trois thèmes (captures + relevé au pixel) :
+  Clair/Sunset strictement identiques à avant, rose en Nuit seulement.
 
 ### 2026-07-17 — Jeux : « Je possède » (interrupteur) + fiche jeu réorganisée (retours Étienne)
 Deux retours d'Étienne sur les jeux, liés :

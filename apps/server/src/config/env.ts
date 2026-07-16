@@ -8,7 +8,7 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().default(4000),
   DATABASE_URL: z.string().default('file:./data/serietime.sqlite'),
-  APP_NAME: z.string().default('SerieTime'),
+  APP_NAME: z.string().default('PlotTime'),
   APP_URL: z.string().default('http://localhost:4000'),
   APP_SECRET: z.string().default('change-me'),
   JWT_SECRET: z.string().default('change-me'),

@@ -100,7 +100,8 @@ export async function checkHealth(url: string): Promise<{ ok: boolean; app: stri
     const res = await fetch(`${url.replace(/\/+$/, '')}/health`, { signal: controller.signal });
     if (!res.ok) throw new ApiError(res.status, 'invalid_response');
     const data = await res.json();
-    if (data?.ok !== true || data?.app !== 'SerieTime') throw new ApiError(200, 'invalid_server');
+    // Accepte l'ancien nom : un serveur pas encore redéployé répond « SerieTime ».
+    if (data?.ok !== true || (data?.app !== 'PlotTime' && data?.app !== 'SerieTime')) throw new ApiError(200, 'invalid_server');
     return data;
   } finally {
     clearTimeout(t);
