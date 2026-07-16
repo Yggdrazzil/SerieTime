@@ -62,8 +62,8 @@ export function FloatingSectionPill({ label }: { label: string | null }) {
 const styles = StyleSheet.create({
   wrap: { position: 'absolute', top: 8, left: 0, right: 0, alignItems: 'center' },
   pill: {
-    backgroundColor: COLORS.pink, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 4,
+    backgroundColor: COLORS.pillBg, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 4,
     shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 5, elevation: 4,
   },
-  text: { color: COLORS.onPink, fontSize: 11, fontFamily: FONTS.bold, letterSpacing: 0.8 },
+  text: { color: COLORS.pillFg, fontSize: 11, fontFamily: FONTS.bold, letterSpacing: 0.8 },
 });

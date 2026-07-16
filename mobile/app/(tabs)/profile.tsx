@@ -371,7 +371,7 @@ const styles = StyleSheet.create({
   head: { height: 180, backgroundColor: '#20202a', justifyContent: 'flex-end', overflow: 'hidden' },
   coverShade: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.35)' },
   bell: { position: 'absolute', left: 16, width: 40, height: 40, borderRadius: 20, backgroundColor: COLORS.yellow, alignItems: 'center', justifyContent: 'center' },
-  badge: { position: 'absolute', top: 0, right: 0, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: COLORS.pink, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
+  badge: { position: 'absolute', top: 0, right: 0, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: COLORS.notif, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
   badgeText: { color: '#fff', fontSize: 10, fontFamily: FONTS.extraBold },
   dots: { position: 'absolute', right: 12, width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   headRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },

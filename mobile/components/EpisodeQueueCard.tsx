@@ -100,8 +100,8 @@ const styles = StyleSheet.create({
   // Le code (S03 | E02) reste sur UNE ligne ; « +N » (restants) ne le pousse jamais.
   codeRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
   code: { color: COLORS.text, fontSize: 17, fontFamily: FONTS.bold, flexShrink: 1 },
-  // Rose du logo : le compteur ressort au lieu de se fondre dans le gris.
-  plus: { fontSize: 12, fontFamily: FONTS.bold, color: COLORS.pink, flexShrink: 0 },
+  // Rose du logo en thème Nuit, gris discret dans les autres thèmes.
+  plus: { fontSize: 12, fontFamily: FONTS.bold, color: COLORS.plusCount, flexShrink: 0 },
   epTitle: { color: COLORS.text, fontFamily: FONTS.regular, fontSize: 12.5 },
   badges: { flexDirection: 'row', gap: 6 },
   checkWrap: { justifyContent: 'center', paddingRight: 12 },

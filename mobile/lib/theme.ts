@@ -48,10 +48,13 @@ const LIGHT = {
   provider: '#00A8E1',
   // Texte/icônes posés sur l'accent (boutons jaunes/terracotta, FAB, badges).
   onAccent: '#000000',
-  // Rose du logo (accent SECONDAIRE de marque) : pastilles de section, points
-  // de notification, compteurs — casse le monochrome, surtout en sombre.
-  pink: '#E8317F',
-  onPink: '#FFFFFF',
+  // Pastilles de section / points de notification / compteur « +N » : rôles
+  // séparés car le ROSE du logo ne s'applique QU'AU THÈME NUIT (demande
+  // produit 16/07) — les autres thèmes gardent les couleurs TV Time.
+  pillBg: '#858585',
+  pillFg: '#FFFFFF',
+  notif: '#C7222A',
+  plusCount: '#808080',
   // Vignettes/affiches en attente d'image.
   imagePlaceholder: '#E5E5E5',
 };
@@ -83,9 +86,13 @@ const DARK: Palette = {
   overlay: 'rgba(0,0,0,0.72)',
   provider: '#00A8E1',
   onAccent: '#101014',
-  // Rose éclairci pour rester vif sur les surfaces charbon.
-  pink: '#FF4D97',
-  onPink: '#FFFFFF',
+  // THÈME NUIT UNIQUEMENT : rose du logo (éclairci pour rester vif sur le
+  // charbon) sur les pastilles, notifications et compteurs — casse le
+  // monochrome (demande produit 16/07).
+  pillBg: '#FF4D97',
+  pillFg: '#FFFFFF',
+  notif: '#FF4D97',
+  plusCount: '#FF4D97',
   imagePlaceholder: '#2A2A32',
 };
 
@@ -114,9 +121,10 @@ const SUNSET: Palette = {
   overlay: 'rgba(61,41,25,0.55)',
   provider: '#C96F45',
   onAccent: '#FFF9F2',
-  // Rose réchauffé pour s'accorder aux crèmes Sunset.
-  pink: '#D8447F',
-  onPink: '#FFF9F2',
+  pillBg: '#A5907D',
+  pillFg: '#FDFAF4',
+  notif: '#B8433C',
+  plusCount: '#8D7B6C',
   imagePlaceholder: '#E7DBCB',
 };
 

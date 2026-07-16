@@ -6,7 +6,7 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
-Dernière mise à jour : **2026-07-16** (Claude) — Rose du logo en accent secondaire (pastilles de section, points de notification, compteurs « +N ») : interfaces moins monochromes, surtout en sombre
+Dernière mise à jour : **2026-07-16** (Claude) — Rose du logo en accent secondaire du THÈME NUIT UNIQUEMENT (pastilles de section, points de notification, compteurs « +N ») ; thèmes Clair et Sunset inchangés
 
 ---
 
@@ -74,18 +74,19 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
 ## Journal des modifications
 
 ### 2026-07-16 — Claude (10)
-- **Rose du logo en accent SECONDAIRE de marque** (demande produit : casser le
-  monochrome, surtout en thème sombre, avec le rose + le jaune du logo).
-  Nouveau rôle `pink`/`onPink` dans les trois palettes (clair `#E8317F`,
-  sombre éclairci `#FF4D97`, Sunset réchauffé `#D8447F`).
-- Appliqué : **pastilles de section** (À voir, Historique, Pas commencé… de
-  l'onglet Séries ; En cours/Terminé… des bibliothèques ; VOULUS/POPULAIRES…
-  des Jeux ; pastille flottante), **points de notification** (onglet Explorer,
-  cloche du profil), **compteurs « +N »** des cartes À voir (au lieu du gris —
-  le jaune y serait illisible sur fond clair). Le jaune de marque reste le
-  premier accent (FILTRES, FAB, onglet actif, barres En cours).
-- Captures vérifiées au banc en sombre ET en clair : pastilles roses lisibles,
-  duo rose/jaune cohérent, aucun autre élément altéré.
+- **Rose du logo en accent secondaire du THÈME NUIT — uniquement** (demande
+  produit : casser le monochrome du sombre avec le rose + le jaune du logo ;
+  les thèmes Clair et Sunset ne devaient PAS bouger — corrigé après une
+  première passe trop large). Rôles par thème `pillBg`/`pillFg`/`notif`/
+  `plusCount` : Nuit = rose `#FF4D97`, Clair/Sunset = valeurs TV Time
+  d'origine (pastilles grises/taupe, points rouges, compteurs gris).
+- En Nuit : **pastilles de section roses** (onglet Séries, bibliothèques,
+  Jeux, pastille flottante), **points de notification roses** (Explorer,
+  cloche du profil), **compteurs « +N » roses** sur les cartes À voir. Le
+  jaune de marque reste le premier accent (FILTRES, FAB, onglet actif,
+  barres En cours).
+- Vérifié au banc dans les trois thèmes (captures + relevé au pixel) :
+  Clair/Sunset strictement identiques à avant, rose en Nuit seulement.
 
 ### 2026-07-16 — Claude (9)
 - **Fiches série ET film : sections à l'échelle harmonisée** (les cotes lues
