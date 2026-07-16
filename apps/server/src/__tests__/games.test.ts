@@ -78,6 +78,56 @@ describe('Jeux vidéo — bibliothèque groupée par statut', () => {
     expect(lib.json().playing).toEqual([]);
   });
 
+  it('« Je possède » : interrupteur indépendant du statut (recoupement des groupes)', async () => {
+    const { prisma } = await import('../db/client.js');
+    const g = await prisma.media.create({ data: { type: 'game', igdbId: '77', title: 'Celeste' } });
+    await prisma.game.create({ data: { mediaId: g.id, platforms: 'PC' } });
+
+    // Statut « En cours » + interrupteur possédé → le jeu apparaît dans les
+    // DEUX groupes (playing par statut, owned = vue collection).
+    const st = await app.inject({ method: 'POST', url: `/api/games/${g.id}/status`, payload: { status: 'playing' }, headers: bearer('Alice') });
+    expect(st.statusCode).toBe(200);
+    const on = await app.inject({ method: 'POST', url: `/api/games/${g.id}/owned`, payload: { owned: true }, headers: bearer('Alice') });
+    expect(on.statusCode).toBe(200);
+    expect(on.json().isOwned).toBe(true);
+
+    let lib = await app.inject({ method: 'GET', url: '/api/games', headers: bearer('Alice') });
+    expect(lib.json().playing.map((m: { title: string }) => m.title)).toContain('Celeste');
+    expect(lib.json().owned.map((m: { title: string }) => m.title)).toContain('Celeste');
+
+    // La fiche détail expose le booléen.
+    const detail = await app.inject({ method: 'GET', url: `/api/games/${g.id}`, headers: bearer('Alice') });
+    expect(detail.json().isOwned).toBe(true);
+    expect(detail.json().userStatus).toBe('playing');
+
+    // Retirer « possédé » le sort du groupe collection, sans toucher au statut.
+    const off = await app.inject({ method: 'POST', url: `/api/games/${g.id}/owned`, payload: { owned: false }, headers: bearer('Alice') });
+    expect(off.statusCode).toBe(200);
+    lib = await app.inject({ method: 'GET', url: '/api/games', headers: bearer('Alice') });
+    expect(lib.json().owned.map((m: { title: string }) => m.title)).not.toContain('Celeste');
+    expect(lib.json().playing.map((m: { title: string }) => m.title)).toContain('Celeste');
+  });
+
+  it('« Je possède » sans autre interaction crée la ligne en wishlist (fallback documenté)', async () => {
+    const { prisma } = await import('../db/client.js');
+    const g = await prisma.media.create({ data: { type: 'game', igdbId: '78', title: 'Hades' } });
+    await prisma.game.create({ data: { mediaId: g.id, platforms: 'PC' } });
+
+    const on = await app.inject({ method: 'POST', url: `/api/games/${g.id}/owned`, payload: { owned: true }, headers: bearer('Alice') });
+    expect(on.statusCode).toBe(200);
+
+    const lib = await app.inject({ method: 'GET', url: '/api/games', headers: bearer('Alice') });
+    expect(lib.json().owned.map((m: { title: string }) => m.title)).toContain('Hades');
+    expect(lib.json().wishlist.map((m: { title: string }) => m.title)).toContain('Hades');
+  });
+
+  it('« owned » n’est plus un statut accepté par POST /status', async () => {
+    const { prisma } = await import('../db/client.js');
+    const g = await prisma.media.findFirstOrThrow({ where: { igdbId: '42' } });
+    const res = await app.inject({ method: 'POST', url: `/api/games/${g.id}/status`, payload: { status: 'owned' }, headers: bearer('Alice') });
+    expect(res.statusCode).toBeGreaterThanOrEqual(400);
+  });
+
   it('/api/games/upcoming renvoie des groupes (vide si aucun suivi à venir)', async () => {
     const res = await app.inject({ method: 'GET', url: '/api/games/upcoming', headers: bearer('Alice') });
     expect(res.statusCode).toBe(200);

@@ -6,9 +6,9 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
-Dernière mise à jour : **2026-07-16** (Claude) — Popup de migration douce vers le SSO : invite les comptes e-mail connectés (web) qui n'ont lié ni Google ni Discord, non bloquante (« Plus tard »)
+Dernière mise à jour : **2026-07-17** (Claude) — Jeux : « Possédé » devient un interrupteur « Je possède » (booléen `isOwned`) indépendant du statut (retour Étienne) ; fiche jeu réorganisée (infos à côté de la jaquette, statuts remontés avant le trailer, section Informations fusionnée dans la fiche d'identité)
 
-Mise à jour précédente : **2026-07-16** (Claude) — Jeux : statut « Possédé » (collectionneurs) ; libellé chip « Voulu » au singulier sur la fiche ; système de signalement d'œuvre inappropriée (série/film/jeu) → modèle `Report` + `POST /api/report` + action « Signaler » dans le menu ⋯
+Mise à jour précédente : **2026-07-16** (Claude) — Popup de migration douce vers le SSO : invite les comptes e-mail connectés (web) qui n'ont lié ni Google ni Discord, non bloquante (« Plus tard »)
 
 ---
 
@@ -21,7 +21,7 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
 
 - **Branche de référence : `main`** (à cloner / puller). Le développement passe
   par des branches courtes fusionnées via pull request.
-- Tests : `pnpm test` (286 tests au 2026-07-16 : 143 core + 143 serveur).
+- Tests : `pnpm test` (310 tests au 2026-07-17 : 158 core + 152 serveur).
 - Lancement local : voir `README.md` (serveur `pnpm dev:server`, mobile `npx expo start -c`).
 
 ## État par domaine
@@ -50,10 +50,10 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
 | Distribution native (APK / stores) | ⏳ Optionnel | EAS Build documenté dans le README ; la web app couvre déjà l'usage quotidien |
 | Jeux vidéo — modèle de données | ✅ Fait | Table `Game` (plateformes, développeur, éditeur, modes, Steam App ID, DLC) + `Media.igdbId` + `UserMediaStatus.playtimeMinutes` (migration `add_games`) |
 | Jeux vidéo — provider IGDB | ✅ Fait | `apps/server/src/services/igdb/` : auth Twitch (client credentials, cache mémoire), requêtes Apicalypse avec cache `ApiCache`, mapper `igdbToMedia` |
-| Jeux vidéo — module API | ✅ Fait | `apps/server/src/modules/games/routes.ts` : `GET /api/games/search`, `POST /api/games/add-from-igdb`, `GET /api/games` (bibliothèque groupée par statut wishlist/**owned**/playing/completed/abandoned — « owned » = Possédé, sans `completedAt` ni XP de fin), `POST /api/games/:id/status`, `GET /api/games/:id` (enrichissement paresseux), `GET /api/games/discover`, `GET /api/games/upcoming`, `POST /api/games/steam/import`, `DELETE /api/games/:id/tracking` |
-| Jeux vidéo — onglet Jeux (mobile) | ✅ Fait | `mobile/app/(tabs)/games.tsx` : bibliothèque par statut (VOULUS / **POSSÉDÉS** / EN COURS / TERMINÉS / ABANDONNÉS), carrousels « Populaires »/« À venir » (découverte, tap = ajoute + ouvre la fiche), « Sorties à venir » (jeux suivis, groupés par mois) ; recherche déplacée dans l'onglet Explorer |
+| Jeux vidéo — module API | ✅ Fait | `apps/server/src/modules/games/routes.ts` : `GET /api/games/search`, `POST /api/games/add-from-igdb`, `GET /api/games` (groupes par statut wishlist/playing/completed/abandoned + groupe `owned` = vue collection `isOwned`, recoupement possible), `POST /api/games/:id/status`, `POST /api/games/:id/owned` (interrupteur « Je possède », booléen `isOwned` indépendant du statut, sans XP), `GET /api/games/:id` (enrichissement paresseux), `GET /api/games/discover`, `GET /api/games/upcoming`, `POST /api/games/steam/import`, `DELETE /api/games/:id/tracking` |
+| Jeux vidéo — onglet Jeux (mobile) | ✅ Fait | `mobile/app/(tabs)/games.tsx` : bibliothèque par statut (VOULUS / EN COURS / TERMINÉS / ABANDONNÉS) + section POSSÉDÉS = vue collection `isOwned` (peut recouper les autres groupes), carrousels « Populaires »/« À venir » (découverte, tap = ajoute + ouvre la fiche), « Sorties à venir » (jeux suivis, groupés par mois) ; recherche déplacée dans l'onglet Explorer |
 | Jeux vidéo — connexion Steam (mobile) | ✅ Fait | Bloc « Jeux — Steam » dans `mobile/app/settings.tsx` (onglet Compte) : SteamID/URL de profil → import bibliothèque possédée |
-| Jeux vidéo — fiche jeu (mobile) | ✅ Fait | `mobile/app/game/[id].tsx` : parité avec la fiche série/film — menu « … » (Personnaliser affiche/bannière via `GET/POST /api/games/:id/images|poster|banner`, Favoris `POST /api/games/:id/favorite`, Ajouter à une liste, Partager, Retirer), aperçu bande-annonce 16:9 (miniature YouTube + iframe autoplay sur web / ouverture YouTube sur natif, `videoId` IGDB), sélecteur de statut, temps de jeu, commentaires ; suivi optimiste avec rollback |
+| Jeux vidéo — fiche jeu (mobile) | ✅ Fait | `mobile/app/game/[id].tsx` : parité avec la fiche série/film — menu « … » (Personnaliser affiche/bannière via `GET/POST /api/games/:id/images|poster|banner`, Favoris `POST /api/games/:id/favorite`, Ajouter à une liste, Partager, Retirer), ordre : jaquette + infos compactes (Genre/Sortie/Note presse) → statuts + interrupteur « Je possède » → bande-annonce 16:9 → fiche d'identité (Plateformes/Développeur/Éditeur/Modes/Temps de jeu) → résumé → éditions/extensions → commentaires ; suivi optimiste avec rollback |
 | Jeux vidéo — notifications de sortie | ✅ Fait | Passe du worker de fond (`apps/server/src/services/sync-worker.ts`) : `Notification` de type `game_release` quand `Media.releaseDate` d'un jeu suivi (non masqué) tombe aujourd'hui, dédupliquée par `(userId, mediaId, type)` |
 | Gamification — serveur (XP, badges, streaks, défis, classement) | ✅ Fait | Modèles `UserProgress`/`UserBadge`/`UserChallenge`, `modules/gamification/` (recompute idempotent débouncé + backfill au boot), `GET /api/gamification/me` + `/leaderboard`, items `badge` dans le fil social, XP rétroactif à l'import |
 | Gamification — mobile (page Trophées, toasts, pastille niveau) | ✅ Fait | Page `/trophies` (niveau + XP, streak, défis du mois, grille de badges à paliers, classement hebdo), pastille niveau + rangée Trophées sur le profil, items badge dans le fil, toasts de déblocage globaux (`GamificationToastHost`) |
@@ -81,6 +81,39 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
 6. Publication native optionnelle (EAS Build APK, puis stores).
 
 ## Journal des modifications
+
+### 2026-07-17 — Jeux : « Je possède » (interrupteur) + fiche jeu réorganisée (retours Étienne)
+Deux retours d'Étienne sur les jeux, liés :
+- **« Possédé » n'est plus un statut exclusif** (le modèle d'hier était faux :
+  on peut être « En cours » ET posséder le jeu, ou jouer via Game Pass sans le
+  posséder) → **booléen `isOwned` indépendant** sur `UserMediaStatus`
+  (migration `20260716215631_game_owned_flag`, défaut `false` ; aucune donnée
+  à migrer — 0 ligne `status='owned'` en prod).
+  - `POST /api/games/:id/owned` body `{ owned: boolean }` : upsert — si la
+    ligne existe, ne touche que `isOwned` ; sinon création avec
+    `status: 'wishlist'` (fallback documenté : un jeu possédé sans autre
+    interaction doit exister quelque part, wishlist est le moins faux). Pas de
+    `scheduleRecompute` (posséder ne donne aucun XP ; `gamesCompleted` reste
+    basé sur `status='completed'` uniquement).
+  - `GET /api/games` : groupes par statut wishlist/playing/completed/abandoned
+    + groupe `owned` = TOUTES les lignes `isOwned` (vue « collection », peut
+    recouper les autres groupes). Même forme de réponse — l'onglet Jeux
+    (section POSSÉDÉS) fonctionne sans changement.
+  - `serializeGame` + fiche `GET /api/games/:id` exposent `isOwned`.
+  - Fiche mobile : chips réduits à Voulu/En cours/Terminé/Abandonné +
+    **interrupteur « Je possède »** (icône `archive`, toggle animé répliqué du
+    ToggleRow des Paramètres — non exporté) avec mise à jour optimiste.
+  - Tests serveur (`games.test.ts`) : recoupement playing+owned, fallback
+    wishlist, `owned` rejeté par `POST /status` (152 tests verts).
+- **Haut de la fiche jeu réorganisé** (`mobile/app/game/[id].tsx`) — « trop
+  vide à côté de la jaquette », « chiant de scroller pour cocher le statut » :
+  1. à côté de la jaquette : infos compactes Genre / Sortie le / Note presse ;
+  2. chips de statut + « Je possède » remontés juste sous la jaquette/titre ;
+  3. bande-annonce en dessous ;
+  4. fiche d'identité ensuite : « Plateformes : » (libellé ajouté devant la
+     liste brute), Développeur, Éditeur, « Modes : » (ex-section
+     « Informations », fusionnée puis supprimée) et « Temps de jeu : » ;
+  5. reste inchangé (résumé, éditions/extensions, commentaires).
 
 ### 2026-07-16 — Popup de migration douce vers le SSO
 Objectif : inciter en douceur les comptes e-mail existants à se lier à un

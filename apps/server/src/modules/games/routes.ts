@@ -10,9 +10,10 @@ import { filterSeenWithFallback, loadRecentImpressions, recordImpressions } from
 import { genreProfile, igdbGenreWeights, pickWeighted } from '../explore/taste.js';
 import { allowsAdultContent } from '../settings/adultContent.js';
 
-// `owned` = « Possédé » (jeux que le joueur possède, pour les collectionneurs) :
-// distinct de `completed` (aucun XP de fin, aucun `completedAt` posé).
-const GAME_STATUSES = ['wishlist', 'owned', 'playing', 'completed', 'abandoned'] as const;
+// « Possédé » n'est PAS un statut : c'est l'interrupteur indépendant `isOwned`
+// (on peut être « En cours » ET posséder le jeu, ou y jouer via Game Pass sans
+// le posséder) — cf. POST /api/games/:id/owned.
+const GAME_STATUSES = ['wishlist', 'playing', 'completed', 'abandoned'] as const;
 
 // Crée/à-jour le Media (type game) + Game à partir d'un id IGDB. Miroir de ensureMediaFromTmdb.
 export async function ensureGameFromIgdb(igdbId: string) {
@@ -29,12 +30,13 @@ export async function ensureGameFromIgdb(igdbId: string) {
   return created;
 }
 
-function serializeGame(m: { id: string; title: string; posterPath: string | null; year: number | null; voteAverage: number | null; igdbId: string | null; game?: { platforms: string | null } | null }, status?: { status: string; playtimeMinutes: number | null } | null) {
+function serializeGame(m: { id: string; title: string; posterPath: string | null; year: number | null; voteAverage: number | null; igdbId: string | null; game?: { platforms: string | null } | null }, status?: { status: string; playtimeMinutes: number | null; isOwned: boolean } | null) {
   return {
     id: m.id, title: m.title, posterPath: m.posterPath, year: m.year,
     voteAverage: m.voteAverage, igdbId: m.igdbId,
     platforms: m.game?.platforms ?? null,
     userStatus: status?.status ?? null,
+    isOwned: status?.isOwned ?? false,
     playtimeMinutes: status?.playtimeMinutes ?? null,
   };
 }
@@ -112,12 +114,35 @@ export async function gamesRoutes(app: FastifyInstance): Promise<void> {
       include: { media: { include: { game: true } } },
       orderBy: { updatedAt: 'desc' },
     });
+    // wishlist/playing/completed/abandoned = groupes PAR STATUT (exclusifs) ;
+    // `owned` = vue « collection » : TOUTES les lignes isOwned, quel que soit
+    // le statut — un jeu peut donc apparaître dans deux groupes (En cours +
+    // Possédés), c'est voulu. Même forme de réponse qu'avant pour le mobile.
     const groups: Record<string, ReturnType<typeof serializeGame>[]> = { wishlist: [], owned: [], playing: [], completed: [], abandoned: [] };
     for (const r of rows) {
       const bucket = groups[r.status];
       if (bucket) bucket.push(serializeGame(r.media, r));
+      if (r.isOwned) groups.owned!.push(serializeGame(r.media, r));
     }
     return groups;
+  });
+
+  // Interrupteur « Je possède » — booléen INDÉPENDANT du statut. Un jeu marqué
+  // possédé sans autre interaction doit bien exister dans UserMediaStatus : on
+  // crée alors la ligne avec `status: 'wishlist'` (fallback le moins faux — pas
+  // d'XP, pas de completedAt, et le jeu apparaît dans la bibliothèque).
+  // Pas de scheduleRecompute : posséder un jeu ne donne aucun XP.
+  app.post('/api/games/:id/owned', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const { owned } = z.object({ owned: z.boolean() }).parse(request.body);
+    const media = await prisma.media.findFirst({ where: { id, type: 'game' } });
+    if (!media) return reply.code(404).send({ error: 'not_found' });
+    await prisma.userMediaStatus.upsert({
+      where: { userId_mediaId: { userId: request.userId, mediaId: id } },
+      create: { userId: request.userId, mediaId: id, status: 'wishlist', isOwned: owned },
+      update: { isOwned: owned },
+    });
+    return { ok: true, isOwned: owned };
   });
 
   app.post('/api/games/:id/status', async (request, reply) => {

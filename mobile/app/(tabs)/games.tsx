@@ -42,6 +42,9 @@ type GamesDiscoverResponse = { popular: DiscoverGameDto[]; upcoming: DiscoverGam
 type GameUpcomingItemDto = { id: string; title: string; posterPath: string | null; releaseDate: string };
 type GamesUpcomingResponse = { groups: { label: string; items: GameUpcomingItemDto[] }[] };
 
+// « POSSÉDÉS » n'est plus un statut : c'est la vue « collection » (toutes les
+// lignes isOwned côté serveur) — un jeu peut apparaître dans POSSÉDÉS ET dans
+// son groupe de statut (ex. EN COURS), c'est voulu.
 const SECTIONS: { key: keyof GamesLibraryResponse; label: string }[] = [
   { key: 'wishlist', label: 'VOULUS' },
   { key: 'owned', label: 'POSSÉDÉS' },

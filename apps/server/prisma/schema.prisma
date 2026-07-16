@@ -291,6 +291,9 @@ model UserMediaStatus {
   media         Media     @relation(fields: [mediaId], references: [id], onDelete: Cascade)
 
   status        String // UserMediaState
+  // Jeux : « Je possède » — interrupteur INDÉPENDANT du statut (on peut être
+  // « En cours » ET posséder le jeu, ou y jouer via Game Pass sans le posséder).
+  isOwned       Boolean   @default(false)
   isFavorite    Boolean   @default(false)
   // Ordre personnalisé des favoris (drag & drop façon TV Time) + date d'ajout
   // aux favoris (tris « Derniers/Premiers ajouts »).
