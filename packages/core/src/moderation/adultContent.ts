@@ -88,6 +88,42 @@ const WORD_MARKERS: AdultMarker[] = [
   { term: 'milf', mode: 'word', lang: 'en' },
 ];
 
+// Marqueurs CJK (japonais) de contenu adulte, vérifiés sur le texte BRUT (avant
+// `normalizeForModeration`, qui SUPPRIME les caractères non latins). Uniquement
+// des sous-chaînes NON AMBIGUËS : on n'y met PAS « 変態 » (= hentai MAIS aussi
+// « métamorphose » — cf. l'animé grand public « 変態王子と笑わない猫 ») ni « エロ »
+// seul (« エロマンガ先生 » est un animé mainstream) ni « 成人 » (成人式 = passage à
+// l'âge adulte). Les rares porno dont SEUL le titre kanji trahit le contenu
+// (sans mot-clé TMDb) sont couverts par la liste d'ids `KNOWN_ADULT_TMDB_IDS`.
+export const CJK_ADULT_MARKERS: readonly string[] = [
+  '18禁', // interdit aux moins de 18 ans
+  'アダルト', // adult (katakana)
+  'アダルトビデオ', // AV
+  'ポルノ', // porno
+  '裏ビデオ', // « urabideo » : vidéo porno clandestine
+  '成人向け', // « destiné aux adultes » (compound non ambigu)
+  '成人映画', // film pour adultes
+  'エロアニメ', // ero-anime (compound non ambigu)
+  'エロゲ', // eroge (jeu érotique)
+];
+
+// Liste noire d'IDENTIFIANTS TMDb — filet pour les rares œuvres pornographiques
+// que ni le flag `adult`, ni les mots-clés, ni le titre ne trahissent (ex. une
+// fiche « 変態 » sans aucun mot-clé). EXTENSIBLE : ajouter un id le bannit du
+// flux ET de la recherche, sans risque de faux positif (correspondance exacte).
+export const KNOWN_ADULT_TMDB_IDS: ReadonlySet<string> = new Set<string>([
+  '1259564', // 犯し魔 変態リンチ (pink film)
+  '1027993', // 変態ＳＥＸ 私とろける (pink film)
+  '233071', //  変態 (sans mot-clé)
+  '306449', //  変態植物倶楽部 (sans mot-clé)
+  '1262147', // 変態肉濡れバイブ
+]);
+
+// `true` si l'id TMDb est explicitement banni (contenu adulte confirmé).
+export function isKnownAdultTmdbId(id: string | null | undefined): boolean {
+  return id != null && KNOWN_ADULT_TMDB_IDS.has(id);
+}
+
 // Liste exportée (extensible) de TOUS les marqueurs pornographiques.
 export const ADULT_MARKERS: readonly AdultMarker[] = [...SUBSTR_MARKERS, ...WORD_MARKERS];
 
@@ -138,6 +174,11 @@ export function containsAdultContent(
 ): boolean {
   for (const raw of [text, ...more]) {
     if (typeof raw !== 'string' || raw.length === 0) continue;
+    // 1) Marqueurs CJK sur le texte BRUT (la normalisation supprime les kanji).
+    for (const marker of CJK_ADULT_MARKERS) {
+      if (raw.includes(marker)) return true;
+    }
+    // 2) Marqueurs latins/romanisés sur le texte normalisé.
     const spaced = normalizeForModeration(raw);
     if (!spaced) continue;
     const compact = spaced.replace(/[^a-z0-9]/g, '');

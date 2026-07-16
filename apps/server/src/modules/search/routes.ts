@@ -10,7 +10,7 @@ import { allowsAdultContent } from '../settings/adultContent.js';
 import { attachSocialStats } from './socialStats.js';
 import { filterSeenWithFallback, loadRecentImpressions, recordImpressions } from '../explore/impressions.js';
 import { genreProfile, pickExplorationSlug, pickWeighted, tmdbGenreBySlug, tmdbGenreWeights } from '../explore/taste.js';
-import { containsAdultContent } from '@serietime/core';
+import { containsAdultContent, isKnownAdultTmdbId } from '@serietime/core';
 
 // Contenu pornographique exclu du flux et de la recherche : marqueur TMDb
 // `adult` OU signaux porno (titre/résumé) via containsAdultContent. La violence
@@ -23,8 +23,12 @@ type AdultCheckable = {
   original_title?: string;
   overview?: string;
 };
-function isAdultContent(r: AdultCheckable): boolean {
-  return r.adult === true || containsAdultContent(r.name, r.title, r.original_name, r.original_title, r.overview);
+function isAdultContent(r: AdultCheckable & { id?: number | string }): boolean {
+  return (
+    r.adult === true ||
+    isKnownAdultTmdbId(r.id != null ? String(r.id) : null) ||
+    containsAdultContent(r.name, r.title, r.original_name, r.original_title, r.overview)
+  );
 }
 
 // Vérification hentai par mots-clés PAR ITEM, sur la sélection FINALE d'items
@@ -35,19 +39,26 @@ function isAdultContent(r: AdultCheckable): boolean {
 const ADULT_ITEM_KEYWORDS = new Set([
   'hentai', 'erotic', 'pornographic animation', 'pornographic video', 'pornography',
   'porno', 'erotic movie', 'softcore', 'hardcore',
+  // Pink films / softcore live-action / JAV : ces « movie » japonais passent le
+  // flag `adult` ET containsAdultContent (titre anodin), mais leurs mots-clés
+  // TMDb les trahissent. Étendu au-delà de l'animation pour couvrir la RECHERCHE.
+  'pink film', 'erotica', 'sexploitation', 'adult video', 'av idol', 'jav', 'roman porno',
   // « ecchi » : fan-service très suggestif, classé 18+ dans de nombreux pays
   // (ex. « Takamine-san » : BR 18, KR 19, IT VM18…). Écarté par défaut, comme
   // le reste du 18+ ; l'interrupteur « Contenu 18+ » le fait réapparaître.
-  // N'affecte que les animés (dropHentaiAnime est gardé par isAnime).
   'ecchi',
 ]);
+// Vérification par mots-clés TMDb PAR ITEM : exclut si un mot-clé ∈ ensemble
+// adulte. `matches` restreint la portée (flux : animés seulement ; recherche :
+// tous les items avec tmdbId). Coût borné : sélection finale, en parallèle.
+// Débrayé pour les comptes 18+.
 async function dropHentaiAnime<T extends { tmdbId: string | null; type: 'show' | 'movie' }>(
   items: T[],
-  isAnime: (item: T) => boolean,
+  matches: (item: T) => boolean,
 ): Promise<T[]> {
   const ok = await Promise.all(
     items.map(async (item) => {
-      if (!item.tmdbId || !isAnime(item)) return true;
+      if (!item.tmdbId || !matches(item)) return true;
       const names = await tmdbKeywordNames(item.type === 'movie' ? 'movie' : 'tv', item.tmdbId);
       return !names.some((n) => ADULT_ITEM_KEYWORDS.has(n.trim().toLowerCase()));
     }),
@@ -179,14 +190,13 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
       });
     }
 
-    // Ids TMDb d'ANIMATION (genre 16) : vérifiés par mots-clés en fin de route
-    // (hentai qui échappe au flag `adult`). Ignoré pour les comptes 18+.
-    const animeTmdbIds = new Set<string>();
     if (tmdbEnabled()) {
       const remote = await tmdbSearch(q, 'multi', undefined, lang, allowAdult);
       for (const r of remote.slice(0, 20)) {
+        // isAdultContent voit le titre LOCALISÉ, le titre ORIGINAL (kanji inclus,
+        // désormais détecté) et le résumé. Le filtre par mots-clés ci-dessous
+        // (fin de route) attrape les pink films/softcore sans marqueur textuel.
         if (!allowAdult && isAdultContent(r)) continue; // exclut le contenu pornographique
-        if ((r.genre_ids ?? []).includes(16)) animeTmdbIds.add(String(r.id));
         add({
           id: null,
           tmdbId: String(r.id),
@@ -225,10 +235,14 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
         });
       }
     }
-    // Vérification hentai par mots-clés sur les items d'animation (sélection finale).
+    // Vérification par mots-clés TMDb sur TOUS les résultats ayant un tmdbId
+    // (pas seulement les animés) : les pink films / softcore live-action
+    // passent le flag `adult` ET containsAdultContent mais sont taggés
+    // « softcore »/« pink film »/« erotica »… Jeu de résultats petit (≤ ~40),
+    // /keywords caché 30 j → coût borné. Débrayé pour les comptes 18+.
     const finalResults = allowAdult
       ? results
-      : await dropHentaiAnime(results, (i) => i.tmdbId != null && animeTmdbIds.has(i.tmdbId));
+      : await dropHentaiAnime(results, (i) => i.tmdbId != null);
     return { results: finalResults, sources };
   });
 

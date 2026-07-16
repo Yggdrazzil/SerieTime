@@ -571,7 +571,7 @@ function AppTab() {
       <SectionTitle>Suggestions</SectionTitle>
       <ToggleRow
         label="Contenu 18+"
-        sub="Affiche le contenu pornographique et les hentai dans les suggestions. Désactivé par défaut."
+        sub="Affiche le contenu réservé aux adultes dans les suggestions. Désactivé par défaut."
         on={s.allowAdultContent ?? false}
         onToggle={(v) => adultMut.mutate(v)}
       />

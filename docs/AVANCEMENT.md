@@ -6,7 +6,7 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
-Dernière mise à jour : **2026-07-16** (Claude) — Profil public enrichi (niveau + titre + streak, section Trophées, compteur Jeux, favoris séries/films/jeux ; gamification visible même en profil privé)
+Dernière mise à jour : **2026-07-16** (Claude) — Recherche : filtrage porno colmaté (marqueurs CJK/kanji dans `containsAdultContent` + vérif mots-clés TMDb étendue à TOUS les résultats, plus seulement les animés)
 
 ---
 

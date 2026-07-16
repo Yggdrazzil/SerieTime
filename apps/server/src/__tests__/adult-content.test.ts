@@ -36,24 +36,43 @@ beforeAll(async () => {
     vi.fn(async (url: unknown) => {
       const u = String(url);
       if (u.includes('/search/multi')) {
-        return new Response(
-          JSON.stringify({
-            results: [
-              { id: 1, media_type: 'movie', title: 'Hentai Paradise', adult: false, overview: 'nsfw' },
-              {
-                id: 2,
-                media_type: 'movie',
-                title: 'Blood Murder Gore',
-                adult: false,
-                overview: 'extreme violence, gore, blood and murder',
-              },
-              { id: 3, media_type: 'tv', name: 'Wholesome Family Show', adult: false, overview: 'a nice show' },
-            ],
-          }),
-          { status: 200 },
-        );
+        const base = [
+          { id: 1, media_type: 'movie', title: 'Hentai Paradise', adult: false, overview: 'nsfw' },
+          {
+            id: 2,
+            media_type: 'movie',
+            title: 'Blood Murder Gore',
+            adult: false,
+            overview: 'extreme violence, gore, blood and murder',
+          },
+          { id: 3, media_type: 'tv', name: 'Wholesome Family Show', adult: false, overview: 'a nice show' },
+          // Pink film live-action : titre/résumé anodins (adult:false, aucun
+          // marqueur textuel) → seuls les mots-clés TMDb le trahissent.
+          { id: 10, media_type: 'movie', title: 'Pink Nights', adult: false, overview: 'a romance in Tokyo' },
+          // Porno à titre KANJI « 変態 » SANS mot-clé et adult:false → aucun signal
+          // textuel/keyword. Attrapé par la liste noire d'ids (id réel banni).
+          { id: 233071, media_type: 'movie', title: '変態', original_title: '変態', adult: false, overview: 'drama' },
+          // Animé japonais NORMAL (Demon Slayer) : titre kanji anodin + mots-clés
+          // sains → conservé (pas de faux positif).
+          { id: 12, media_type: 'tv', name: '鬼滅の刃', original_name: '鬼滅の刃', adult: false, overview: 'shounen' },
+          // Animé grand public dont le TITRE contient « 変態 » (ex. « 変態王子 ») mais
+          // AUCUN mot-clé adulte → doit être CONSERVÉ (le kanji 変態 seul ne bloque plus).
+          { id: 13, media_type: 'tv', name: '変態な日常', original_name: '変態な日常', adult: false, overview: 'comedy' },
+        ];
+        return new Response(JSON.stringify({ results: base }), { status: 200 });
       }
-      // Toute autre requête TMDb (ex. langue) : réponse vide inoffensive.
+      // Mots-clés par item (vérification appliquée à TOUS les items avec tmdbId).
+      // Movie → champ `keywords` ; TV → champ `results`.
+      if (u.includes('/movie/10/keywords')) {
+        return new Response(JSON.stringify({ keywords: [{ name: 'pink film' }, { name: 'softcore' }] }), { status: 200 });
+      }
+      if (u.includes('/tv/12/keywords')) {
+        return new Response(JSON.stringify({ results: [{ name: 'anime' }, { name: 'shounen' }] }), { status: 200 });
+      }
+      if (u.includes('/tv/13/keywords')) {
+        return new Response(JSON.stringify({ results: [{ name: 'anime' }, { name: 'comedy' }] }), { status: 200 });
+      }
+      // Toute autre requête TMDb (mots-clés sains, langue…) : réponse vide inoffensive.
       return new Response(JSON.stringify({ results: [] }), { status: 200 });
     }),
   );
@@ -103,6 +122,45 @@ describe('TMDb — le porno est exclu, la violence conservée', () => {
     expect(titles).not.toContain('Hentai Paradise');
     expect(titles).toContain('Blood Murder Gore'); // violence 18+ → autorisée
     expect(titles).toContain('Wholesome Family Show');
+  });
+
+  it('/api/search exclut le pink film (mots-clés) et l’id banni, garde les animés normaux', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/search?q=whatever&type=media', headers: bearer() });
+    expect(res.statusCode).toBe(200);
+    const ids = (res.json().results as { tmdbId: string | null }[]).map((r) => r.tmdbId);
+    expect(ids).not.toContain('10'); // pink film / softcore (mots-clés, titre anodin)
+    expect(ids).not.toContain('233071'); // « 変態 » porno → liste noire d'ids
+    expect(ids).toContain('12'); // 鬼滅の刃 (Demon Slayer) — titre japonais normal
+    expect(ids).toContain('13'); // « 変態な日常 » — 変態 dans le titre mais animé normal → conservé
+  });
+});
+
+describe('TMDb — 18+ activé : tout revient', () => {
+  it('/api/search avec allowAdultContent=true renvoie pink film, kanji et hentai', async () => {
+    const reg = await app.inject({
+      method: 'POST',
+      url: '/api/auth/register',
+      payload: { displayName: 'Adult', email: 'adult@example.com', password: 'secret123' },
+    });
+    expect(reg.statusCode).toBe(200);
+    const adultToken = reg.json().token as string;
+    const set = await app.inject({
+      method: 'POST',
+      url: '/api/settings',
+      headers: { authorization: `Bearer ${adultToken}` },
+      payload: { allowAdultContent: true },
+    });
+    expect(set.statusCode).toBe(200);
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/search?q=whatever&type=media',
+      headers: { authorization: `Bearer ${adultToken}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const ids = (res.json().results as { tmdbId: string | null }[]).map((r) => r.tmdbId);
+    expect(ids).toContain('1'); // Hentai Paradise
+    expect(ids).toContain('10'); // pink film
+    expect(ids).toContain('233071'); // 変態 (id banni) — revient en 18+
   });
 });
 

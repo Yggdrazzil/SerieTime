@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { containsAdultContent, ADULT_MARKERS } from '../moderation/adultContent.js';
+import { containsAdultContent, ADULT_MARKERS, isKnownAdultTmdbId } from '../moderation/adultContent.js';
 
 describe('containsAdultContent — BLOQUE le porno (multilingue)', () => {
   const porn = [
@@ -46,6 +46,29 @@ describe('containsAdultContent — BLOQUE le porno (multilingue)', () => {
     expect(containsAdultContent('Titre anodin', null, 'Un synopsis franchement pornographique')).toBe(true);
     expect(containsAdultContent(undefined, 'Hentai uncensored')).toBe(true);
   });
+
+  it('bloque les marqueurs CJK NON AMBIGUS uniquement', () => {
+    expect(containsAdultContent('18禁アニメ')).toBe(true); // interdit -18
+    expect(containsAdultContent('成人向けアダルトビデオ')).toBe(true); // pour adultes / AV
+    expect(containsAdultContent('エロアニメ集')).toBe(true); // ero-anime (compound)
+    // Vu même quand seul le résumé (ou un champ tardif) contient le marqueur.
+    expect(containsAdultContent('Neutral title', null, 'ポルノ映画')).toBe(true);
+  });
+
+  it('NE bloque PAS 変態 / エロ seuls (animés grand public)', () => {
+    // « 変態 » = hentai MAIS aussi « métamorphose » → le blocage passe par la
+    // liste d'ids, pas par la sous-chaîne (sinon on bloque « 変態王子 »).
+    expect(containsAdultContent('変態王子と笑わない猫')).toBe(false); // The Hentai Prince
+    expect(containsAdultContent('エロマンガ先生')).toBe(false); // Eromanga-sensei (mainstream)
+    expect(containsAdultContent('変態植物倶楽部')).toBe(false); // 変態 seul → pas via texte
+  });
+
+  it('isKnownAdultTmdbId : liste noire d’ids exacte', () => {
+    expect(isKnownAdultTmdbId('233071')).toBe(true);
+    expect(isKnownAdultTmdbId('306449')).toBe(true);
+    expect(isKnownAdultTmdbId('12345')).toBe(false); // id quelconque non banni
+    expect(isKnownAdultTmdbId(null)).toBe(false);
+  });
 });
 
 describe('containsAdultContent — NE BLOQUE PAS le grand public (0 faux positif)', () => {
@@ -72,6 +95,10 @@ describe('containsAdultContent — NE BLOQUE PAS le grand public (0 faux positif
     'MaXXXine', // film d'horreur 2024 (Ti West) — « xxx » interne, pas un token
     'Watermilfoil documentary', // « milf » interne à « milfoil »
     'Learning Java in 24 hours', // « jav » interne à « java »
+    // Titres japonais NORMAUX (aucun marqueur CJK adulte) → autorisés
+    '進撃の巨人', // L'Attaque des Titans
+    '鬼滅の刃', // Demon Slayer
+    'ワンピース', // One Piece
     // Divers grand public
     'Cette série est géniale',
     'A masterpiece about war and loss',
