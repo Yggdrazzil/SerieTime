@@ -80,6 +80,12 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
 
 ## Journal des modifications
 
+### 2026-07-17 — Claude : thème Sombre — pastilles de section en jaune du logo
+- Dans le thème SOMBRE uniquement : les pastilles « En cours », « À voir »,
+  « Pas regardé depuis un moment », « Voulus »… passent au jaune du logo
+  `#FBAE00` (texte foncé). Nuit garde son rose, Clair/Sunset leurs gris —
+  vérifié au pixel dans les trois thèmes.
+
 ### 2026-07-17 — Claude : icône maskable aérée, fiches fluides, flash Séries (correctif racine)
 - **Icône PWA (écran d'accueil)** : le motif était encore trop serré — les
   maskable sont recomposées avec le motif à 53 % du canevas, soit ~66 %

@@ -86,10 +86,10 @@ const DARK: Palette = {
   overlay: 'rgba(0,0,0,0.72)',
   provider: '#00A8E1',
   onAccent: '#101014',
-  // « Sombre » reste sobre : le rose du logo est réservé au thème NUIT
-  // (midnight) — demande produit 16/07.
-  pillBg: '#6A6A76',
-  pillFg: '#1B1B22',
+  // Pastilles de section en JAUNE du logo (demande produit 17/07 — thème
+  // Sombre uniquement) ; le rose reste réservé au thème Nuit (midnight).
+  pillBg: '#FBAE00',
+  pillFg: '#101014',
   notif: '#E36067',
   plusCount: '#9C9CA8',
   imagePlaceholder: '#2A2A32',
