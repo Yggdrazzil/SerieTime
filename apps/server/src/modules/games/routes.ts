@@ -8,6 +8,7 @@ import { isAllowedImageUrl } from '../media/imageUrl.js';
 import { scheduleRecompute } from '../gamification/service.js';
 import { filterSeenWithFallback, loadRecentImpressions, recordImpressions } from '../explore/impressions.js';
 import { genreProfile, igdbGenreWeights, pickWeighted } from '../explore/taste.js';
+import { allowsAdultContent } from '../settings/adultContent.js';
 
 const GAME_STATUSES = ['wishlist', 'playing', 'completed', 'abandoned'] as const;
 
@@ -62,7 +63,8 @@ export async function gamesRoutes(app: FastifyInstance): Promise<void> {
       take: 10,
     });
     const seen = new Set(local.map((m) => m.igdbId).filter(Boolean));
-    const games = await igdbSearch(needle).catch(() => []);
+    const allowAdult = await allowsAdultContent(request.userId);
+    const games = await igdbSearch(needle, allowAdult).catch(() => []);
     return {
       results: [
         ...local.map((m) => ({
@@ -288,14 +290,15 @@ export async function gamesRoutes(app: FastifyInstance): Promise<void> {
     };
   });
 
-  app.get('/api/games/discover', async () => {
+  app.get('/api/games/discover', async (request) => {
     const { igdbPopular, igdbUpcoming, igdbImageUrl } = await import('../../services/igdb/index.js');
+    const allowAdult = await allowsAdultContent(request.userId);
     const card = (g: { id: number; name: string; first_release_date?: number; cover?: { image_id: string } }) => ({
       igdbId: String(g.id), title: g.name,
       year: g.first_release_date ? new Date(g.first_release_date * 1000).getFullYear() : null,
       posterPath: g.cover ? igdbImageUrl(g.cover.image_id) : null,
     });
-    const [popular, upcoming] = await Promise.all([igdbPopular(), igdbUpcoming()]);
+    const [popular, upcoming] = await Promise.all([igdbPopular({ allowAdult }), igdbUpcoming(allowAdult)]);
     return { popular: popular.map(card), upcoming: upcoming.map(card) };
   });
 
@@ -317,17 +320,19 @@ export async function gamesRoutes(app: FastifyInstance): Promise<void> {
     );
     // 1-2 genres préférés tirés au hasard pondéré → viviers IGDB dédiés.
     const genreIds = pickWeighted(weights, 2).map(Number);
+    const allowAdult = await allowsAdultContent(request.userId);
     // Offsets aléatoires : fenêtre glissante dans les classements IGDB, le
     // vivier change à chaque appel (la clé ApiCache = corps Apicalypse exact,
-    // offset et genres compris — le cache ne fige donc pas le hasard).
+    // offset, genres ET clause thème compris — le cache ne fige pas le hasard
+    // et ne mélange pas comptes 18+ / standards).
     const randOffset = (max: number) => Math.floor(Math.random() * (max + 1));
     const [popular, upcoming, recent, seenRecently, byGenre] = await Promise.all([
-      igdbPopular({ offset: randOffset(200) }),
-      igdbUpcoming(),
-      igdbRecent({ offset: randOffset(100) }),
+      igdbPopular({ offset: randOffset(200), allowAdult }),
+      igdbUpcoming(allowAdult),
+      igdbRecent({ offset: randOffset(100), allowAdult }),
       // Mémoire du flux : items servis < 3 jours exclus (garde anti-famine plus bas).
       loadRecentImpressions(request.userId),
-      Promise.all(genreIds.map((gid) => igdbByGenres([gid], { offset: randOffset(150) }))),
+      Promise.all(genreIds.map((gid) => igdbByGenres([gid], { offset: randOffset(150), allowAdult }))),
     ]);
     const trackedIds = new Set(tracked.map((t) => t.media.igdbId).filter((x): x is string => Boolean(x)));
     const seen = new Set<number>();

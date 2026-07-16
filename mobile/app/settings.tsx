@@ -491,6 +491,22 @@ function AppTab() {
     onSettled: () => qc.invalidateQueries({ queryKey: ['settings'] }),
   });
   const s = data?.settings ?? {};
+  // Contenu 18+ : bascule optimiste sur /api/settings, puis on re-fetche les
+  // suggestions (Explorer) qui dépendent du réglage. Défaut : désactivé.
+  const adultMut = useMutation({
+    mutationFn: (v: boolean) => api.post('/api/settings', { allowAdultContent: v }),
+    onMutate: async (v: boolean) => {
+      await qc.cancelQueries({ queryKey: ['settings'] });
+      const prev = qc.getQueryData<{ settings: any }>(['settings']);
+      if (prev?.settings) qc.setQueryData(['settings'], { ...prev, settings: { ...prev.settings, allowAdultContent: v } });
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => { if (ctx?.prev) qc.setQueryData(['settings'], ctx.prev); },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['settings'] });
+      qc.invalidateQueries({ queryKey: ['explore'] });
+    },
+  });
   // Langue de contenu : la valeur courante vient du serveur (User.language) ;
   // sélection optimiste le temps de l'aller-retour.
   const [langSel, setLangSel] = useState<string | null>(null);
@@ -552,6 +568,14 @@ function AppTab() {
       ))}
       {langMsg ? <Text style={styles.themeNote}>{langMsg}</Text> : null}
       <Divider />
+      <SectionTitle>Suggestions</SectionTitle>
+      <ToggleRow
+        label="Contenu 18+"
+        sub="Affiche le contenu pornographique et les hentai dans les suggestions. Désactivé par défaut."
+        on={s.allowAdultContent ?? false}
+        onToggle={(v) => adultMut.mutate(v)}
+      />
+      <Divider />
       <SectionTitle>Cache</SectionTitle>
       <View style={{ padding: 16 }}>
         <Pressable style={styles.cacheBtn} onPress={() => api.post('/api/cache/clear').catch(() => {})}>
@@ -596,7 +620,13 @@ function ToggleRow({ label, sub, on, onToggle }: { label: string; sub?: string; 
         <Text style={{ color: COLORS.text, fontFamily: FONTS.regular, fontSize: 14 }}>{label}</Text>
         {sub ? <Text style={{ fontFamily: FONTS.regular, fontSize: 12.5, color: COLORS.textMuted, lineHeight: 17, marginTop: 2 }}>{sub}</Text> : null}
       </View>
-      <Pressable onPress={() => onToggle(!on)} hitSlop={8}>
+      <Pressable
+        onPress={() => onToggle(!on)}
+        hitSlop={8}
+        accessibilityRole="switch"
+        accessibilityLabel={label}
+        accessibilityState={{ checked: on }}
+      >
         <Animated.View style={[styles.toggle, { backgroundColor: v.interpolate({ inputRange: [0, 1], outputRange: [COLORS.chipSelected, COLORS.yellow] }) }]}>
           <Animated.View
             style={[

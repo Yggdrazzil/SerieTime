@@ -74,16 +74,19 @@ export function igdbImageUrl(imageId: string, size = 't_cover_big'): string {
 
 // Corps Apicalypse exposés pour les tests (le cache ApiCache est adressé par
 // ce corps exact — les tests le pré-remplissent pour tourner sans réseau).
-export function searchQueryBody(q: string): string {
+export function searchQueryBody(q: string, allowAdult = false): string {
   // NB : le champ IGDB `category` a été déprécié (migré vers `game_type`) et
   // `where category = 0` ne matche plus RIEN → on ne filtre plus par type ici.
-  return `search "${q.replace(/"/g, '')}"; ${FIELDS}; where ${SAFE_THEMES}; limit 30;`;
+  // allowAdult (utilisateur 18+) : on retire la clause thème 42 (SAFE_THEMES).
+  // La clause fait partie du corps Apicalypse = clé de cache → isolation entre
+  // comptes 18+ et comptes standards.
+  const where = allowAdult ? '' : ` where ${SAFE_THEMES};`;
+  return `search "${q.replace(/"/g, '')}"; ${FIELDS};${where} limit 30;`;
 }
 
-export async function igdbSearch(q: string): Promise<IgdbGame[]> {
-  return ((await igdbQuery<IgdbGame[]>('games', searchQueryBody(q), DAY)) ?? [])
-    .filter(isMainGame)
-    .filter(isSafeGame);
+export async function igdbSearch(q: string, allowAdult = false): Promise<IgdbGame[]> {
+  const games = ((await igdbQuery<IgdbGame[]>('games', searchQueryBody(q, allowAdult), DAY)) ?? []).filter(isMainGame);
+  return allowAdult ? games : games.filter(isSafeGame);
 }
 
 export async function igdbGame(id: number): Promise<IgdbGame | null> {
@@ -99,37 +102,45 @@ export async function igdbGame(id: number): Promise<IgdbGame | null> {
 // le hasard n'est donc jamais figé par le cache.
 const offsetClause = (offset?: number) => (offset ? ` offset ${offset};` : '');
 
-export async function igdbPopular(opts: { offset?: number } = {}): Promise<IgdbGame[]> {
-  const body = `${FIELDS}; where total_rating_count > 200 & ${SAFE_THEMES}; sort total_rating desc; limit 50;${offsetClause(opts.offset)}`;
-  return ((await igdbQuery<IgdbGame[]>('games', body, DAY)) ?? []).filter(isMainGame).filter(isSafeGame);
+// allowAdult (18+) : retire ` & SAFE_THEMES` du `where` et le post-filtre
+// isSafeGame. La clause étant dans le corps Apicalypse (= clé de cache), les
+// comptes 18+ et standards n'utilisent jamais la même entrée de cache.
+const themesClause = (allowAdult: boolean) => (allowAdult ? '' : ` & ${SAFE_THEMES}`);
+const applySafe = (games: IgdbGame[], allowAdult: boolean) =>
+  allowAdult ? games : games.filter(isSafeGame);
+
+export async function igdbPopular(opts: { offset?: number; allowAdult?: boolean } = {}): Promise<IgdbGame[]> {
+  const body = `${FIELDS}; where total_rating_count > 200${themesClause(opts.allowAdult ?? false)}; sort total_rating desc; limit 50;${offsetClause(opts.offset)}`;
+  return applySafe(((await igdbQuery<IgdbGame[]>('games', body, DAY)) ?? []).filter(isMainGame), opts.allowAdult ?? false);
 }
 
 // Sorties récentes bien notées (2 dernières années) : élargit le vivier du
 // flux Explorer au-delà du top all-time, pour que chaque tirage varie.
-export async function igdbRecent(opts: { offset?: number } = {}): Promise<IgdbGame[]> {
+export async function igdbRecent(opts: { offset?: number; allowAdult?: boolean } = {}): Promise<IgdbGame[]> {
   const now = Math.floor(Date.now() / 1000);
   const twoYearsAgo = now - 2 * 365 * 86_400;
-  const body = `${FIELDS}; where first_release_date > ${twoYearsAgo} & first_release_date < ${now} & total_rating_count > 20 & ${SAFE_THEMES}; sort total_rating desc; limit 50;${offsetClause(opts.offset)}`;
-  return ((await igdbQuery<IgdbGame[]>('games', body, DAY)) ?? []).filter(isMainGame).filter(isSafeGame);
+  const body = `${FIELDS}; where first_release_date > ${twoYearsAgo} & first_release_date < ${now} & total_rating_count > 20${themesClause(opts.allowAdult ?? false)}; sort total_rating desc; limit 50;${offsetClause(opts.offset)}`;
+  return applySafe(((await igdbQuery<IgdbGame[]>('games', body, DAY)) ?? []).filter(isMainGame), opts.allowAdult ?? false);
 }
 
 // Vivier par genres IGDB (profil de goût du flux Explorer jeux). Corps exposé
 // pour les tests (pré-remplissage du cache ApiCache adressé par ce corps).
-export function genresQueryBody(genreIds: number[], opts: { offset?: number } = {}): string {
-  return `${FIELDS}; where genres = (${genreIds.join(',')}) & total_rating_count > 50 & ${SAFE_THEMES}; sort total_rating desc; limit 50;${offsetClause(opts.offset)}`;
+export function genresQueryBody(genreIds: number[], opts: { offset?: number; allowAdult?: boolean } = {}): string {
+  return `${FIELDS}; where genres = (${genreIds.join(',')}) & total_rating_count > 50${themesClause(opts.allowAdult ?? false)}; sort total_rating desc; limit 50;${offsetClause(opts.offset)}`;
 }
 
-export async function igdbByGenres(genreIds: number[], opts: { offset?: number } = {}): Promise<IgdbGame[]> {
+export async function igdbByGenres(genreIds: number[], opts: { offset?: number; allowAdult?: boolean } = {}): Promise<IgdbGame[]> {
   if (genreIds.length === 0) return [];
-  return ((await igdbQuery<IgdbGame[]>('games', genresQueryBody(genreIds, opts), DAY)) ?? [])
-    .filter(isMainGame)
-    .filter(isSafeGame);
+  return applySafe(
+    ((await igdbQuery<IgdbGame[]>('games', genresQueryBody(genreIds, opts), DAY)) ?? []).filter(isMainGame),
+    opts.allowAdult ?? false,
+  );
 }
 
-export async function igdbUpcoming(): Promise<IgdbGame[]> {
+export async function igdbUpcoming(allowAdult = false): Promise<IgdbGame[]> {
   const now = Math.floor(Date.now() / 1000);
-  const body = `${FIELDS}; where first_release_date > ${now} & ${SAFE_THEMES}; sort first_release_date asc; limit 30;`;
-  return ((await igdbQuery<IgdbGame[]>('games', body, DAY)) ?? []).filter(isMainGame).filter(isSafeGame);
+  const body = `${FIELDS}; where first_release_date > ${now}${themesClause(allowAdult)}; sort first_release_date asc; limit 30;`;
+  return applySafe(((await igdbQuery<IgdbGame[]>('games', body, DAY)) ?? []).filter(isMainGame), allowAdult);
 }
 
 export function igdbToMedia(g: IgdbGame) {

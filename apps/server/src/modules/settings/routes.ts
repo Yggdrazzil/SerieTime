@@ -4,6 +4,7 @@ import { prisma } from '../../db/client.js';
 import { requireAuth } from '../auth/routes.js';
 import { fromJson, toJson } from '../../utils/json.js';
 import { getUserLang, invalidateUserLang } from '../media/userLang.js';
+import { invalidateAdultContent } from './adultContent.js';
 import { backfillUserTranslations } from '../../services/tmdb/index.js';
 
 // Langues de contenu proposées (titres/résumés des séries et films).
@@ -18,6 +19,8 @@ const DEFAULT_SETTINGS = {
   upcoming: { hideWatched: false, channels: [] as string[] },
   subscriptions: [] as string[],
   appLock: false,
+  // Contenu 18+ (porno/hentai) dans les suggestions. Désactivé par défaut.
+  allowAdultContent: false,
 };
 
 export type AppSettings = typeof DEFAULT_SETTINGS;
@@ -38,6 +41,7 @@ const SETTINGS_SCHEMA = z
     upcoming: z.object({ hideWatched: z.boolean(), channels: z.array(z.string()) }).partial(),
     subscriptions: z.array(z.string()),
     appLock: z.boolean(),
+    allowAdultContent: z.boolean(),
   })
   .partial();
 
@@ -103,6 +107,8 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
         create: { userId: request.userId, dataJson: toJson(next) },
         update: { dataJson: toJson(next) },
       });
+      // Invalide le cache de l'interrupteur 18+ (lu par feed/discover/search/games).
+      if ('allowAdultContent' in patch) invalidateAdultContent(request.userId);
     }
     return {
       settings: { ...next, language: language ?? (await getUserLang(request.userId)) },

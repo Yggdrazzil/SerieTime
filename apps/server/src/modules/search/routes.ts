@@ -4,8 +4,9 @@ import { prisma } from '../../db/client.js';
 import { requireAuth } from '../auth/routes.js';
 import { mediaTitle, serializeMedia } from '../media/serialize.js';
 import { getUserLang } from '../media/userLang.js';
-import { parseTranslations, tmdbEnabled, tmdbSearch, tmdbSearchPerson, tmdbTrending } from '../../services/tmdb/index.js';
+import { parseTranslations, tmdbEnabled, tmdbKeywordNames, tmdbSearch, tmdbSearchPerson, tmdbTrending } from '../../services/tmdb/index.js';
 import { tvdbEnabled, tvdbLanguage, tvdbSearch } from '../../services/tvdb/index.js';
+import { allowsAdultContent } from '../settings/adultContent.js';
 import { attachSocialStats } from './socialStats.js';
 import { filterSeenWithFallback, loadRecentImpressions, recordImpressions } from '../explore/impressions.js';
 import { genreProfile, pickExplorationSlug, pickWeighted, tmdbGenreBySlug, tmdbGenreWeights } from '../explore/taste.js';
@@ -24,6 +25,29 @@ type AdultCheckable = {
 };
 function isAdultContent(r: AdultCheckable): boolean {
   return r.adult === true || containsAdultContent(r.name, r.title, r.original_name, r.original_title, r.overview);
+}
+
+// Vérification hentai par mots-clés PAR ITEM, sur la sélection FINALE d'items
+// d'ANIMATION uniquement (les hentai passent parfois le flag `adult` et
+// containsAdultContent — cf. « Jimihen », taggé « erotic » sans « hentai »). On
+// exclut si un mot-clé TMDb ∈ ensemble adulte. Coût borné : seulement les
+// items animés retenus, en parallèle. Débrayé pour les comptes 18+.
+const ADULT_ITEM_KEYWORDS = new Set([
+  'hentai', 'erotic', 'pornographic animation', 'pornographic video', 'pornography',
+  'porno', 'erotic movie', 'softcore', 'hardcore',
+]);
+async function dropHentaiAnime<T extends { tmdbId: string | null; type: 'show' | 'movie' }>(
+  items: T[],
+  isAnime: (item: T) => boolean,
+): Promise<T[]> {
+  const ok = await Promise.all(
+    items.map(async (item) => {
+      if (!item.tmdbId || !isAnime(item)) return true;
+      const names = await tmdbKeywordNames(item.type === 'movie' ? 'movie' : 'tv', item.tmdbId);
+      return !names.some((n) => ADULT_ITEM_KEYWORDS.has(n.trim().toLowerCase()));
+    }),
+  );
+  return items.filter((_, i) => ok[i]);
 }
 
 type SearchResult = {
@@ -66,6 +90,7 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
       .parse(request.query ?? {});
     const q = query.q.trim();
     const lang = await getUserLang(request.userId);
+    const allowAdult = await allowsAdultContent(request.userId);
     // L'app affiche un message clair si aucune source externe n'est configurée.
     const sources = { tmdb: tmdbEnabled(), tvdb: tvdbEnabled() };
     if (!q) return { results: [], sources };
@@ -149,10 +174,14 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
       });
     }
 
+    // Ids TMDb d'ANIMATION (genre 16) : vérifiés par mots-clés en fin de route
+    // (hentai qui échappe au flag `adult`). Ignoré pour les comptes 18+.
+    const animeTmdbIds = new Set<string>();
     if (tmdbEnabled()) {
-      const remote = await tmdbSearch(q, 'multi', undefined, lang);
+      const remote = await tmdbSearch(q, 'multi', undefined, lang, allowAdult);
       for (const r of remote.slice(0, 20)) {
-        if (isAdultContent(r)) continue; // exclut le contenu pornographique
+        if (!allowAdult && isAdultContent(r)) continue; // exclut le contenu pornographique
+        if ((r.genre_ids ?? []).includes(16)) animeTmdbIds.add(String(r.id));
         add({
           id: null,
           tmdbId: String(r.id),
@@ -191,7 +220,11 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
         });
       }
     }
-    return { results, sources };
+    // Vérification hentai par mots-clés sur les items d'animation (sélection finale).
+    const finalResults = allowAdult
+      ? results
+      : await dropHentaiAnime(results, (i) => i.tmdbId != null && animeTmdbIds.has(i.tmdbId));
+    return { results: finalResults, sources };
   });
 
   // Spec §20.3 : flux personnel de recommandations, affiné selon les goûts.
@@ -199,6 +232,7 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
     // Langue de contenu : les titres/résumés des cartes viennent de TMDb, qui
     // les renvoie directement dans la langue demandée (cache par langue).
     const lang = await getUserLang(request.userId);
+    const allowAdult = await allowsAdultContent(request.userId);
     // Graines de goût : ce que l'utilisateur a AIMÉ. Les favoris comptent le plus,
     // puis « à voir »/en cours/déjà vu (les swipes du mode Découvrir alimentent ça :
     // ♥ à voir = watchlist, ↓ déjà vu = completed). Plus il y en a, plus le flux
@@ -272,12 +306,12 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
       const { tmdbRecommendations } = await import('../../services/tmdb/index.js');
       for (const status of tasteSeeds) {
         if (!status.media.tmdbId) continue;
-        const recs = await tmdbRecommendations(status.media.type === 'show' ? 'tv' : 'movie', status.media.tmdbId, lang);
+        const recs = await tmdbRecommendations(status.media.type === 'show' ? 'tv' : 'movie', status.media.tmdbId, lang, allowAdult);
         // Échantillon aléatoire (le tirage change à chaque rafraîchissement) ; les
         // favoris pèsent plus lourd (plus de suggestions issues d'eux).
         const picks = [...recs].sort(() => Math.random() - 0.5).slice(0, status.isFavorite ? 5 : 3);
         for (const r of picks) {
-          if (isAdultContent(r)) continue; // exclut le contenu pornographique
+          if (!allowAdult && isAdultContent(r)) continue; // exclut le contenu pornographique
           const recType = status.media.type === 'show' ? 'show' : 'movie';
           const recTitle = r.name ?? r.title ?? '';
           const recYear = (r.first_air_date ?? r.release_date)
@@ -312,29 +346,31 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
       // époques (tri par votes) + 2 DÉCENNIES aléatoires + un vivier ANIMÉ dédié
       // + jusqu'à 3 viviers PAR GENRE issus du profil de goût (tv + movie).
       const decadePools = decades.flatMap((d) => [
-        tmdbDiscover('tv', { page: discPage(), yearGte: d, yearLte: d + 9, sort: 'vote_count.desc', lang }),
-        tmdbDiscover('movie', { page: discPage(), yearGte: d, yearLte: d + 9, sort: 'vote_count.desc', lang }),
+        tmdbDiscover('tv', { page: discPage(), yearGte: d, yearLte: d + 9, sort: 'vote_count.desc', lang, allowAdult }),
+        tmdbDiscover('movie', { page: discPage(), yearGte: d, yearLte: d + 9, sort: 'vote_count.desc', lang, allowAdult }),
       ]);
       const genrePools = genrePicks.flatMap((g) => [
-        ...(g.tvId ? [tmdbDiscover('tv', { genres: [g.tvId], page: discPage(), lang })] : []),
-        ...(g.movieId ? [tmdbDiscover('movie', { genres: [g.movieId], page: discPage(), lang })] : []),
+        ...(g.tvId ? [tmdbDiscover('tv', { genres: [g.tvId], page: discPage(), lang, allowAdult })] : []),
+        ...(g.movieId ? [tmdbDiscover('movie', { genres: [g.movieId], page: discPage(), lang, allowAdult })] : []),
       ]);
+      // Viviers ANIMÉS (genre 16 / VO japonaise) : `excludeErotic` ajoute le
+      // mot-clé « erotic » au without_keywords (le hentai y est souvent taggé).
       const pools = await Promise.all([
-        tmdbTrending('tv', page, lang),
-        tmdbTrending('movie', page, lang),
-        tmdbDiscover('tv', { page: discPage(), lang }),
-        tmdbDiscover('movie', { page: discPage(), lang }),
-        tmdbDiscover('tv', { page: discPage(), sort: 'vote_count.desc', lang }),
-        tmdbDiscover('movie', { page: discPage(), sort: 'vote_count.desc', lang }),
-        tmdbDiscover('tv', { genres: [16], language: 'ja', page: discPage(), lang }),
-        tmdbDiscover('movie', { genres: [16], language: 'ja', page: discPage(), lang }),
-        tmdbDiscover('tv', { genres: [16], language: 'ja', page: discPage(), sort: 'vote_count.desc', lang }),
+        tmdbTrending('tv', page, lang, allowAdult),
+        tmdbTrending('movie', page, lang, allowAdult),
+        tmdbDiscover('tv', { page: discPage(), lang, allowAdult }),
+        tmdbDiscover('movie', { page: discPage(), lang, allowAdult }),
+        tmdbDiscover('tv', { page: discPage(), sort: 'vote_count.desc', lang, allowAdult }),
+        tmdbDiscover('movie', { page: discPage(), sort: 'vote_count.desc', lang, allowAdult }),
+        tmdbDiscover('tv', { genres: [16], language: 'ja', page: discPage(), lang, allowAdult, excludeErotic: true }),
+        tmdbDiscover('movie', { genres: [16], language: 'ja', page: discPage(), lang, allowAdult, excludeErotic: true }),
+        tmdbDiscover('tv', { genres: [16], language: 'ja', page: discPage(), sort: 'vote_count.desc', lang, allowAdult, excludeErotic: true }),
         ...decadePools,
         ...genrePools,
       ]);
       const pool = pools.flat().sort(() => Math.random() - 0.5);
       for (const r of pool) {
-        if (isAdultContent(r)) continue; // exclut le contenu pornographique
+        if (!allowAdult && isAdultContent(r)) continue; // exclut le contenu pornographique
         const trendType = r.title ? 'movie' : 'show';
         const trendTitle = r.name ?? r.title ?? '';
         const trendYear = (r.first_air_date ?? r.release_date)
@@ -376,22 +412,26 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
     // pour que chaque filtre de l'app reste fourni sans renvoyer une liste énorme.
     const PER_CAT = 22;
     const perCat = new Map<string, number>();
-    const feed = varied.filter((c) => {
+    const capped = varied.filter((c) => {
       const cat = c.category ?? (c.type === 'show' ? 'serie' : 'film');
       const n = perCat.get(cat) ?? 0;
       if (n >= PER_CAT) return false;
       perCat.set(cat, n + 1);
       return true;
     });
+    // Vérification hentai par mots-clés sur les items d'ANIMATION retenus
+    // (catégorie « anime ») — appliquée sur la sélection FINALE, en parallèle.
+    const feed = allowAdult ? capped : await dropHentaiAnime(capped, (c) => c.category === 'anime');
     // Mémorise ce qui vient d'être servi (exclu des tirages pendant 3 jours).
     await recordImpressions(request.userId, feed.map(itemKey));
     const withStats = await attachSocialStats(feed, request.userId);
     return { feed: withStats };
   });
 
-  app.get('/api/explore/discover', async () => {
+  app.get('/api/explore/discover', async (request) => {
     if (!tmdbEnabled()) return { shows: [], movies: [] };
-    const [tv, movies] = await Promise.all([tmdbTrending('tv'), tmdbTrending('movie')]);
+    const allowAdult = await allowsAdultContent(request.userId);
+    const [tv, movies] = await Promise.all([tmdbTrending('tv', 1, undefined, allowAdult), tmdbTrending('movie', 1, undefined, allowAdult)]);
     const map = (r: Awaited<ReturnType<typeof tmdbTrending>>[number], type: 'show' | 'movie') => ({
       tmdbId: String(r.id),
       type,
@@ -399,9 +439,10 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
       posterPath: r.poster_path ?? null,
       backdropPath: r.backdrop_path ?? null,
     });
+    const keep = (r: Awaited<ReturnType<typeof tmdbTrending>>[number]) => allowAdult || !isAdultContent(r);
     return {
-      shows: tv.filter((r) => !isAdultContent(r)).map((r) => map(r, 'show')),
-      movies: movies.filter((r) => !isAdultContent(r)).map((r) => map(r, 'movie')),
+      shows: tv.filter(keep).map((r) => map(r, 'show')),
+      movies: movies.filter(keep).map((r) => map(r, 'movie')),
     };
   });
 

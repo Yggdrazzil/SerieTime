@@ -6,7 +6,7 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
-Dernière mise à jour : **2026-07-16** (Claude) — Modération (commentaires haineux + anti-porno renforcé, popup drôle) et lot UX du 16/07 d'Étienne (fenêtre épisode harmonisée, navigation, thèmes, bibliothèques)
+Dernière mise à jour : **2026-07-16** (Claude) — Interrupteur « contenu 18+ » par utilisateur (débraye le filtrage porno/hentai) + détection hentai renforcée (mot-clé TMDb « erotic » sur les animés, correction du sur-blocage des mots-clés) ; puis modération (commentaires haineux + anti-porno renforcé, popup drôle) et lot UX du 16/07 d'Étienne
 
 ---
 
@@ -19,7 +19,7 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
 
 - **Branche de référence : `main`** (à cloner / puller). Le développement passe
   par des branches courtes fusionnées via pull request.
-- Tests : `pnpm test` (235 tests au 2026-07-16 : 99 core + 136 serveur).
+- Tests : `pnpm test` (285 tests au 2026-07-16 : 143 core + 142 serveur).
 - Lancement local : voir `README.md` (serveur `pnpm dev:server`, mobile `npx expo start -c`).
 
 ## État par domaine
@@ -56,7 +56,8 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
 | Gamification — mobile (page Trophées, toasts, pastille niveau) | ✅ Fait | Page `/trophies` (niveau + XP, streak, défis du mois, grille de badges à paliers, classement hebdo), pastille niveau + rangée Trophées sur le profil, items badge dans le fil, toasts de déblocage globaux (`GamificationToastHost`) |
 | Flux Explorer — variété + personnalisation (serveur) | ✅ Fait | `GET /api/explore/feed` + `GET /api/explore/games` : mémoire des impressions (`ExploreImpression`, exclusion 3 j, garde anti-famine, purge 14 j), profil de goût par genres (favoris ×3, watchlist/en cours ×2, terminés ×1, dislikés ×−2) → viviers TMDb Discover/IGDB par genre, recs tirées parmi 30 graines, pages 1..8, 2 décennies, offsets IGDB aléatoires (`modules/explore/`, testé) |
 | Modération — commentaires (haine/insultes graves) | ✅ Fait | Module pur `packages/core/src/moderation/` (blocklist curée multilingue fr/en/es/de/it/pt × racisme/antisémitisme/homophobie/sexisme/injures sexuelles/violence + filtre tolérant leetspeak/répétitions/séparateurs/accents, frontière de mot pour termes courts) ; `POST /api/media/:id/comments` rejette (400 `comment_blocked`) commentaires **et** réponses ; mobile affiche le message renvoyé (testé, 0 faux positif sur la batterie légitime) |
-| Modération — suggestions (contenu adulte / porno) | ✅ Fait | Détection **porno ciblée** (sans bloquer la violence 18+) : module pur `packages/core/src/moderation/adultContent.ts` (`containsAdultContent` + `ADULT_MARKERS` multilingues fr/en/es/de/it/pt + japonais romanisé, tolérant leet/répétitions/séparateurs). TMDb : `include_adult=false` + `adult === true` + `containsAdultContent(titre/résumé)` sur flux/recherche/recos, **et** `without_keywords` (ids mots-clés porno récupérés dynamiquement via `/search/keyword`, doublement cachés) sur `/discover`. IGDB : thème « Erotic » (id 42) + `containsAdultContent(name, summary)` dans `isSafeGame` (testé) |
+| Modération — suggestions (contenu adulte / porno) | ✅ Fait | Détection **porno ciblée** (sans bloquer la violence 18+) : module pur `packages/core/src/moderation/adultContent.ts` (`containsAdultContent` + `ADULT_MARKERS` multilingues fr/en/es/de/it/pt + japonais romanisé, tolérant leet/répétitions/séparateurs). TMDb : `include_adult=false` + `adult === true` + `containsAdultContent(titre/résumé)` sur flux/recherche/recos, **et** `without_keywords` (ids mots-clés porno via `/search/keyword`, désormais **nom exact** — plus de sur-blocage sentai/senpai/porco) sur `/discover`ᐧ **Hentai** détecté par item via `tmdbKeywordNames` (mot-clé `erotic`, animés uniquement) + mot-clé `erotic` ajouté au `without_keywords` des viviers animés. IGDB : thème « Erotic » (id 42) + `containsAdultContent(name, summary)` dans `isSafeGame` (testé) |
+| Contenu 18+ — interrupteur par utilisateur | ✅ Fait | Paramètres > Suggestions > « Contenu 18+ » (défaut **désactivé**) : `allowAdultContent` (`UserSetting`, helper caché `modules/settings/adultContent.ts`). Activé = débraye tout le filtrage adulte pour ce compte (`include_adult=true`, pas de `without_keywords`, pas de `containsAdultContent`, pas de thème IGDB 42, pas de vérif mots-clés) sur `/api/explore/feed`, `/explore/discover`, `/api/search`, `/api/explore/games` ; `include_adult`/clause IGDB font partie de la **clé de cache** → aucune contamination entre comptes (testé). Bibliothèque jamais filtrée |
 | Langue de contenu par utilisateur | ✅ Fait | Paramètres > Langue (fr/en/es/de/it/pt) : titres/résumés des séries et films traduits partout (À voir, À venir, bibliothèque, profil, fiches, recherche, explorer, fil social, listes) via TMDb `/translations` (`Media.translationsJson`, une requête par média, backfill en fond au changement de langue) ; jeux IGDB hors périmètre (nom international) |
 
 ## Prochaines étapes (par priorité)
@@ -76,6 +77,56 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
 6. Publication native optionnelle (EAS Build APK, puis stores).
 
 ## Journal des modifications
+
+### 2026-07-16 — Interrupteur « contenu 18+ » par utilisateur + détection hentai renforcée
+Ajout d'un réglage **par compte** pour afficher (ou non) le contenu
+pornographique/hentai dans les suggestions, et durcissement de la détection du
+hentai qui échappait encore aux filtres.
+- **Réglage `allowAdultContent`** (défaut **false**) : ajouté au schéma zod fermé
+  et aux `DEFAULTS` de `apps/server/src/modules/settings/routes.ts` (stockage
+  `UserSetting` par utilisateur). Helper de lecture caché
+  `apps/server/src/modules/settings/adultContent.ts` (`allowsAdultContent` /
+  `invalidateAdultContent`, TTL 60 s), calqué sur `media/userLang.ts` ;
+  invalidé au `POST /api/settings`.
+- **`true` = débrayage total** pour ce compte : `include_adult=true` transmis à
+  TMDb, plus aucun `without_keywords`, ni `containsAdultContent`, ni exclusion
+  IGDB thème 42, ni vérification de mots-clés. Surfaces : `/api/explore/feed`,
+  `/api/explore/discover`, `/api/search`, `/api/explore/games` (+
+  `/api/games/search`, `/api/games/discover`). La **bibliothèque n'est jamais
+  filtrée**.
+- **Isolation de cache** : `include_adult` est surchargeable **par appel** et
+  fait partie de la **clé `ApiCache`** (via les `URLSearchParams` de
+  `cachedFetch`) ; côté IGDB la clause thème 42 est dans le corps Apicalypse
+  (= clé). Un compte 18+ n'empoisonne donc jamais le cache d'un compte standard
+  (testé).
+- **Correction du sur-blocage `getAdultKeywordIds()`** : on ne retenait que le
+  premier résultat flou de `/search/keyword` — « hentai » ramenait aussi
+  *sentai/senpai/mental*, « porno » ramenait *porco* (Porco Rosso), tous exclus
+  en silence des animés légitimes. Désormais **correspondance de nom EXACT**
+  (casse/espaces normalisés) contre une liste curée
+  (`hentai, pornography, pornographic, pornographic video, pornographic
+  animation, porn, porno, softcore, hardcore porn, sex film, erotic movie,
+  eroge`).
+- **Détection réelle du hentai** (compte standard) : (a) le mot-clé EXACT
+  `erotic` est ajouté au `without_keywords` des **seuls viviers animés**
+  (`genres:[16]`/`language:'ja'`, option `excludeErotic` de `tmdbDiscover`) — pas
+  des requêtes grand public (thrillers érotiques préservés) ; (b) nouvelle
+  fonction `tmdbKeywordNames(type, tmdbId)` (`/tv|movie/{id}/keywords`, cachée
+  30 j) appliquée aux items d'**animation de la sélection finale** de
+  `/api/explore/feed` et `/api/search`, en `Promise.all` : exclusion si un
+  mot-clé ∈ `{hentai, erotic, pornographic animation/video, pornography, porno,
+  erotic movie, softcore, hardcore}`. Vérifié : *Jimihen* (TMDb 113360, taggé
+  `erotic`) est exclu.
+- **Mobile** (`mobile/app/settings.tsx`) : nouvelle rangée « Contenu 18+ »
+  (section **Suggestions**) réutilisant le `ToggleRow` animé existant (enrichi
+  d'`accessibilityRole="switch"` + label + `checked`) ; bascule optimiste sur
+  `/api/settings`, puis `invalidateQueries(['explore'])`.
+- **Tests** (`apps/server/src/__tests__/adult-toggle.test.ts`, 4) :
+  `getAdultKeywordIds` nom exact (sentai/senpai/porco exclus) ; défaut = hentai
+  `erotic` + porno exclus, animé sain conservé ; `allowAdultContent=true` =
+  hentai/porno visibles + `include_adult=true` transmis ; isolation de cache
+  entre deux comptes opposés. **285 tests verts** (143 core + 142 serveur),
+  `typecheck` serveur et mobile OK.
 
 ### 2026-07-16 — Détection pornographie renforcée + popup drôle au commentaire bloqué
 Durcissement anti-porno pour ne **rien** laisser passer de pornographique
