@@ -14,6 +14,7 @@ import { TopTabs, CheckCircle, Loading, LoadError, EmptyState } from '@/componen
 import { AnimatedFill, Pop, SlideUpBar, FadeSwitch, PressableScale } from '@/components/anim';
 import { Stars } from '@/components/Stars';
 import { MarkPreviousPopup, hasUnwatchedPrevious } from '@/components/MarkPreviousPopup';
+import { EpisodeSheet, type EpisodeSheetTarget } from '@/components/EpisodeSheet';
 import { genresFr, statusFr, airDayFr, compactCount } from '@/lib/frMedia';
 import { FicheSkeleton } from '@/components/FicheSkeleton';
 
@@ -258,7 +259,7 @@ export default function ShowDetail() {
             {tab === 'À PROPOS' ? (
               <AboutTab media={media} detail={detail.data} mediaId={String(id)} interest={interest} setInterest={setInterest} onScroll={onScroll} />
             ) : (
-              <EpisodesTab showId={String(id)} posterPath={media.posterPath} onChange={refresh} onScroll={onScroll} />
+              <EpisodesTab showId={String(id)} title={media.title} posterPath={media.posterPath} onChange={refresh} onScroll={onScroll} />
             )}
           </FadeSwitch>
         </>
@@ -987,12 +988,17 @@ function EpThumb({ stillPath, fallback }: { stillPath?: string | null; fallback?
   );
 }
 
-function EpisodesTab({ showId, posterPath, onChange, onScroll }: { showId: string; posterPath?: string | null; onChange: () => void; onScroll?: any }) {
+function EpisodesTab({ showId, title, posterPath, onChange, onScroll }: { showId: string; title: string; posterPath?: string | null; onChange: () => void; onScroll?: any }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState<Record<number, boolean>>({});
   // Pop-up « Cocher aussi les épisodes précédents ? » : proposée quand on
   // coche un épisode alors que des épisodes antérieurs diffusés sont non vus.
   const [prevAsk, setPrevAsk] = useState<EpisodeDto | null>(null);
+  // Fenêtre « fiche épisode » (la même que depuis l'onglet Séries) : ouverte
+  // en tapant une carte, dans « Continuer le suivi » comme dans les saisons.
+  const [sheet, setSheet] = useState<EpisodeSheetTarget | null>(null);
+  const openSheet = (e: EpisodeDto) =>
+    setSheet({ mediaId: showId, mediaTitle: title, posterPath, episode: e });
   // Snackbar « Marquer tout comme non vu » (2ᵉ appui sur la coche maîtresse).
   const [confirmUnmark, setConfirmUnmark] = useState(false);
   useEffect(() => {
@@ -1154,23 +1160,48 @@ function EpisodesTab({ showId, posterPath, onChange, onScroll }: { showId: strin
       onScroll={onScroll}
       scrollEventThrottle={16}
     >
-      {data.nextEpisode ? (
-        <View style={{ paddingTop: 20, borderBottomWidth: 1, borderBottomColor: COLORS.borderLight, backgroundColor: COLORS.white }}>
-          <Text style={[styles.sectionTitle, { paddingHorizontal: 24 }]}>{anyWatched ? 'Continuer le suivi' : 'Démarrer le suivi'}</Text>
-          <View style={{ padding: 12 }}>
-            <View style={styles.eprow}>
-              <EpThumb stillPath={data.nextEpisode.stillPath} fallback={posterPath} />
-              <View style={{ flex: 1, padding: 12, justifyContent: 'center' }}>
-                <Text style={styles.epCode}>{episodeCode(data.nextEpisode.seasonNumber, data.nextEpisode.episodeNumber)}</Text>
-                <Text style={styles.epRowTitle} numberOfLines={1}>{data.nextEpisode.title}</Text>
-              </View>
-              <View style={{ justifyContent: 'center', paddingRight: 14 }}>
-                <CheckCircle checked={data.nextEpisode.watched} onPress={() => toggleEp.mutate(data.nextEpisode!)} />
-              </View>
-            </View>
+      {data.nextEpisode ? (() => {
+        // Carrousel latéral (façon TV Time) : TOUS les épisodes réguliers déjà
+        // diffusés et non vus, dans l'ordre — on coche l'un, la carte suivante
+        // prend sa place (la liste se recalcule via le cache optimiste).
+        const queue = seasons
+          .filter((s) => !isSpecial(s))
+          .flatMap((s) => s.episodes)
+          .filter((e) => !isUpcoming(e.airDate) && !e.watched)
+          .slice(0, 24);
+        const CARD_W = Dimensions.get('window').width - 56; // la suivante dépasse
+        return (
+          <View style={{ paddingTop: 20, borderBottomWidth: 1, borderBottomColor: COLORS.borderLight, backgroundColor: COLORS.white }}>
+            <Text style={[styles.sectionTitle, { paddingHorizontal: 24 }]}>{anyWatched ? 'Continuer le suivi' : 'Démarrer le suivi'}</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              snapToInterval={CARD_W + 10}
+              decelerationRate="fast"
+              contentContainerStyle={{ padding: 12, gap: 10 }}
+            >
+              {queue.map((e) => (
+                <Pressable
+                  key={e.id}
+                  style={[styles.eprow, { width: CARD_W, marginBottom: 0 }]}
+                  onPress={() => openSheet(e)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Épisode ${episodeCode(e.seasonNumber, e.episodeNumber)}`}
+                >
+                  <EpThumb stillPath={e.stillPath} fallback={posterPath} />
+                  <View style={{ flex: 1, padding: 12, justifyContent: 'center' }}>
+                    <Text style={styles.epCode}>{episodeCode(e.seasonNumber, e.episodeNumber)}</Text>
+                    <Text style={styles.epRowTitle} numberOfLines={1}>{e.title}</Text>
+                  </View>
+                  <View style={{ justifyContent: 'center', paddingRight: 14 }}>
+                    <CheckCircle checked={e.watched} onPress={() => pressEp(e)} />
+                  </View>
+                </Pressable>
+              ))}
+            </ScrollView>
           </View>
-        </View>
-      ) : null}
+        );
+      })() : null}
 
       <View style={{ paddingTop: 20 }}>
         <View style={[styles.sectionHeadRow, { marginBottom: 0 }]}>
@@ -1220,7 +1251,15 @@ function EpisodesTab({ showId, posterPath, onChange, onScroll }: { showId: strin
                   ? s.episodes.map((e) => {
                       const upcoming = isUpcoming(e.airDate);
                       return (
-                        <View key={e.id} style={styles.eprow}>
+                        // Taper la carte ouvre la fenêtre épisode (les non
+                        // diffusés restent inertes : rien à y voir/cocher).
+                        <Pressable
+                          key={e.id}
+                          style={styles.eprow}
+                          onPress={upcoming ? undefined : () => openSheet(e)}
+                          accessibilityRole={upcoming ? undefined : 'button'}
+                          accessibilityLabel={`Épisode ${episodeCode(e.seasonNumber, e.episodeNumber)}`}
+                        >
                           <EpThumb stillPath={e.stillPath} fallback={posterPath} />
                           <View style={{ flex: 1, padding: 10, justifyContent: 'center' }}>
                             <Text style={styles.epCode}>{episodeCode(e.seasonNumber, e.episodeNumber)}</Text>
@@ -1238,7 +1277,7 @@ function EpisodesTab({ showId, posterPath, onChange, onScroll }: { showId: strin
                               <CheckCircle size={44} checked={e.watched} onPress={() => pressEp(e)} />
                             )}
                           </View>
-                        </View>
+                        </Pressable>
                       );
                     })
                   : null}
@@ -1262,6 +1301,9 @@ function EpisodesTab({ showId, posterPath, onChange, onScroll }: { showId: strin
         onYes={() => { if (prevAsk) markPrevious.mutate(prevAsk); setPrevAsk(null); }}
         onNo={() => setPrevAsk(null)}
       />
+
+      {/* Fenêtre épisode (la même que dans l'onglet Séries), swipe latéral inclus. */}
+      <EpisodeSheet target={sheet} onClose={() => setSheet(null)} />
     </View>
   );
 }

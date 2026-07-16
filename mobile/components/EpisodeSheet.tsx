@@ -158,8 +158,10 @@ function Dots({ total, index }: { total: number; index: number }) {
   );
 }
 
-// Une page épisode : blocs blancs sur fond gris (cotes calées sur les captures
-// TV Time : code 30, date 17, titres de section 20, synopsis 16/23).
+// Une page épisode : blocs blancs sur fond gris. Cotes HARMONISÉES avec le
+// reste de l'app (cartes de l'onglet Séries : code 17-22, corps 13-14,
+// titres de section 16) — les tailles lues sur les captures TV Time brutes
+// rendaient « énormes » à l'écran (retour utilisateur récurrent).
 function EpisodePage({
   episode, mediaId, mediaTitle, posterPath, seasons, onClose, bottomPad,
 }: {
@@ -314,16 +316,16 @@ function EpisodePage({
         <View style={styles.metaRow}>
           {episode.airDate ? (
             <View style={styles.metaItem}>
-              <Feather name="calendar" size={19} color={COLORS.black} />
+              <Feather name="calendar" size={16} color={COLORS.black} />
               <Text style={styles.metaText}>{dateFr(episode.airDate)}</Text>
             </View>
           ) : null}
           <View style={styles.metaItem}>
-            <Ionicons name={episode.watched ? 'eye' : 'eye-outline'} size={21} color={COLORS.black} />
+            <Ionicons name={episode.watched ? 'eye' : 'eye-outline'} size={18} color={COLORS.black} />
             <Text style={styles.metaText}>{episode.watched ? 'Vu' : 'Pas vu'}</Text>
           </View>
           <View style={{ flex: 1 }} />
-          <CheckCircle size={46} checked={episode.watched} onPress={pressCheck} />
+          <CheckCircle size={40} checked={episode.watched} onPress={pressCheck} />
         </View>
       </View>
 
@@ -331,7 +333,7 @@ function EpisodePage({
       <View style={styles.block}>
         <View style={styles.sectionHead}>
           <Text style={styles.sectionTitle}>Où regarder</Text>
-          <Feather name="settings" size={20} color={COLORS.black} />
+          <Feather name="settings" size={18} color={COLORS.black} />
         </View>
         {providers.length === 0 ? (
           <Text style={styles.muted}>{detail.isLoading ? 'Chargement…' : 'Non disponible'}</Text>
@@ -339,7 +341,7 @@ function EpisodePage({
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingTop: 12 }}>
             {providers.map((p) => (
               <View key={p.name} style={styles.provBtn}>
-                <Ionicons name="play-circle-outline" size={20} color="#fff" />
+                <Ionicons name="play-circle-outline" size={17} color="#fff" />
                 <Text style={styles.provText}>{p.name.toUpperCase()}</Text>
               </View>
             ))}
@@ -351,7 +353,7 @@ function EpisodePage({
       {typeof avg === 'number' || episode.overview ? (
         <View style={styles.block}>
           <Text style={styles.sectionTitle}>Informations sur l'épisode</Text>
-          {typeof avg === 'number' ? <Stars rating10={avg * 2} size={21} /> : null}
+          {typeof avg === 'number' ? <Stars rating10={avg * 2} size={17} /> : null}
           {episode.overview ? <Text style={styles.overview}>{episode.overview}</Text> : null}
         </View>
       ) : null}
@@ -367,7 +369,7 @@ function EpisodePage({
         <Text style={styles.sectionTitle}>Commentaires</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <Text style={styles.commentsCount}>{commentsTotal}</Text>
-          <Feather name="chevron-right" size={24} color={COLORS.black} />
+          <Feather name="chevron-right" size={20} color={COLORS.black} />
         </View>
       </Pressable>
 
@@ -389,8 +391,9 @@ const styles = StyleSheet.create({
   dotsRow: { flexDirection: 'row', gap: 9 },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.chipSelected },
   dotOn: { backgroundColor: COLORS.yellow },
-  block: { backgroundColor: COLORS.white, marginHorizontal: 12, marginBottom: 10, borderRadius: 12, overflow: 'hidden', padding: 16 },
-  hero: { aspectRatio: 16 / 9, marginHorizontal: -16, marginTop: -16, backgroundColor: '#1a1a22', justifyContent: 'flex-end' },
+  block: { backgroundColor: COLORS.white, marginHorizontal: 12, marginBottom: 10, borderRadius: 12, overflow: 'hidden', padding: 14 },
+  // Les marges négatives compensent le padding du bloc (image bord à bord).
+  hero: { aspectRatio: 16 / 9, marginHorizontal: -14, marginTop: -14, backgroundColor: '#1a1a22', justifyContent: 'flex-end' },
   heroEmpty: { alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.imagePlaceholder },
   heroShade: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.28)' },
   heroTop: { position: 'absolute', top: 12, left: 14, right: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
@@ -399,18 +402,18 @@ const styles = StyleSheet.create({
     borderRadius: 999, paddingHorizontal: 12, paddingVertical: 3, flexShrink: 1,
   },
   seriesPillText: { color: '#fff', fontSize: 11, fontFamily: FONTS.bold, letterSpacing: 0.6, flexShrink: 1 },
-  heroCap: { padding: 14 },
-  heroCode: { color: '#fff', fontSize: 30, fontFamily: FONTS.extraBold },
-  heroEpTitle: { color: 'rgba(255,255,255,0.95)', fontSize: 15, fontFamily: FONTS.regular, marginTop: 1 },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 22, paddingTop: 14 },
-  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 9 },
-  metaText: { color: COLORS.text, fontSize: 17, fontFamily: FONTS.regular },
+  heroCap: { padding: 12 },
+  heroCode: { color: '#fff', fontSize: 22, fontFamily: FONTS.extraBold },
+  heroEpTitle: { color: 'rgba(255,255,255,0.95)', fontSize: 13, fontFamily: FONTS.regular, marginTop: 1 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 20, paddingTop: 12 },
+  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  metaText: { color: COLORS.text, fontSize: 14, fontFamily: FONTS.regular },
   sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  sectionTitle: { color: COLORS.text, fontSize: 20, fontFamily: FONTS.extraBold },
-  muted: { color: COLORS.textMuted, fontFamily: FONTS.regular, fontSize: 16, marginTop: 8 },
-  provBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#101014', borderRadius: 999, paddingHorizontal: 22, paddingVertical: 12 },
-  provText: { color: '#fff', fontSize: 14, fontFamily: FONTS.extraBold, letterSpacing: 0.3 },
-  overview: { color: COLORS.text, fontFamily: FONTS.regular, fontSize: 16, lineHeight: 23, marginTop: 12 },
+  sectionTitle: { color: COLORS.text, fontSize: 16, fontFamily: FONTS.extraBold },
+  muted: { color: COLORS.textMuted, fontFamily: FONTS.regular, fontSize: 13.5, marginTop: 8 },
+  provBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#101014', borderRadius: 999, paddingHorizontal: 16, paddingVertical: 9 },
+  provText: { color: '#fff', fontSize: 12, fontFamily: FONTS.extraBold, letterSpacing: 0.3 },
+  overview: { color: COLORS.text, fontFamily: FONTS.regular, fontSize: 13.5, lineHeight: 20, marginTop: 10 },
   commentsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  commentsCount: { fontSize: 17, fontFamily: FONTS.regular, color: COLORS.textMuted },
+  commentsCount: { fontSize: 14, fontFamily: FONTS.regular, color: COLORS.textMuted },
 });

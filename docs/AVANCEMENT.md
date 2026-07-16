@@ -6,7 +6,7 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
-Dernière mise à jour : **2026-07-16** (Claude) — Bibliothèques du profil : pastille de statut flottante (suit le scroll, comme l'onglet Séries) + barres de progression colorées par statut (jaune en cours, vert à jour, bleu terminé, orange plus tard, rouge arrêté)
+Dernière mise à jour : **2026-07-16** (Claude) — Fenêtre épisode : tailles harmonisées, ouverte aussi depuis l'onglet ÉPISODES de la fiche, et « Continuer le suivi » devient un carrousel latéral d'épisodes cochables
 
 ---
 
@@ -72,6 +72,22 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
 6. Publication native optionnelle (EAS Build APK, puis stores).
 
 ## Journal des modifications
+
+### 2026-07-16 — Claude (7)
+- **Fenêtre épisode : tailles harmonisées** (retour récurrent « textes trop
+  gros ») — code épisode 30→22, dates/méta 17→14, titres de section 20→16,
+  synopsis 16/23→13,5/20, pastilles plateformes et icônes réduites, coche
+  46→40. Alignée sur l'échelle des cartes de l'onglet Séries.
+- **Fiche série → onglet ÉPISODES : taper une carte ouvre la fenêtre
+  épisode** (la même que depuis l'onglet Séries, swipe latéral inclus) —
+  dans « Continuer le suivi » comme dans « Tous les épisodes » (les épisodes
+  non diffusés restent inertes, la coche garde son geste propre).
+- **« Continuer le suivi » = carrousel latéral** : tous les épisodes diffusés
+  non vus (dans l'ordre, la carte suivante dépasse à droite, snap façon
+  TV Time) — chacun cochable ; cocher fait avancer la file (cache optimiste).
+- Vérifié au banc Playwright (7/7) : 3 cartes côte à côte, glissement tactile
+  effectif, ouverture de la fenêtre depuis le carrousel ET depuis une rangée
+  de saison (sur le bon épisode), tailles 22px/16px mesurées au DOM.
 
 ### 2026-07-16 — Claude (6)
 - **Bibliothèques du profil (Séries / Films) + onglet Jeux : pastille de
