@@ -245,6 +245,7 @@ export function TikTokCard({
       <ActionRail
         item={item}
         state={{ ...state, comments: (item.stats?.comments ?? 0) + commentBump }}
+        isGame={isGame}
         onLike={onLike}
         onDislike={onDislike}
         onWatched={onWatched}

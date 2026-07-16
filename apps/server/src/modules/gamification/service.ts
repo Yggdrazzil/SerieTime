@@ -20,9 +20,15 @@ import { prisma } from '../../db/client.js';
 
 const PARIS_TZ = 'Europe/Paris';
 
+// Formatter réutilisé (fr-CA = format ISO "YYYY-MM-DD") : un seul objet Intl au
+// niveau module au lieu d'un `new Intl.DateTimeFormat` par appel. Sur la grosse
+// bibliothèque (>20 000 épisodes vus), `dayKeyParis` est appelé des dizaines de
+// milliers de fois par recompute — la création répétée du formatter dominait.
+const PARIS_DAY = new Intl.DateTimeFormat('fr-CA', { timeZone: PARIS_TZ });
+
 // "YYYY-MM-DD" en Europe/Paris (fr-CA = format ISO).
 export function dayKeyParis(date: Date): string {
-  return date.toLocaleDateString('fr-CA', { timeZone: PARIS_TZ });
+  return PARIS_DAY.format(date);
 }
 
 export function monthKeyParis(date: Date): string {
@@ -183,7 +189,26 @@ const TIER_LABELS = ['', 'bronze', 'argent', 'or', 'platine'];
 // UserProgress, et notifications pour les NOUVEAUTÉS uniquement. Au tout
 // premier calcul d'un utilisateur (pas encore de UserProgress — backfill,
 // import initial), tout est posé silencieusement : pas de spam de 15 notifs.
-export async function recomputeUser(userId: string, now = new Date()): Promise<void> {
+// Sérialisation par utilisateur : deux recomputes concurrents (binge de coches
+// + backfill, ou deux actions quasi simultanées) liraient en parallèle le même
+// `existingBadges`/`existingProgress` et enverraient les notifications level_up
+// /badge EN DOUBLE. On chaîne donc les recomputes d'un même user : le suivant
+// attend la fin du précédent (qui a déjà persisté les nouveaux paliers), si
+// bien que le diff est vu une seule fois.
+const recomputeChain = new Map<string, Promise<void>>();
+
+export function recomputeUser(userId: string, now = new Date()): Promise<void> {
+  const previous = recomputeChain.get(userId) ?? Promise.resolve();
+  const next = previous.catch(() => undefined).then(() => recomputeUserInner(userId, now));
+  recomputeChain.set(userId, next);
+  void next.finally(() => {
+    // Libère l'entrée seulement si personne n'a chaîné après nous.
+    if (recomputeChain.get(userId) === next) recomputeChain.delete(userId);
+  });
+  return next;
+}
+
+async function recomputeUserInner(userId: string, now = new Date()): Promise<void> {
   const collected = await collect(userId, now);
   if (!collected) return;
   const { stats, currentStreak, monthStats } = collected;

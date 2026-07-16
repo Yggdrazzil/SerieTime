@@ -28,6 +28,7 @@ type GameDto = {
 
 type GamesLibraryResponse = {
   wishlist: GameDto[];
+  owned: GameDto[];
   playing: GameDto[];
   completed: GameDto[];
   abandoned: GameDto[];
@@ -41,8 +42,12 @@ type GamesDiscoverResponse = { popular: DiscoverGameDto[]; upcoming: DiscoverGam
 type GameUpcomingItemDto = { id: string; title: string; posterPath: string | null; releaseDate: string };
 type GamesUpcomingResponse = { groups: { label: string; items: GameUpcomingItemDto[] }[] };
 
+// « POSSÉDÉS » n'est plus un statut : c'est la vue « collection » (toutes les
+// lignes isOwned côté serveur) — un jeu peut apparaître dans POSSÉDÉS ET dans
+// son groupe de statut (ex. EN COURS), c'est voulu.
 const SECTIONS: { key: keyof GamesLibraryResponse; label: string }[] = [
   { key: 'wishlist', label: 'VOULUS' },
+  { key: 'owned', label: 'POSSÉDÉS' },
   { key: 'playing', label: 'EN COURS' },
   { key: 'completed', label: 'TERMINÉS' },
   { key: 'abandoned', label: 'ABANDONNÉS' },
@@ -65,6 +70,7 @@ function GamesScreenInner() {
   const isEmpty =
     !!library.data &&
     library.data.wishlist.length === 0 &&
+    library.data.owned.length === 0 &&
     library.data.playing.length === 0 &&
     library.data.completed.length === 0 &&
     library.data.abandoned.length === 0;

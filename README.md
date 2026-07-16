@@ -36,9 +36,9 @@ mobile est un projet Expo autonome (npm) qui communique uniquement via HTTP.
 
 ```bash
 pnpm install
-cp .env.example .env            # renseigner TMDB_API_KEY pour les métadonnées
-pnpm db:migrate                 # crée la base SQLite et applique les migrations
-pnpm dev:server                 # démarre l'API sur http://localhost:4000
+cp .env.example .env                        # renseigner TMDB_API_KEY pour les métadonnées
+pnpm --filter @serietime/server db:deploy   # crée la base SQLite et applique les migrations
+pnpm dev:server                             # démarre l'API sur http://localhost:4000
 ```
 
 Vérifier : `curl http://localhost:4000/health` → `{"ok":true,"app":"SerieTime","version":"1.0.0"}`.
@@ -55,8 +55,8 @@ Plusieurs personnes peuvent donc utiliser le même serveur, chacune avec sa prop
 
 Les titres, synopsis, affiches, castings et « où regarder » viennent de **TMDb**. Sans clé,
 l'app fonctionne mais affiche des posters vides et ne peut pas enrichir la recherche externe.
-Renseignez `TMDB_API_KEY` (ou `TMDB_READ_ACCESS_TOKEN`) dans `.env`. **TVmaze** sert de fallback
-séries (épisodes, calendrier) et ne nécessite pas de clé.
+Renseignez `TMDB_API_KEY` (ou `TMDB_READ_ACCESS_TOKEN`) dans `.env`. **TheTVDB** (ci-dessous) est
+la source de contenu séries principale ; TMDb complète pour les films, castings et « où regarder ».
 
 ### Configuration TheTVDB (source de contenu séries)
 

@@ -167,12 +167,34 @@ describe('Social — abonnements, fil, commentaires, réactions, confidentialit�
     expect(count.json().unreadCount).toBe(0);
   });
 
-  it('profil privé : masqué aux non-abonnés, visible des abonnés', async () => {
+  it('profil public : gamification (niveau) + favoris exposés', async () => {
+    // Bob met le film en favori pour peupler « Films préférés ».
+    await app.inject({ method: 'POST', url: `/api/movies/${movieId}/favorite`, headers: bearer('Bob') });
+
+    const asCarol = await app.inject({ method: 'GET', url: `/api/users/${uid("Bob")}`, headers: bearer('Carol') });
+    const body = asCarol.json();
+    expect(body.restricted).toBe(false);
+    // Gamification publique : niveau présent, défis JAMAIS exposés.
+    expect(typeof body.gamification.level).toBe('number');
+    expect(body.gamification.challenges).toBeUndefined();
+    expect(Array.isArray(body.gamification.badges)).toBe(true);
+    // gamesCount ajouté aux stats.
+    expect(typeof body.stats.gamesCount).toBe('number');
+    // Favoris exposés.
+    expect(body.favoriteMovies.map((m: { id: string }) => m.id)).toContain(movieId);
+    expect(Array.isArray(body.favoriteShows)).toBe(true);
+  });
+
+  it('profil privé : masqué aux non-abonnés, visible des abonnés (mais gamification toujours visible)', async () => {
     await app.inject({ method: 'POST', url: '/api/social/privacy', payload: { isPrivate: true }, headers: bearer('Bob') });
 
     const asCarol = await app.inject({ method: 'GET', url: `/api/users/${uid("Bob")}`, headers: bearer('Carol') });
     expect(asCarol.json().restricted).toBe(true);
     expect(asCarol.json().stats).toBeNull();
+    // Restricted : favoris masqués…
+    expect(asCarol.json().favoriteMovies).toEqual([]);
+    // …mais la gamification (réputation) reste visible.
+    expect(typeof asCarol.json().gamification.level).toBe('number');
 
     const asAlice = await app.inject({ method: 'GET', url: `/api/users/${uid("Bob")}`, headers: bearer('Alice') });
     expect(asAlice.json().restricted).toBe(false);

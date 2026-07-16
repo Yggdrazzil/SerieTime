@@ -35,6 +35,8 @@ function serializeUser(user: {
   birthYear: number | null;
   gender: string | null;
   countryCode: string;
+  // Langue de contenu (titres/résumés) choisie dans les Paramètres.
+  language?: string;
   provider: string;
   passwordHash?: string | null;
   googleId?: string | null;
@@ -51,6 +53,7 @@ function serializeUser(user: {
     birthYear: user.birthYear,
     gender: user.gender,
     countryCode: user.countryCode,
+    language: user.language ?? 'fr',
     provider: user.provider,
     // Méthodes de connexion liées à ce compte (pour l'écran « comptes liés »).
     linkedProviders: {
@@ -108,6 +111,23 @@ async function verifyGoogleToken(idToken: string): Promise<OAuthProfile> {
 
 // Vérifie un access token Facebook via le Graph API.
 async function verifyFacebookToken(accessToken: string): Promise<OAuthProfile> {
+  // Contrôle d'audience : un access token Facebook est émis POUR UNE app donnée.
+  // Sans ce contrôle, un token obtenu par n'importe quelle autre app Facebook
+  // (même id utilisateur) serait accepté → prise de contrôle de compte. On
+  // interroge donc debug_token avec le App Access Token (APP_ID|APP_SECRET) et
+  // on exige que le jeton appartienne bien à NOTRE app et soit valide.
+  const appId = env.FACEBOOK_APP_ID.trim();
+  const appSecret = env.FACEBOOK_APP_SECRET.trim();
+  if (appId && appSecret) {
+    const dbg = await fetch(
+      `https://graph.facebook.com/debug_token?input_token=${encodeURIComponent(accessToken)}&access_token=${encodeURIComponent(`${appId}|${appSecret}`)}`,
+    );
+    if (!dbg.ok) throw new Error('facebook_verify_failed');
+    const dbgData = (await dbg.json()) as { data?: { app_id?: string; is_valid?: boolean } };
+    if (dbgData.data?.app_id !== appId || dbgData.data?.is_valid !== true) {
+      throw new Error('facebook_bad_audience');
+    }
+  }
   const res = await fetch(
     `https://graph.facebook.com/me?fields=id,name,email,picture.type(large)&access_token=${encodeURIComponent(accessToken)}`,
   );
@@ -130,6 +150,18 @@ async function verifyFacebookToken(accessToken: string): Promise<OAuthProfile> {
 
 // Vérifie un access token Discord via /users/@me.
 async function verifyDiscordToken(accessToken: string): Promise<OAuthProfile> {
+  // Contrôle d'audience : /users/@me accepte un token émis pour N'IMPORTE quelle
+  // app Discord (prise de contrôle de compte). oauth2/@me, lui, renvoie l'app à
+  // laquelle le token est rattaché — on exige que ce soit NOTRE application.
+  const clientId = env.DISCORD_CLIENT_ID.trim();
+  if (clientId) {
+    const authRes = await fetch('https://discord.com/api/oauth2/@me', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!authRes.ok) throw new Error('discord_verify_failed');
+    const authData = (await authRes.json()) as { application?: { id?: string } };
+    if (authData.application?.id !== clientId) throw new Error('discord_bad_audience');
+  }
   const res = await fetch('https://discord.com/api/users/@me', {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
@@ -196,6 +228,19 @@ async function loginOrLinkOAuth(provider: Provider, profile: OAuthProfile) {
 }
 
 export async function authRoutes(app: FastifyInstance): Promise<void> {
+  // Contrôle d'audience OAuth : sans les identifiants d'app, on ne peut pas
+  // vérifier que le jeton a été émis pour NOTRE app. On garde alors le
+  // comportement actuel (pas de blocage en dev/prod tant que les vars ne sont
+  // pas posées) mais on l'annonce clairement au démarrage.
+  if (!env.FACEBOOK_APP_ID.trim() || !env.FACEBOOK_APP_SECRET.trim()) {
+    app.log.warn(
+      'Vérification d’audience OAuth facebook désactivée : variable manquante (FACEBOOK_APP_ID/FACEBOOK_APP_SECRET).',
+    );
+  }
+  if (!env.DISCORD_CLIENT_ID.trim()) {
+    app.log.warn('Vérification d’audience OAuth discord désactivée : variable manquante (DISCORD_CLIENT_ID).');
+  }
+
   // Quels providers SSO sont configurés côté serveur (le mobile adapte son écran).
   // On expose les IDs PUBLICS (client id Google, app id Facebook) pour que le
   // client s'auto-configure sans rebuild — ce ne sont pas des secrets.
@@ -216,7 +261,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
 
   // Connexion / inscription via SSO. Idempotent : crée le compte, ou le relie à
   // un compte existant si l'e-mail vérifié correspond (voir loginOrLinkOAuth).
-  app.post('/api/auth/oauth', async (request, reply) => {
+  app.post('/api/auth/oauth', { config: { rateLimit: { max: 10, timeWindow: '5 minutes' } } }, async (request, reply) => {
     const body = z
       .object({ provider: z.enum(['google', 'facebook', 'discord']), token: z.string().min(1) })
       .parse(request.body);
@@ -232,7 +277,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // Lier une méthode SSO au compte connecté (depuis les réglages « comptes liés »).
-  app.post('/api/auth/link', { preHandler: requireAuth }, async (request, reply) => {
+  app.post('/api/auth/link', { config: { rateLimit: { max: 10, timeWindow: '5 minutes' } }, preHandler: requireAuth }, async (request, reply) => {
     const body = z
       .object({ provider: z.enum(['google', 'facebook', 'discord']), token: z.string().min(1) })
       .parse(request.body);
@@ -278,6 +323,15 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
   // Fallback e-mail / mot de passe — inscription (multi-comptes).
   // Rate limit serré : empêche le spam de création de comptes.
   app.post('/api/auth/register', { config: { rateLimit: { max: 10, timeWindow: '10 minutes' } } }, async (request, reply) => {
+    // Inscription e-mail désactivée en prod : les nouveaux comptes passent par
+    // Google/Discord (aucun mot de passe à perdre). Le login e-mail existant
+    // (POST /api/auth/login) et l'OAuth restent ouverts.
+    if (!env.ALLOW_EMAIL_SIGNUP) {
+      return reply.code(403).send({
+        error: 'email_signup_disabled',
+        message: 'La création de compte se fait avec Google ou Discord.',
+      });
+    }
     const body = z
       .object({
         displayName: z.string().min(1).max(80),
@@ -316,6 +370,63 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     await prisma.session.deleteMany({ where: { userId: user.id, expiresAt: { lt: new Date() } } });
     const session = await createSession(user.id);
     return { user: serializeUser(user), token: session.token, expiresAt: session.expiresAt };
+  });
+
+  // ---------------------------------------------------------------------------
+  // Mot de passe oublié — réinitialisation par ré-authentification SSO.
+  // Le flux OAuth est le MÊME que le login (le client obtient un jeton
+  // Google/Discord côté web puis le poste ici) : le « mode reset » est porté
+  // par cet endpoint dédié. Le compte est identifié UNIQUEMENT par
+  // (provider, providerId) — jamais par e-mail — puis on délivre un jeton de
+  // réinitialisation à usage unique valable 10 minutes (stocké en DB pour
+  // survivre à un restart).
+  app.post('/api/auth/reset-password/init', { config: { rateLimit: { max: 10, timeWindow: '5 minutes' } } }, async (request, reply) => {
+    const body = z
+      .object({ provider: z.enum(['google', 'facebook', 'discord']), token: z.string().min(1) })
+      .parse(request.body);
+    let profile: OAuthProfile;
+    try {
+      profile = await verifyOAuth(body.provider, body.token);
+    } catch {
+      return reply.code(401).send({ error: 'invalid_oauth_token' });
+    }
+    const field = ID_FIELD[body.provider];
+    const user = await prisma.user.findFirst({ where: { [field]: profile.providerId } });
+    if (!user) return reply.code(404).send({ error: 'no_account_for_identity' });
+    // Un seul jeton actif à la fois : purge les précédents (et les expirés).
+    await prisma.passwordResetToken.deleteMany({
+      where: { OR: [{ userId: user.id }, { expiresAt: { lt: new Date() } }] },
+    });
+    const resetToken = randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 10 * 60_000);
+    await prisma.passwordResetToken.create({ data: { token: resetToken, userId: user.id, expiresAt } });
+    return { resetToken, expiresAt };
+  });
+
+  // Pose le nouveau mot de passe avec le jeton délivré ci-dessus. Le jeton est
+  // à usage unique : marqué consommé dans la même transaction que le hash.
+  app.post('/api/auth/reset-password', { config: { rateLimit: { max: 10, timeWindow: '5 minutes' } } }, async (request, reply) => {
+    const body = z
+      .object({ resetToken: z.string().min(1), newPassword: z.string().min(8).max(200) })
+      .parse(request.body);
+    const stored = await prisma.passwordResetToken.findUnique({ where: { token: body.resetToken } });
+    if (!stored) return reply.code(401).send({ error: 'invalid_reset_token' });
+    if (stored.usedAt || stored.expiresAt < new Date()) {
+      return reply.code(400).send({ error: 'reset_token_expired' });
+    }
+    // Si l'appelant est connecté (reset depuis les Paramètres), on préserve SA
+    // session ; toutes les autres sont invalidées, comme au changement classique.
+    const header = request.headers.authorization;
+    const currentToken = header?.startsWith('Bearer ') ? header.slice(7) : '';
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: stored.userId },
+        data: { passwordHash: await bcrypt.hash(body.newPassword, 10) },
+      }),
+      prisma.passwordResetToken.update({ where: { id: stored.id }, data: { usedAt: new Date() } }),
+      prisma.session.deleteMany({ where: { userId: stored.userId, token: { not: currentToken } } }),
+    ]);
+    return { ok: true };
   });
 
   app.post('/api/auth/logout', { preHandler: requireAuth }, async (request) => {

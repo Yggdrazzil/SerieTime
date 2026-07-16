@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../../db/client.js';
 import { requireAuth } from '../auth/routes.js';
 import { serializeMedia } from '../media/serialize.js';
+import { getUserLang } from '../media/userLang.js';
 
 export async function listRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', requireAuth);
@@ -42,6 +43,7 @@ export async function listRoutes(app: FastifyInstance): Promise<void> {
 
   app.get('/api/lists/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
+    const lang = await getUserLang(request.userId);
     const list = await prisma.mediaList.findFirst({
       where: { id, userId: request.userId },
       include: {
@@ -56,7 +58,7 @@ export async function listRoutes(app: FastifyInstance): Promise<void> {
       id: list.id,
       title: list.title,
       description: list.description,
-      items: list.items.map((i) => serializeMedia(i.media, i.media.statuses[0] ?? null)),
+      items: list.items.map((i) => serializeMedia(i.media, i.media.statuses[0] ?? null, lang)),
     };
   });
 

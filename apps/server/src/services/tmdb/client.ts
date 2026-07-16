@@ -10,7 +10,10 @@ export function tmdbEnabled(): boolean {
 // Spec §16.4 : jamais d'appel live à chaque affichage — cache ApiCache obligatoire.
 async function cachedFetch<T>(path: string, params: Record<string, string>, ttlMs: number): Promise<T | null> {
   if (!tmdbEnabled()) return null;
-  const search = new URLSearchParams({ language: env.DEFAULT_LANGUAGE, ...params });
+  // include_adult=false par défaut sur TOUTES les requêtes (TMDb ignore le
+  // paramètre là où il ne s'applique pas). Ceinture ; les bretelles = filtrage
+  // `adult === true` côté mapping (search/feed).
+  const search = new URLSearchParams({ include_adult: 'false', language: env.DEFAULT_LANGUAGE, ...params });
   if (env.TMDB_API_KEY) search.set('api_key', env.TMDB_API_KEY);
   const cacheKey = `${path}?${search.toString()}`;
 
@@ -47,6 +50,25 @@ async function cachedFetch<T>(path: string, params: Record<string, string>, ttlM
 
 const DAY = 86_400_000;
 
+// Langues de contenu proposées dans les Paramètres (hors fr, langue par défaut
+// du serveur : env.DEFAULT_LANGUAGE). Clé = code app, valeur = code TMDb.
+export const CONTENT_LANGS = ['en', 'es', 'de', 'it', 'pt'] as const;
+export type ContentLang = (typeof CONTENT_LANGS)[number];
+const TMDB_LANGUAGE: Record<string, string> = {
+  en: 'en-US',
+  es: 'es-ES',
+  de: 'de-DE',
+  it: 'it-IT',
+  pt: 'pt-PT',
+};
+
+// Paramètre `language` TMDb pour une langue de contenu utilisateur.
+// fr (ou langue inconnue) → {} : cachedFetch garde env.DEFAULT_LANGUAGE.
+export function tmdbLangParam(lang?: string | null): Record<string, string> {
+  const code = lang ? TMDB_LANGUAGE[lang] : undefined;
+  return code ? { language: code } : {};
+}
+
 export type TmdbSearchResult = {
   id: number;
   media_type?: string;
@@ -64,14 +86,20 @@ export type TmdbSearchResult = {
   genre_ids?: number[];
   original_language?: string;
   origin_country?: string[];
+  // Contenu pour adultes (porno) : exclu du flux et de la recherche.
+  adult?: boolean;
 };
 
 export async function tmdbSearch(
   query: string,
   type: 'tv' | 'movie' | 'multi',
   year?: number,
+  lang?: string,
+  // Utilisateur 18+ : `include_adult=true` (surchargé PAR APPEL et donc partie
+  // de la clé de cache — un compte adulte n'empoisonne pas le cache des autres).
+  allowAdult = false,
 ): Promise<TmdbSearchResult[]> {
-  const params: Record<string, string> = { query };
+  const params: Record<string, string> = { query, ...tmdbLangParam(lang), ...(allowAdult ? { include_adult: 'true' } : {}) };
   if (year && type === 'movie') params['year'] = String(year);
   if (year && type === 'tv') params['first_air_date_year'] = String(year);
   const data = await cachedFetch<{ results: TmdbSearchResult[] }>(`/search/${type}`, params, 7 * DAY);
@@ -229,18 +257,113 @@ export async function tmdbWatchProviders(type: 'tv' | 'movie', tmdbId: string): 
   return cachedFetch(`/${type}/${tmdbId}/watch/providers`, {}, 7 * DAY);
 }
 
-export async function tmdbRecommendations(type: 'tv' | 'movie', tmdbId: string): Promise<TmdbSearchResult[]> {
-  const data = await cachedFetch<{ results: TmdbSearchResult[] }>(`/${type}/${tmdbId}/recommendations`, {}, 7 * DAY);
+export async function tmdbRecommendations(
+  type: 'tv' | 'movie',
+  tmdbId: string,
+  lang?: string,
+  allowAdult = false,
+): Promise<TmdbSearchResult[]> {
+  const data = await cachedFetch<{ results: TmdbSearchResult[] }>(
+    `/${type}/${tmdbId}/recommendations`,
+    { ...tmdbLangParam(lang), ...(allowAdult ? { include_adult: 'true' } : {}) },
+    7 * DAY,
+  );
   return data?.results ?? [];
 }
 
-export async function tmdbTrending(type: 'tv' | 'movie', page = 1): Promise<TmdbSearchResult[]> {
+export async function tmdbTrending(type: 'tv' | 'movie', page = 1, lang?: string, allowAdult = false): Promise<TmdbSearchResult[]> {
   const data = await cachedFetch<{ results: TmdbSearchResult[] }>(
     `/trending/${type}/week`,
-    page > 1 ? { page: String(page) } : {},
+    { ...(page > 1 ? { page: String(page) } : {}), ...tmdbLangParam(lang), ...(allowAdult ? { include_adult: 'true' } : {}) },
     1 * DAY,
   );
   return data?.results ?? [];
+}
+
+// Traductions d'une fiche (une seule requête TMDb pour TOUTES les langues).
+export type TmdbTranslationsResponse = {
+  translations?: {
+    iso_639_1?: string;
+    data?: { name?: string; title?: string; overview?: string };
+  }[];
+};
+
+export async function tmdbTranslations(
+  type: 'tv' | 'movie',
+  tmdbId: string,
+): Promise<TmdbTranslationsResponse | null> {
+  return cachedFetch(`/${type}/${tmdbId}/translations`, {}, 7 * DAY);
+}
+
+// Mots-clés TMDb pornographiques : ids récupérés DYNAMIQUEMENT via
+// GET /search/keyword (le catalogue de mots-clés TMDb bouge), pour être passés
+// en `without_keywords` sur /discover (exclusion À LA SOURCE). Double cache :
+// ApiCache (via cachedFetch, 30 j) + mémoire process (évite de relire ApiCache
+// à chaque discover).
+//
+// BUG HISTORIQUE corrigé : on retenait TOUS les résultats flous de
+// /search/keyword — « hentai » ramenait aussi sentai/senpai/mental, « porno »
+// ramenait « porco » (Porco Rosso). On excluait donc EN SILENCE des animés
+// légitimes. Désormais on n'accepte QUE les correspondances de NOM EXACT
+// (insensible casse/espaces) contre une liste curée de noms pornographiques.
+const ADULT_KEYWORD_QUERIES = ['hentai', 'pornography', 'pornographic', 'porn', 'porno', 'softcore', 'hardcore', 'eroge', 'sex film', 'erotic', 'ecchi'];
+// Noms EXACTS acceptés (normalisés : casse, espaces réduits). « erotic » seul
+// N'EST PAS ici (grand public — cf. « erotic thriller ») : il est traité à part
+// et n'est appliqué qu'aux viviers ANIMÉS.
+const ADULT_KEYWORD_EXACT = new Set([
+  'hentai', 'pornography', 'pornographic', 'pornographic video', 'pornographic animation',
+  'porn', 'porno', 'softcore', 'hardcore porn', 'sex film', 'erotic movie', 'eroge',
+]);
+// Mots-clés appliqués aux VIVIERS ANIMÉS uniquement (pas au live-action) :
+// « erotic » (le hentai y est souvent taggé sans l'être « hentai ») et « ecchi »
+// (fan-service 18+). Traités à part car « erotic » seul est grand public hors
+// anime (« erotic thriller »).
+const ANIME_ONLY_EXACT = new Set(['erotic', 'ecchi']);
+const normKeyword = (s: string): string => s.trim().toLowerCase().replace(/\s+/g, ' ');
+
+type AdultKeywords = { pornIds: string[]; animeOnlyIds: string[] };
+let adultKeywordCache: { data: AdultKeywords; expiresAt: number } | null = null;
+
+async function loadAdultKeywords(): Promise<AdultKeywords> {
+  if (!tmdbEnabled()) return { pornIds: [], animeOnlyIds: [] };
+  if (adultKeywordCache && adultKeywordCache.expiresAt > Date.now()) return adultKeywordCache.data;
+  const pornIds = new Set<string>();
+  const animeOnlyIds = new Set<string>();
+  for (const term of ADULT_KEYWORD_QUERIES) {
+    const data = await cachedFetch<{ results?: { id: number; name?: string }[] }>('/search/keyword', { query: term }, 30 * DAY);
+    for (const k of data?.results ?? []) {
+      const name = normKeyword(k.name ?? '');
+      if (ADULT_KEYWORD_EXACT.has(name)) pornIds.add(String(k.id));
+      if (ANIME_ONLY_EXACT.has(name)) animeOnlyIds.add(String(k.id));
+    }
+  }
+  const result: AdultKeywords = { pornIds: [...pornIds], animeOnlyIds: [...animeOnlyIds] };
+  adultKeywordCache = { data: result, expiresAt: Date.now() + 30 * DAY };
+  return result;
+}
+
+// Ids des mots-clés PORNO (famille non ambiguë) pour `without_keywords`.
+export async function getAdultKeywordIds(): Promise<string[]> {
+  return (await loadAdultKeywords()).pornIds;
+}
+
+// Ids des mots-clés réservés aux viviers ANIMÉS (« erotic » + « ecchi »),
+// ajoutés à leur `without_keywords`. Le premier est renvoyé pour rétro-compat
+// des tests ; l'exclusion réelle utilise `animeOnlyIds` dans tmdbDiscover.
+export async function getEroticKeywordId(): Promise<string | null> {
+  return (await loadAdultKeywords()).animeOnlyIds[0] ?? null;
+}
+
+// Noms des mots-clés d'une fiche (vérification par item du hentai) : /tv/{id}/keywords
+// (champ `results`) ou /movie/{id}/keywords (champ `keywords`). Caché 30 j.
+export async function tmdbKeywordNames(type: 'tv' | 'movie', tmdbId: string): Promise<string[]> {
+  const data = await cachedFetch<{ results?: { name?: string }[]; keywords?: { name?: string }[] }>(
+    `/${type}/${tmdbId}/keywords`,
+    {},
+    30 * DAY,
+  );
+  const arr = type === 'tv' ? data?.results : data?.keywords;
+  return (arr ?? []).map((k) => k.name ?? '').filter((n): n is string => n.length > 0);
 }
 
 // Découverte ciblée : sert à remplir chaque catégorie du flux Explorer (ex. les
@@ -256,15 +379,36 @@ export async function tmdbDiscover(
     // Fenêtre d'années (incluse) pour varier les époques du flux Explorer.
     yearGte?: number;
     yearLte?: number;
+    // Langue de contenu de l'utilisateur (titres/résumés des résultats).
+    lang?: string;
+    // Utilisateur 18+ : débraye tout le filtrage adulte (include_adult=true,
+    // pas de without_keywords). Partie de la clé de cache → pas de contamination.
+    allowAdult?: boolean;
+    // Vivier ANIMÉ (genres:[16]/language:'ja') : ajoute le mot-clé EXACT
+    // « erotic » au without_keywords (en plus de la famille porno) — le hentai
+    // est souvent taggé « erotic ». N'a PAS d'effet quand allowAdult.
+    excludeErotic?: boolean;
   } = {},
 ): Promise<TmdbSearchResult[]> {
   const params: Record<string, string> = {
     sort_by: opts.sort ?? 'popularity.desc',
     page: String(opts.page ?? 1),
     'vote_count.gte': '20',
+    ...tmdbLangParam(opts.lang),
   };
   if (opts.genres?.length) params.with_genres = opts.genres.join(',');
   if (opts.language) params.with_original_language = opts.language;
+  if (opts.allowAdult) {
+    params.include_adult = 'true';
+  } else {
+    // Exclusion à la source du porno : /discover supporte `without_keywords`.
+    const { pornIds, animeOnlyIds } = await loadAdultKeywords();
+    const adultKw = [...pornIds];
+    // Viviers animés : on écarte aussi « erotic » et « ecchi » (18+ suggestif),
+    // jamais sur le live-action (pas d'`excludeErotic` là-bas).
+    if (opts.excludeErotic) adultKw.push(...animeOnlyIds);
+    if (adultKw.length) params.without_keywords = adultKw.join(',');
+  }
   const dateField = type === 'tv' ? 'first_air_date' : 'primary_release_date';
   if (opts.yearGte) params[`${dateField}.gte`] = `${opts.yearGte}-01-01`;
   if (opts.yearLte) params[`${dateField}.lte`] = `${opts.yearLte}-12-31`;

@@ -1,0 +1,23 @@
+# Contexte de build Docker : n'envoyer au démon que ce qui sert à l'image
+# serveur. Sans ce fichier, node_modules, l'app mobile, les captures de
+# référence, .git et .env étaient transmis à chaque build (contexte lourd/lent).
+**/node_modules
+.git
+.gitignore
+mobile
+docs
+apps/server/data
+**/*.sqlite
+**/*.sqlite-shm
+**/*.sqlite-wal
+**/.env
+**/.env.*
+!**/.env.example
+mobile/dist
+**/.expo
+**/dist
+**/.turbo
+*.log
+.DS_Store
+scratchpad
+backups

@@ -2,10 +2,41 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../../db/client.js';
 import { requireAuth } from '../auth/routes.js';
-import { serializeMedia } from '../media/serialize.js';
+import { mediaTitle, serializeMedia } from '../media/serialize.js';
+import { getUserLang } from '../media/userLang.js';
 import { notifyFollowers, notifyUser } from './notify.js';
-import { BADGES } from '@serietime/core';
-import { scheduleRecompute } from '../gamification/service.js';
+import { BADGES, findBlockedTerm } from '@serietime/core';
+import { meView, scheduleRecompute } from '../gamification/service.js';
+
+// Ordre favoris (drag & drop) partagé avec /api/profile : positionnés d'abord,
+// puis les plus anciennement ajoutés.
+const FAVORITE_ORDER = [
+  { favoriteOrder: { sort: 'asc' as const, nulls: 'last' as const } },
+  { favoritedAt: 'asc' as const },
+];
+
+// Sous-ensemble PUBLIC de la gamification (réputation, visible même sur un
+// profil restreint) : niveau, titre, streak et badges DÉBLOQUÉS uniquement.
+// Les défis (personnels) ne sont jamais exposés. Réutilise meView (lecture
+// pure, aucune écriture ni notification). Null si l'utilisateur a disparu.
+async function publicGamification(userId: string) {
+  const view = await meView(userId);
+  if (!view) return null;
+  const badges = view.badges
+    .filter((b) => b.tier > 0)
+    // Palier décroissant, puis déblocage le plus récent d'abord.
+    .sort((a, b) => b.tier - a.tier || (b.unlockedAt ?? '').localeCompare(a.unlockedAt ?? ''))
+    .map((b) => ({ id: b.id, label: b.label, icon: b.icon, tier: b.tier, tierCount: b.tierCount }));
+  return {
+    level: view.level,
+    levelTitle: view.levelTitle,
+    xp: view.xp,
+    nextLevelXp: view.nextLevelXp,
+    currentStreak: view.currentStreak,
+    bestStreak: view.bestStreak,
+    badges,
+  };
+}
 
 type PublicUser = { id: string; displayName: string; avatarUrl: string | null; isPrivate: boolean };
 
@@ -128,6 +159,8 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
   // --- Profil public -------------------------------------------------------
   app.get('/api/users/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
+    // Langue du VISITEUR (request.userId), pas celle du profil consulté.
+    const lang = await getUserLang(request.userId);
     const user = await prisma.user.findUnique({ where: { id } });
     if (!user) return reply.code(404).send({ error: 'not_found' });
     const isSelf = id === request.userId;
@@ -136,37 +169,72 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
       !!(await prisma.follow.findUnique({
         where: { followerId_followingId: { followerId: request.userId, followingId: id } },
       }));
-    const [followersCount, followingCount] = await Promise.all([
+    // Gamification calculée TOUJOURS (réputation publique, même en restricted).
+    const [followersCount, followingCount, gamification] = await Promise.all([
       prisma.follow.count({ where: { followingId: id } }),
       prisma.follow.count({ where: { followerId: id } }),
+      publicGamification(id),
     ]);
-    const base = { ...publicUser(user), isFollowing, isSelf, followersCount, followingCount };
+    const base = { ...publicUser(user), isFollowing, isSelf, followersCount, followingCount, gamification };
 
-    // Profil privé : activité masquée aux non-abonnés.
+    // Profil privé : niveau + trophées restent visibles, mais l'activité (stats,
+    // séries récentes, favoris) est masquée aux non-abonnés.
     if (user.isPrivate && !isSelf && !isFollowing) {
-      return { ...base, restricted: true, stats: null, recentShows: [] };
+      return {
+        ...base,
+        restricted: true,
+        stats: null,
+        recentShows: [],
+        favoriteShows: [],
+        favoriteMovies: [],
+        favoriteGames: [],
+      };
     }
-    const [showsCount, moviesCount, episodesWatched, recent] = await Promise.all([
-      prisma.userMediaStatus.count({ where: { userId: id, media: { type: 'show' } } }),
-      prisma.userMediaStatus.count({ where: { userId: id, media: { type: 'movie' } } }),
-      prisma.userEpisodeStatus.count({ where: { userId: id, status: 'watched' } }),
-      prisma.userMediaStatus.findMany({
-        where: { userId: id, media: { type: 'show' }, isHidden: false },
-        include: { media: true },
-        orderBy: { lastWatchedAt: 'desc' },
-        take: 12,
-      }),
-    ]);
+    const [showsCount, moviesCount, episodesWatched, gamesCount, recent, favoriteShows, favoriteMovies, favoriteGames] =
+      await Promise.all([
+        prisma.userMediaStatus.count({ where: { userId: id, media: { type: 'show' } } }),
+        prisma.userMediaStatus.count({ where: { userId: id, media: { type: 'movie' } } }),
+        prisma.userEpisodeStatus.count({ where: { userId: id, status: 'watched' } }),
+        prisma.userMediaStatus.count({ where: { userId: id, media: { type: 'game' }, isHidden: false } }),
+        prisma.userMediaStatus.findMany({
+          where: { userId: id, media: { type: 'show' }, isHidden: false },
+          include: { media: true },
+          orderBy: { lastWatchedAt: 'desc' },
+          take: 12,
+        }),
+        prisma.userMediaStatus.findMany({
+          where: { userId: id, media: { type: 'show' }, isFavorite: true },
+          include: { media: true },
+          orderBy: FAVORITE_ORDER,
+          take: 12,
+        }),
+        prisma.userMediaStatus.findMany({
+          where: { userId: id, media: { type: 'movie' }, isFavorite: true },
+          include: { media: true },
+          orderBy: FAVORITE_ORDER,
+          take: 12,
+        }),
+        prisma.userMediaStatus.findMany({
+          where: { userId: id, media: { type: 'game' }, isFavorite: true },
+          include: { media: true },
+          orderBy: FAVORITE_ORDER,
+          take: 12,
+        }),
+      ]);
     return {
       ...base,
       restricted: false,
-      stats: { showsCount, moviesCount, episodesWatched },
-      recentShows: recent.map((s) => serializeMedia(s.media, s)),
+      stats: { showsCount, moviesCount, episodesWatched, gamesCount },
+      recentShows: recent.map((s) => serializeMedia(s.media, s, lang)),
+      favoriteShows: favoriteShows.map((s) => serializeMedia(s.media, s, lang)),
+      favoriteMovies: favoriteMovies.map((s) => serializeMedia(s.media, s, lang)),
+      favoriteGames: favoriteGames.map((s) => serializeMedia(s.media, s, lang)),
     };
   });
 
   // --- Fil d'activité des abonnements --------------------------------------
   app.get('/api/social/feed', async (request) => {
+    const lang = await getUserLang(request.userId);
     const ids = [...(await followingIdSet(request.userId))];
     if (ids.length === 0) return { items: [] as FeedItem[] };
 
@@ -205,7 +273,7 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
         user: withLevel(e.user),
         media: {
           id: e.mediaId,
-          title: e.media.localizedTitle ?? e.media.title,
+          title: mediaTitle(e.media, lang),
           posterPath: e.media.posterPath,
           type: e.media.type,
         },
@@ -221,7 +289,7 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
         user: withLevel(c.user),
         media: {
           id: c.mediaId,
-          title: c.media.localizedTitle ?? c.media.title,
+          title: mediaTitle(c.media, lang),
           posterPath: c.media.posterPath,
           type: c.media.type,
         },
@@ -300,6 +368,18 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
         parentId: z.string().optional(),
       })
       .parse(request.body);
+    // Modération : rejette les commentaires ET réponses (même route) contenant
+    // des termes haineux/gravement injurieux. On ne journalise QUE la catégorie,
+    // jamais le texte complet du commentaire.
+    const blocked = findBlockedTerm(body.body);
+    if (blocked) {
+      request.log.info({ category: blocked.category }, 'comment blocked by moderation');
+      return reply.code(400).send({
+        error: 'comment_blocked',
+        message:
+          'Hop hop hop ! 🙅 La politesse est de mise sur SerieTime, chenapan. Reformule ça sans insulte et réessaie 😇',
+      });
+    }
     const media = await prisma.media.findUnique({ where: { id } });
     if (!media) return reply.code(404).send({ error: 'not_found' });
     if (body.episodeId) {

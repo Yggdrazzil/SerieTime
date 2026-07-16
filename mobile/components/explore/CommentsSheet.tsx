@@ -7,6 +7,7 @@ import { COLORS, FONTS } from '@/lib/theme';
 import { EmptyState, Loading } from '@/components/ui';
 import { useComments } from '@/components/comments/useComments';
 import { CommentCard } from '@/components/comments/CommentCard';
+import { BlockedCommentPopup } from '@/components/comments/BlockedCommentPopup';
 import type { FeedItem } from './types';
 
 export function CommentsSheet({
@@ -93,6 +94,8 @@ function CommentsPanel({
     setReplyText,
     post,
     postReply,
+    postError,
+    clearPostError,
     heart,
     remove,
     shareComment,
@@ -102,9 +105,11 @@ function CommentsPanel({
     if (!text.trim() || busy) return;
     setBusy(true);
     try {
-      await post(text);
-      setText('');
-      onCommentPosted?.();
+      const ok = await post(text);
+      if (ok) {
+        setText('');
+        onCommentPosted?.();
+      }
     } finally {
       setBusy(false);
     }
@@ -136,6 +141,8 @@ function CommentsPanel({
           ))}
         </ScrollView>
       )}
+      {/* Popup de modération : commentaire/réponse rejeté (règles communauté). */}
+      <BlockedCommentPopup message={postError} onClose={clearPostError} />
       {/* Barre de composition TikTok : en bas, inline (pas de FAB flottant ici). */}
       <View style={styles.composer}>
         <TextInput
@@ -143,7 +150,7 @@ function CommentsPanel({
           placeholder="Ajouter un commentaire…"
           placeholderTextColor={COLORS.textMuted}
           value={text}
-          onChangeText={setText}
+          onChangeText={(t) => { setText(t); if (postError) clearPostError(); }}
         />
         <Pressable
           style={[styles.composerSend, (!text.trim() || busy) && { opacity: 0.4 }]}

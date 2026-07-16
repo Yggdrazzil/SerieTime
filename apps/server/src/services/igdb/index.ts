@@ -1,3 +1,4 @@
+import { containsAdultContent } from '@serietime/core';
 import { igdbQuery, igdbEnabled } from './client.js';
 export { igdbEnabled };
 
@@ -29,16 +30,34 @@ export type IgdbGame = {
   parent_game?: number;
   // Note presse agrégée (0-100) — le plus proche d'un Metacritic via IGDB.
   aggregated_rating?: number;
+  // Thèmes IGDB : sert à exclure le thème « Erotic » (id 42) — contenu sexuel.
+  themes?: { id: number; name?: string }[];
   // Nombre de « follows » avant sortie : proxy IGDB des jeux les plus attendus.
   hypes?: number;
 };
+
+// Thème IGDB « Erotic » = id 42. Clause Apicalypse ajoutée à chaque `where` de
+// découverte/recherche : on garde les jeux SANS thème (`themes = null`).
+const SAFE_THEMES = '(themes != (42) | themes = null)';
+
+// Garde applicative (ceinture + bretelles au filtre Apicalypse) : exclut un jeu
+// dont un thème est « Erotic » (id 42 ou nom contenant « erotic »/« sexual »).
+// Appliquée APRÈS isMainGame dans les listes de découverte/recherche.
+export function isSafeGame(g: IgdbGame): boolean {
+  // Post-filtre porno : les visual novels / eroge explicites qui n'ont pas le
+  // thème 42 mais un nom/résumé sans ambiguïté sont écartés (name + summary
+  // font partie des FIELDS). La violence n'est PAS visée.
+  if (containsAdultContent(g.name, g.summary)) return false;
+  if (!g.themes || g.themes.length === 0) return true;
+  return !g.themes.some((t) => t.id === 42 || (t.name != null && /erotic|sexual/i.test(t.name)));
+}
 
 // Champs demandés à IGDB (Apicalypse). Réutilisé par search/game/popular/upcoming.
 const FIELDS =
   'fields name,summary,first_release_date,cover.image_id,artworks.image_id,genres.name,' +
   'platforms.name,involved_companies.developer,involved_companies.publisher,involved_companies.company.name,' +
   'game_modes.name,total_rating,total_rating_count,release_dates.date,release_dates.human,release_dates.platform.name,' +
-  'dlcs.name,expansions.name,videos.video_id,videos.name,screenshots.image_id,game_type,version_parent,parent_game,aggregated_rating,hypes';
+  'dlcs.name,expansions.name,videos.video_id,videos.name,screenshots.image_id,game_type,version_parent,parent_game,aggregated_rating,themes.id,themes.name,hypes';
 
 // « Vrai jeu » pour la recherche/découverte : exclut les rééditions (Deluxe,
 // GOTY… = version_parent), les DLC/extensions/bundles/updates (game_type 1, 2,
@@ -57,14 +76,34 @@ export function igdbImageUrl(imageId: string, size = 't_cover_big'): string {
 
 // Corps Apicalypse exposés pour les tests (le cache ApiCache est adressé par
 // ce corps exact — les tests le pré-remplissent pour tourner sans réseau).
-export function searchQueryBody(q: string): string {
+export function searchQueryBody(q: string, allowAdult = false): string {
   // NB : le champ IGDB `category` a été déprécié (migré vers `game_type`) et
   // `where category = 0` ne matche plus RIEN → on ne filtre plus par type ici.
-  return `search "${q.replace(/"/g, '')}"; ${FIELDS}; limit 30;`;
+  // allowAdult (utilisateur 18+) : on retire la clause thème 42 (SAFE_THEMES).
+  // La clause fait partie du corps Apicalypse = clé de cache → isolation entre
+  // comptes 18+ et comptes standards.
+  const where = allowAdult ? '' : ` where ${SAFE_THEMES};`;
+  return `search "${q.replace(/"/g, '')}"; ${FIELDS};${where} limit 30;`;
 }
 
-export async function igdbSearch(q: string): Promise<IgdbGame[]> {
-  return ((await igdbQuery<IgdbGame[]>('games', searchQueryBody(q), DAY)) ?? []).filter(isMainGame);
+// Repli PRÉFIXE : le `search` plein-texte IGDB ne matche pas les mots partiels
+// (« assassin's creed ori » → 0 résultat tant que « origins » n'est pas fini).
+// `where name ~ *"…"*` (joker, insensible à la casse) attrape la saisie en cours.
+export function prefixQueryBody(q: string, allowAdult = false): string {
+  const safe = q.replace(/["\\]/g, '');
+  const themes = allowAdult ? '' : ` & ${SAFE_THEMES}`;
+  return `${FIELDS}; where name ~ *"${safe}"*${themes}; sort total_rating_count desc; limit 30;`;
+}
+
+export async function igdbSearch(q: string, allowAdult = false): Promise<IgdbGame[]> {
+  const games = ((await igdbQuery<IgdbGame[]>('games', searchQueryBody(q, allowAdult), DAY)) ?? []).filter(isMainGame);
+  // Peu/pas de résultats plein-texte → tentative joker (saisie partielle).
+  if (games.length < 3) {
+    const viaPrefix = ((await igdbQuery<IgdbGame[]>('games', prefixQueryBody(q, allowAdult), DAY)) ?? []).filter(isMainGame);
+    const seen = new Set(games.map((g) => g.id));
+    for (const g of viaPrefix) if (!seen.has(g.id)) games.push(g);
+  }
+  return allowAdult ? games : games.filter(isSafeGame);
 }
 
 export async function igdbGame(id: number): Promise<IgdbGame | null> {
@@ -73,41 +112,71 @@ export async function igdbGame(id: number): Promise<IgdbGame | null> {
   return r && r.length ? r[0]! : null;
 }
 
+// `offset N;` Apicalypse : fenêtre glissante dans le classement — le flux
+// Explorer tire un offset aléatoire pour varier le vivier à chaque appel.
+// NB cache : la clé ApiCache est le corps Apicalypse EXACT (endpoint + body,
+// cf. igdbQuery) — un offset/genre différent = une entrée de cache différente,
+// le hasard n'est donc jamais figé par le cache.
+const offsetClause = (offset?: number) => (offset ? ` offset ${offset};` : '');
+
+// allowAdult (18+) : retire ` & SAFE_THEMES` du `where` et le post-filtre
+// isSafeGame. La clause étant dans le corps Apicalypse (= clé de cache), les
+// comptes 18+ et standards n'utilisent jamais la même entrée de cache.
+const themesClause = (allowAdult: boolean) => (allowAdult ? '' : ` & ${SAFE_THEMES}`);
+const applySafe = (games: IgdbGame[], allowAdult: boolean) =>
+  allowAdult ? games : games.filter(isSafeGame);
+
 // « Populaires » du MOMENT : gros succès sortis dans les 18 derniers mois
 // (la fenêtre glissante suit d'elle-même la saisonnalité des sorties),
 // classés par nombre de notes (proxy de popularité, pas la note elle-même
 // qui figeait le carrousel sur le top all-time : Zelda/Metroid éternels).
-// NB : le timestamp est arrondi au JOUR pour que la clé de cache ApiCache
-// (adressée par le corps exact) reste stable 24 h.
-export function popularQueryBody(): string {
+// Le timestamp est arrondi au JOUR pour que la clé de cache reste stable 24 h ;
+// `offset` (flux Explorer) et `allowAdult` (18+) restent supportés.
+export function popularQueryBody(opts: { offset?: number; allowAdult?: boolean } = {}): string {
   const today = Math.floor(Date.now() / 86_400_000) * 86_400; // minuit UTC, en secondes
   const window = today - 548 * 86_400; // ~18 mois
-  return `${FIELDS}; where first_release_date > ${window} & first_release_date < ${today} & total_rating_count > 5; sort total_rating_count desc; limit 60;`;
+  return `${FIELDS}; where first_release_date > ${window} & first_release_date < ${today} & total_rating_count > 5${themesClause(opts.allowAdult ?? false)}; sort total_rating_count desc; limit 60;${offsetClause(opts.offset)}`;
 }
 
-export async function igdbPopular(): Promise<IgdbGame[]> {
-  return ((await igdbQuery<IgdbGame[]>('games', popularQueryBody(), DAY)) ?? []).filter(isMainGame);
+export async function igdbPopular(opts: { offset?: number; allowAdult?: boolean } = {}): Promise<IgdbGame[]> {
+  return applySafe(((await igdbQuery<IgdbGame[]>('games', popularQueryBody(opts), DAY)) ?? []).filter(isMainGame), opts.allowAdult ?? false);
 }
 
 // Sorties récentes bien notées (2 dernières années) : élargit le vivier du
 // flux Explorer au-delà du top all-time, pour que chaque tirage varie.
-export async function igdbRecent(): Promise<IgdbGame[]> {
+// Sorties récentes bien notées (2 dernières années) : timestamp arrondi au jour
+// (cache stable 24 h), `offset`/`allowAdult` supportés pour le flux Explorer.
+export async function igdbRecent(opts: { offset?: number; allowAdult?: boolean } = {}): Promise<IgdbGame[]> {
   const today = Math.floor(Date.now() / 86_400_000) * 86_400;
   const twoYearsAgo = today - 2 * 365 * 86_400;
-  const body = `${FIELDS}; where first_release_date > ${twoYearsAgo} & first_release_date < ${today} & total_rating_count > 20; sort total_rating desc; limit 50;`;
-  return ((await igdbQuery<IgdbGame[]>('games', body, DAY)) ?? []).filter(isMainGame);
+  const body = `${FIELDS}; where first_release_date > ${twoYearsAgo} & first_release_date < ${today} & total_rating_count > 20${themesClause(opts.allowAdult ?? false)}; sort total_rating desc; limit 50;${offsetClause(opts.offset)}`;
+  return applySafe(((await igdbQuery<IgdbGame[]>('games', body, DAY)) ?? []).filter(isMainGame), opts.allowAdult ?? false);
 }
 
-// « À venir » : les jeux LES PLUS ATTENDUS (hypes = follows IGDB avant
-// sortie), pas les prochaines dates du fond du store — trier par date seule
-// remontait du shovelware obscur (« Slime Slider »…).
-export function upcomingQueryBody(): string {
+// Vivier par genres IGDB (profil de goût du flux Explorer jeux). Corps exposé
+// pour les tests (pré-remplissage du cache ApiCache adressé par ce corps).
+export function genresQueryBody(genreIds: number[], opts: { offset?: number; allowAdult?: boolean } = {}): string {
+  return `${FIELDS}; where genres = (${genreIds.join(',')}) & total_rating_count > 50${themesClause(opts.allowAdult ?? false)}; sort total_rating desc; limit 50;${offsetClause(opts.offset)}`;
+}
+
+export async function igdbByGenres(genreIds: number[], opts: { offset?: number; allowAdult?: boolean } = {}): Promise<IgdbGame[]> {
+  if (genreIds.length === 0) return [];
+  return applySafe(
+    ((await igdbQuery<IgdbGame[]>('games', genresQueryBody(genreIds, opts), DAY)) ?? []).filter(isMainGame),
+    opts.allowAdult ?? false,
+  );
+}
+
+// « À venir » : les jeux LES PLUS ATTENDUS (hypes = follows IGDB avant sortie),
+// pas les prochaines dates du fond du store — trier par date seule remontait du
+// shovelware obscur (« Slime Slider »…). `allowAdult` (18+) supporté.
+export function upcomingQueryBody(allowAdult = false): string {
   const today = Math.floor(Date.now() / 86_400_000) * 86_400;
-  return `${FIELDS}; where first_release_date > ${today} & hypes > 4; sort hypes desc; limit 60;`;
+  return `${FIELDS}; where first_release_date > ${today} & hypes > 4${themesClause(allowAdult)}; sort hypes desc; limit 60;`;
 }
 
-export async function igdbUpcoming(): Promise<IgdbGame[]> {
-  return ((await igdbQuery<IgdbGame[]>('games', upcomingQueryBody(), DAY)) ?? []).filter(isMainGame);
+export async function igdbUpcoming(allowAdult = false): Promise<IgdbGame[]> {
+  return applySafe(((await igdbQuery<IgdbGame[]>('games', upcomingQueryBody(allowAdult), DAY)) ?? []).filter(isMainGame), allowAdult);
 }
 
 export function igdbToMedia(g: IgdbGame) {

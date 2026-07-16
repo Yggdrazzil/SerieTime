@@ -10,9 +10,20 @@ services:
       - ./apps/server/data:/app/apps/server/data
     env_file:
       - .env
+    # Fuseau du conteneur : sans ça il tourne en UTC et les bornes « aujourd'hui »
+    # des stats/file divergeaient de l'heure de Paris (décalage de quelques heures
+    # autour de minuit). La gamification calcule déjà en Europe/Paris explicitement.
+    environment:
+      TZ: Europe/Paris
     restart: unless-stopped
     mem_limit: 512m
     cpus: "1.0"
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:4000/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 40s
+      retries: 3
     # Rotation des logs : borne l'espace disque (sinon json-file grandit sans fin).
     logging:
       driver: json-file

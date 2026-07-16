@@ -4,6 +4,7 @@ import type { ProfileStatsDto } from '@serietime/types';
 import { prisma } from '../../db/client.js';
 import { requireAuth } from '../auth/routes.js';
 import { serializeMedia } from '../media/serialize.js';
+import { getUserLang } from '../media/userLang.js';
 
 async function computeStats(userId: string): Promise<ProfileStatsDto> {
   // Temps de visionnage agrégé EN SQL : l'ancienne version chargeait TOUTES
@@ -59,6 +60,7 @@ export async function profileRoutes(app: FastifyInstance): Promise<void> {
 
   // Profil complet pour l'écran /profile.
   app.get('/api/profile', async (request) => {
+    const lang = await getUserLang(request.userId);
     const user = await prisma.user.findUniqueOrThrow({ where: { id: request.userId } });
     const [stats, lists, shows, favoriteShows, movies, favoriteMovies, games, favoriteGames, followingCount, followersCount, commentsCount] = await Promise.all([
       computeStats(request.userId),
@@ -133,12 +135,12 @@ export async function profileRoutes(app: FastifyInstance): Promise<void> {
         posterPaths: l.items.map((i) => i.media.posterPath).filter((p): p is string => !!p),
         itemCount: l.items.length,
       })),
-      shows: shows.map((s) => serializeMedia(s.media, s)),
-      favoriteShows: favoriteShows.map((s) => serializeMedia(s.media, s)),
-      movies: movies.map((s) => serializeMedia(s.media, s)),
-      favoriteMovies: favoriteMovies.map((s) => serializeMedia(s.media, s)),
-      games: games.map((s) => serializeMedia(s.media, s)),
-      favoriteGames: favoriteGames.map((s) => serializeMedia(s.media, s)),
+      shows: shows.map((s) => serializeMedia(s.media, s, lang)),
+      favoriteShows: favoriteShows.map((s) => serializeMedia(s.media, s, lang)),
+      movies: movies.map((s) => serializeMedia(s.media, s, lang)),
+      favoriteMovies: favoriteMovies.map((s) => serializeMedia(s.media, s, lang)),
+      games: games.map((s) => serializeMedia(s.media, s, lang)),
+      favoriteGames: favoriteGames.map((s) => serializeMedia(s.media, s, lang)),
     };
   });
 
@@ -165,6 +167,7 @@ export async function profileRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get('/api/profile/favorites', async (request) => {
+    const lang = await getUserLang(request.userId);
     const query = z.object({ type: z.enum(['show', 'movie', 'game']).optional() }).parse(request.query ?? {});
     const statuses = await prisma.userMediaStatus.findMany({
       where: {
@@ -177,7 +180,7 @@ export async function profileRoutes(app: FastifyInstance): Promise<void> {
       // (données antérieures à la fonctionnalité) arrivent en fin de liste.
       orderBy: [{ favoriteOrder: { sort: 'asc', nulls: 'last' } }, { favoritedAt: 'asc' }],
     });
-    return { favorites: statuses.map((s) => serializeMedia(s.media, s)) };
+    return { favorites: statuses.map((s) => serializeMedia(s.media, s, lang)) };
   });
 
   // Réordonnancement des favoris (drag & drop façon TV Time) : reçoit la liste

@@ -7,20 +7,23 @@
     "scheme": "serietime",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-    "icon": "./assets/icon.png",
+    "icon": "./assets/branding/icon-universal-ios-1024.png",
     "splash": {
-      "backgroundColor": "#FFD400",
+      "image": "./assets/branding/icon-universal-ios-1024.png",
+      "backgroundColor": "#0B075A",
       "resizeMode": "contain"
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.serietime.app"
+      "bundleIdentifier": "com.serietime.app",
+      "icon": "./assets/branding/icon-universal-ios-1024.png"
     },
     "android": {
       "package": "com.serietime.app",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#FFD400"
+        "foregroundImage": "./assets/branding/android-adaptive-foreground-1024.png",
+        "backgroundColor": "#0B075A",
+        "monochromeImage": "./assets/branding/android-monochrome-1024.png"
       },
       "edgeToEdgeEnabled": true,
       "permissions": [
@@ -30,7 +33,7 @@
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/icon.png"
+      "favicon": "./assets/branding/pwa-icon-192.png"
     },
     "plugins": [
       "expo-router",

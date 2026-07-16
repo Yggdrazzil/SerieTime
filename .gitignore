@@ -2,13 +2,18 @@ node_modules/
 dist/
 *.local
 .env
+.env.*
+!.env.example
 apps/server/data/*.sqlite
 apps/server/data/*.sqlite-journal
 apps/server/data/*.sqlite-shm
 apps/server/data/*.sqlite-wal
 apps/server/data/imports/
-apps/mobile/android/app/build/
-apps/mobile/android/.gradle/
-apps/mobile/dev-dist/
+# App Expo : le dossier réel est mobile/ (pas apps/mobile/). Ignore les sorties
+# de build web et les projets natifs générés par `expo prebuild`/EAS.
+mobile/dist/
+mobile/android/
+mobile/ios/
+mobile/.expo/
 coverage/
 apps/server/prisma/data/

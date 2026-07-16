@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, ActivityIndicator, Text, TextInput } from 'react-native';
+import { View, Image, Text, TextInput } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -47,9 +47,16 @@ export default function RootLayout() {
     Mulish_800ExtraBold,
   });
   if (!fontsLoaded) {
+    // Écran de démarrage : logo sur le bleu nuit de la marque (l'icône étant
+    // elle-même sur fond #0B075A, elle se fond dans la page — seul le motif
+    // tricolore apparaît, comme sur le splash natif et le splash PWA).
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.white }}>
-        <ActivityIndicator color={COLORS.black} />
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#0B075A' }}>
+        <Image
+          source={require('../assets/branding/pwa-icon-512.png')}
+          style={{ width: 160, height: 160 }}
+          resizeMode="contain"
+        />
       </View>
     );
   }

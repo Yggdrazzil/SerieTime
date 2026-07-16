@@ -9,6 +9,7 @@ import { COLORS, FONTS, applyThemePreference, getThemePreference, type ThemePref
 import { PageHeader } from '@/components/PageHeader';
 import { FadeSwitch, PopIn } from '@/components/anim';
 import { useReduceMotion } from '@/lib/useReduceMotion';
+import { ssoWebAvailable, initGoogleButton, discordLogin } from '@/lib/sso';
 
 const NATIVE = Platform.OS !== 'web';
 
@@ -236,7 +237,26 @@ function ResyncLibraryRow() {
   );
 }
 
+// Providers SSO configurés côté serveur (sous-ensemble utile au reset).
+type SsoProviders = {
+  google: boolean; googleClientId: string;
+  discord: boolean; discordClientId: string;
+};
+
 function PasswordModal({ onClose }: { onClose: () => void }) {
+  const { user } = useAppStore();
+  const linked = ((user as { linkedProviders?: Record<string, boolean> } | null)?.linkedProviders) ?? {};
+  const hasSso = Boolean(linked.google || linked.discord);
+  // Le lien « mot de passe oublié » n'apparaît que si un compte Google/Discord
+  // est lié ET configuré côté serveur — et seulement sur le web (comme le SSO).
+  const providersQ = useQuery({
+    queryKey: ['auth', 'providers'],
+    queryFn: () => api.get<SsoProviders>('/api/auth/providers'),
+    enabled: ssoWebAvailable() && hasSso,
+  });
+  const cfg = providersQ.data;
+  const canReset = ssoWebAvailable() && Boolean((linked.google && cfg?.google) || (linked.discord && cfg?.discord));
+  const [resetMode, setResetMode] = useState(false);
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -257,6 +277,9 @@ function PasswordModal({ onClose }: { onClose: () => void }) {
       ),
   });
   const canSubmit = current.length > 0 && next.length >= 8 && !mut.isPending;
+  if (resetMode && cfg) {
+    return <ResetPasswordSheet cfg={cfg} linked={linked} onClose={onClose} />;
+  }
   return (
     <Sheet title="Modifier le mot de passe" onClose={onClose}>
       {done ? (
@@ -271,6 +294,119 @@ function PasswordModal({ onClose }: { onClose: () => void }) {
           <Pressable style={[styles.mBtn, !canSubmit && { opacity: 0.4 }]} disabled={!canSubmit} onPress={() => { setError(null); mut.mutate(); }}>
             {mut.isPending ? <ActivityIndicator color={COLORS.onAccent} /> : <Text style={styles.mBtnText}>ENREGISTRER</Text>}
           </Pressable>
+          {canReset ? (
+            <Pressable
+              onPress={() => setResetMode(true)}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel="Mot de passe oublié — réinitialiser via Google ou Discord"
+            >
+              <Text style={styles.resetLink}>Mot de passe oublié ? Réinitialiser via Google ou Discord</Text>
+            </Pressable>
+          ) : null}
+        </>
+      )}
+    </Sheet>
+  );
+}
+
+// Réinitialisation SANS ancien mot de passe : ré-authentification via un compte
+// SSO lié (même mécanique web que le login), puis le jeton de reset (10 min,
+// usage unique) délivré par le serveur autorise la pose du nouveau mot de passe.
+function ResetPasswordSheet({ cfg, linked, onClose }: { cfg: SsoProviders; linked: Record<string, boolean>; onClose: () => void }) {
+  const [resetToken, setResetToken] = useState<string | null>(null);
+  const [pw, setPw] = useState('');
+  const [pw2, setPw2] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+  const gRef = useRef<View>(null);
+
+  // Jeton du provider obtenu → le serveur vérifie l'identité (provider, id)
+  // et délivre le jeton de réinitialisation.
+  const initReset = async (provider: 'google' | 'discord', tok: string) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await api.post<{ resetToken: string }>('/api/auth/reset-password/init', { provider, token: tok });
+      setResetToken(res.resetToken);
+    } catch (e) {
+      setError(
+        e instanceof ApiError && e.code === 'no_account_for_identity'
+          ? 'Ce compte Google/Discord n’est lié à aucun compte SerieTime.'
+          : 'Vérification impossible. Réessaie.',
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Bouton officiel Google (même rendu que l'écran « Comptes liés »).
+  useEffect(() => {
+    if (resetToken || done || !cfg.google || !linked.google || !ssoWebAvailable() || !gRef.current) return;
+    initGoogleButton(cfg.googleClientId, gRef.current as unknown as HTMLElement, (t) => initReset('google', t)).catch(
+      () => undefined,
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cfg, resetToken, done]);
+
+  const mut = useMutation({
+    mutationFn: () => api.post('/api/auth/reset-password', { resetToken, newPassword: pw }),
+    onSuccess: () => {
+      setDone(true);
+      setTimeout(onClose, 1200);
+    },
+    onError: (e: unknown) =>
+      setError(
+        e instanceof ApiError && (e.code === 'reset_token_expired' || e.code === 'invalid_reset_token')
+          ? 'Session de réinitialisation expirée — recommence.'
+          : e instanceof ApiError && e.code === 'validation_error'
+            ? 'Nouveau mot de passe : 8 caractères minimum.'
+            : 'Impossible de réinitialiser le mot de passe.',
+      ),
+  });
+  const canSubmit = pw.length >= 8 && pw === pw2 && !mut.isPending;
+
+  return (
+    <Sheet title="Réinitialiser le mot de passe" onClose={onClose}>
+      {done ? (
+        <Text style={styles.okMsg}>Mot de passe réinitialisé ✓</Text>
+      ) : resetToken ? (
+        <>
+          <Text style={styles.mLabel}>Nouveau mot de passe</Text>
+          <TextInput style={styles.mInput} secureTextEntry value={pw} onChangeText={setPw} autoCapitalize="none" placeholder="8 caractères minimum" placeholderTextColor={COLORS.textSoft} />
+          <Text style={styles.mLabel}>Confirmer le nouveau mot de passe</Text>
+          <TextInput style={styles.mInput} secureTextEntry value={pw2} onChangeText={setPw2} autoCapitalize="none" />
+          {pw2.length > 0 && pw !== pw2 ? (
+            <Text style={styles.errMsg}>Les deux mots de passe ne correspondent pas.</Text>
+          ) : error ? (
+            <Text style={styles.errMsg}>{error}</Text>
+          ) : null}
+          <Pressable style={[styles.mBtn, !canSubmit && { opacity: 0.4 }]} disabled={!canSubmit} onPress={() => { setError(null); mut.mutate(); }}>
+            {mut.isPending ? <ActivityIndicator color={COLORS.onAccent} /> : <Text style={styles.mBtnText}>RÉINITIALISER</Text>}
+          </Pressable>
+        </>
+      ) : (
+        <>
+          <Text style={styles.warn}>
+            Confirme ton identité avec un compte lié : tu pourras ensuite choisir un nouveau mot de passe, sans
+            saisir l’ancien.
+          </Text>
+          {cfg.google && linked.google ? <View ref={gRef} style={{ alignItems: 'flex-start', paddingVertical: 4 }} /> : null}
+          {cfg.discord && linked.discord ? (
+            <Pressable
+              style={[styles.ssoResetBtn, busy && { opacity: 0.4 }]}
+              disabled={busy}
+              accessibilityRole="button"
+              accessibilityLabel="Continuer avec Discord"
+              onPress={() => discordLogin(cfg.discordClientId).then((t) => initReset('discord', t)).catch(() => undefined)}
+            >
+              <Feather name="message-circle" size={16} color="#fff" />
+              <Text style={styles.ssoResetText}>Continuer avec Discord</Text>
+            </Pressable>
+          ) : null}
+          {busy ? <ActivityIndicator size="small" color={COLORS.textMuted} style={{ marginTop: 10 }} /> : null}
+          {error ? <Text style={styles.errMsg}>{error}</Text> : null}
         </>
       )}
     </Sheet>
@@ -336,6 +472,17 @@ function Sheet({ title, onClose, children }: { title: string; onClose: () => voi
   );
 }
 
+// Langues de contenu : les titres (et résumés quand disponibles) des séries et
+// films s'affichent dans cette langue partout. Même liste que le serveur.
+const CONTENT_LANGS: [string, string][] = [
+  ['fr', 'Français'],
+  ['en', 'English'],
+  ['es', 'Español'],
+  ['de', 'Deutsch'],
+  ['it', 'Italiano'],
+  ['pt', 'Português'],
+];
+
 function AppTab() {
   const qc = useQueryClient();
   const { data } = useQuery({ queryKey: ['settings'], queryFn: () => api.get<{ settings: any }>('/api/settings') });
@@ -344,6 +491,42 @@ function AppTab() {
     onSettled: () => qc.invalidateQueries({ queryKey: ['settings'] }),
   });
   const s = data?.settings ?? {};
+  // Contenu 18+ : bascule optimiste sur /api/settings, puis on re-fetche les
+  // suggestions (Explorer) qui dépendent du réglage. Défaut : désactivé.
+  const adultMut = useMutation({
+    mutationFn: (v: boolean) => api.post('/api/settings', { allowAdultContent: v }),
+    onMutate: async (v: boolean) => {
+      await qc.cancelQueries({ queryKey: ['settings'] });
+      const prev = qc.getQueryData<{ settings: any }>(['settings']);
+      if (prev?.settings) qc.setQueryData(['settings'], { ...prev, settings: { ...prev.settings, allowAdultContent: v } });
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => { if (ctx?.prev) qc.setQueryData(['settings'], ctx.prev); },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['settings'] });
+      qc.invalidateQueries({ queryKey: ['explore'] });
+    },
+  });
+  // Langue de contenu : la valeur courante vient du serveur (User.language) ;
+  // sélection optimiste le temps de l'aller-retour.
+  const [langSel, setLangSel] = useState<string | null>(null);
+  const [langMsg, setLangMsg] = useState<string | null>(null);
+  const lang = langSel ?? s.language ?? 'fr';
+  const pickLang = async (v: string) => {
+    if (v === lang) return;
+    setLangSel(v);
+    setLangMsg(null);
+    try {
+      await api.post('/api/settings', { language: v });
+      if (v !== 'fr') setLangMsg('Bibliothèque en cours de traduction…');
+      // Les titres changent PARTOUT (À voir, À venir, bibliothèque, fiches,
+      // recherche, explorer…) : tout le cache est re-fetché.
+      qc.invalidateQueries();
+    } catch {
+      setLangSel(null);
+      setLangMsg('Impossible de changer la langue. Réessaie.');
+    }
+  };
   // Thème : la préférence EFFECTIVE vient du stockage local (c'est elle qui a
   // servi à peindre cette session) ; le serveur n'en garde qu'une copie.
   const [themePref, setThemePref] = useState<ThemePreference>(getThemePreference());
@@ -369,6 +552,7 @@ function AppTab() {
           ['light', 'Thème clair'],
           ['dark', 'Thème sombre'],
           ['sunset', 'Thème Sunset'],
+          ['midnight', 'Thème Nuit — les couleurs SerieTime'],
         ] as [ThemePreference, string][]
       ).map(([v, l]) => (
         <RadioRow key={v} label={l} on={themePref === v} onPress={() => pickTheme(v)} />
@@ -378,6 +562,20 @@ function AppTab() {
           Sur l'app native, le thème suit l'appareil ; le choix explicite s'applique sur la web app.
         </Text>
       ) : null}
+      <Divider />
+      <SectionTitle>Langue</SectionTitle>
+      {CONTENT_LANGS.map(([v, l]) => (
+        <RadioRow key={v} label={l} on={lang === v} onPress={() => pickLang(v)} />
+      ))}
+      {langMsg ? <Text style={styles.themeNote}>{langMsg}</Text> : null}
+      <Divider />
+      <SectionTitle>Suggestions</SectionTitle>
+      <ToggleRow
+        label="Contenu 18+"
+        sub="Affiche le contenu réservé aux adultes dans les suggestions. Désactivé par défaut."
+        on={s.allowAdultContent ?? false}
+        onToggle={(v) => adultMut.mutate(v)}
+      />
       <Divider />
       <SectionTitle>Cache</SectionTitle>
       <View style={{ padding: 16 }}>
@@ -423,7 +621,13 @@ function ToggleRow({ label, sub, on, onToggle }: { label: string; sub?: string; 
         <Text style={{ color: COLORS.text, fontFamily: FONTS.regular, fontSize: 14 }}>{label}</Text>
         {sub ? <Text style={{ fontFamily: FONTS.regular, fontSize: 12.5, color: COLORS.textMuted, lineHeight: 17, marginTop: 2 }}>{sub}</Text> : null}
       </View>
-      <Pressable onPress={() => onToggle(!on)} hitSlop={8}>
+      <Pressable
+        onPress={() => onToggle(!on)}
+        hitSlop={8}
+        accessibilityRole="switch"
+        accessibilityLabel={label}
+        accessibilityState={{ checked: on }}
+      >
         <Animated.View style={[styles.toggle, { backgroundColor: v.interpolate({ inputRange: [0, 1], outputRange: [COLORS.chipSelected, COLORS.yellow] }) }]}>
           <Animated.View
             style={[
@@ -489,6 +693,9 @@ const styles = StyleSheet.create({
   mBtn: { backgroundColor: COLORS.yellow, borderRadius: 999, paddingVertical: 12, alignItems: 'center', marginTop: 22 },
   mBtnText: { color: COLORS.onAccent, fontSize: 13, fontFamily: FONTS.extraBold, letterSpacing: 0.6 },
   okMsg: { fontSize: 14, fontFamily: FONTS.bold, color: COLORS.green, textAlign: 'center', paddingVertical: 16 },
+  resetLink: { color: COLORS.blue, fontSize: 13, fontFamily: FONTS.bold, textAlign: 'center', marginTop: 16 },
+  ssoResetBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#5865F2', borderRadius: 999, paddingVertical: 10, paddingHorizontal: 18, alignSelf: 'flex-start', marginTop: 8 },
+  ssoResetText: { color: '#fff', fontFamily: FONTS.bold, fontSize: 13 },
   errMsg: { color: COLORS.red, fontSize: 14, fontFamily: FONTS.regular, marginTop: 12 },
   warn: { fontSize: 15, fontFamily: FONTS.regular, color: COLORS.textMuted, lineHeight: 21, marginBottom: 8 },
   version: { textAlign: 'center', paddingVertical: 24, fontSize: 13, fontFamily: FONTS.bold, color: COLORS.textMuted, letterSpacing: 1 },

@@ -33,6 +33,8 @@ model User {
   discordId    String?  @unique
   // Social : un profil privé n'est visible que de ses abonnés (et de lui-même).
   isPrivate    Boolean  @default(false)
+  // Langue de contenu (titres/résumés des séries et films) : fr par défaut.
+  language     String   @default("fr")
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -55,9 +57,35 @@ model User {
   badges          UserBadge[]
   challenges      UserChallenge[]
 
+  // Réinitialisation du mot de passe via ré-authentification SSO.
+  passwordResetTokens PasswordResetToken[]
+
+  // Mémoire du flux Explorer (items déjà servis, exclus du tirage 3 jours).
+  exploreImpressions ExploreImpression[]
+
+  // Réglages applicatifs PAR UTILISATEUR (notifs, thème, abonnements…).
+  setting            UserSetting?
+
+  // Signalements d'œuvres inappropriées émis par cet utilisateur.
+  reports            Report[]
+
   // Un compte SSO est identifié de façon unique par (provider, providerId).
   // Les comptes "password" ont providerId = null (SQLite autorise plusieurs NULL).
   @@unique([provider, providerId])
+}
+
+// Jeton de réinitialisation de mot de passe, délivré après une
+// ré-authentification SSO réussie (Google/Discord). Usage unique, 10 minutes.
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  token     String    @unique
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
 }
 
 model Session {
@@ -80,6 +108,10 @@ model Media {
   localizedTitle    String?
   overview          String?
   localizedOverview String?
+  // Traductions TMDb par langue de contenu (en/es/de/it/pt) :
+  // JSON { "en": { "title": "...", "overview": "..." }, ... }. Le français
+  // reste porté par localizedTitle/localizedOverview (jamais dupliqué ici).
+  translationsJson  String?
 
   posterPath        String?
   backdropPath      String?
@@ -127,6 +159,7 @@ model Media {
   @@index([tmdbId])
   @@index([tvdbId])
   @@index([imdbId])
+  @@index([igdbId])
 }
 
 model Show {
@@ -258,6 +291,9 @@ model UserMediaStatus {
   media         Media     @relation(fields: [mediaId], references: [id], onDelete: Cascade)
 
   status        String // UserMediaState
+  // Jeux : « Je possède » — interrupteur INDÉPENDANT du statut (on peut être
+  // « En cours » ET posséder le jeu, ou y jouer via Game Pass sans le posséder).
+  isOwned       Boolean   @default(false)
   isFavorite    Boolean   @default(false)
   // Ordre personnalisé des favoris (drag & drop façon TV Time) + date d'ajout
   // aux favoris (tris « Derniers/Premiers ajouts »).
@@ -302,7 +338,9 @@ model UserEpisodeStatus {
   @@unique([userId, episodeId])
   @@index([userId])
   @@index([episodeId])
-  @@index([status])
+  // Couvre les agrégats gamification (comptes/dates d'épisodes vus par user).
+  // L'ancien @@index([status]) seul (faible sélectivité) est retiré.
+  @@index([userId, status, watchedAt])
 }
 
 model WatchEvent {
@@ -323,7 +361,8 @@ model WatchEvent {
 
   createdAt    DateTime @default(now())
 
-  @@index([userId])
+  // Feed social & stats : événements d'un user triés par date.
+  @@index([userId, eventDate])
   @@index([eventDate])
 }
 
@@ -496,8 +535,24 @@ model Notification {
 
   createdAt    DateTime @default(now())
 
-  @@index([userId])
+  // Liste des notifications d'un user, triées par date (écran notifications).
+  @@index([userId, date])
   @@index([date])
+}
+
+// Mémoire du flux Explorer : items déjà servis à un utilisateur. Un item vu
+// il y a moins de 3 jours est exclu du tirage suivant (variété réelle entre
+// deux refresh) ; les lignes de plus de 14 jours sont purgées au fil de l'eau.
+model ExploreImpression {
+  id       String   @id @default(cuid())
+  userId   String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // "show:tmdb:123" | "movie:tmdb:456" | "game:igdb:789"
+  itemKey  String
+  servedAt DateTime @default(now())
+
+  @@unique([userId, itemKey])
+  @@index([userId, servedAt])
 }
 
 model AppSetting {
@@ -505,6 +560,16 @@ model AppSetting {
   key       String   @unique
   valueJson String
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Réglages applicatifs PAR UTILISATEUR. Remplace l'AppSetting global key='app'
+// (jadis partagé par tous les comptes : un user changeait les notifs de tout le
+// monde). `dataJson` porte l'objet de réglages sérialisé (mêmes clés qu'avant).
+model UserSetting {
+  userId    String   @id
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dataJson  String?
   updatedAt DateTime @updatedAt
 }
 
@@ -614,4 +679,24 @@ model CommentReaction {
   // Un utilisateur peut poser plusieurs emojis différents sur un même commentaire.
   @@unique([commentId, userId, emoji])
   @@index([commentId])
+}
+
+// Signalement d'une œuvre inappropriée (ex. hentai passé à travers le filtre).
+// Stocké pour un tri manuel ultérieur (pas d'écran admin pour l'instant).
+model Report {
+  id         String   @id @default(cuid())
+  reporterId String
+  reporter   User     @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+  mediaId    String?  // si l'œuvre existe en local
+  mediaType  String   // 'show' | 'movie' | 'game'
+  tmdbId     String?
+  igdbId     String?
+  title      String
+  reason     String   // ex. 'adult' (contenu 18+/porno) — extensible
+  note       String?
+  status     String   @default("pending") // pending | resolved | dismissed
+  createdAt  DateTime @default(now())
+
+  @@index([status, createdAt])
+  @@index([reporterId])
 }

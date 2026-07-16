@@ -3,6 +3,7 @@ import { Redirect, Tabs } from 'expo-router';
 import { TabBar } from '@/components/TabBar';
 import { useAppStore } from '@/lib/store';
 import { resolvedServerUrl } from '@/lib/api';
+import { LinkAccountPrompt } from '@/components/LinkAccountPrompt';
 
 export default function TabsLayout() {
   const { token, hydrated } = useAppStore();
@@ -10,12 +11,17 @@ export default function TabsLayout() {
   // retour à l'écran de connexion plutôt que des écrans vides.
   if (hydrated && (!token || !resolvedServerUrl())) return <Redirect href="/setup" />;
   return (
-    <Tabs tabBar={(props) => <TabBar {...props} />} screenOptions={{ headerShown: false }}>
-      <Tabs.Screen name="index" options={{ title: 'Séries' }} />
-      <Tabs.Screen name="movies" options={{ title: 'Films' }} />
-      <Tabs.Screen name="games" options={{ title: 'Jeux' }} />
-      <Tabs.Screen name="explore" options={{ title: 'Explorer' }} />
-      <Tabs.Screen name="profile" options={{ title: 'Profil' }} />
-    </Tabs>
+    <>
+      <Tabs tabBar={(props) => <TabBar {...props} />} screenOptions={{ headerShown: false }}>
+        <Tabs.Screen name="index" options={{ title: 'Séries' }} />
+        <Tabs.Screen name="movies" options={{ title: 'Films' }} />
+        <Tabs.Screen name="games" options={{ title: 'Jeux' }} />
+        <Tabs.Screen name="explore" options={{ title: 'Explorer' }} />
+        <Tabs.Screen name="profile" options={{ title: 'Profil' }} />
+      </Tabs>
+      {/* Migration douce vers SSO (spec 2026-07-16) : monté une fois ici pour
+          garantir un utilisateur connecté, jamais sur l'écran de connexion. */}
+      <LinkAccountPrompt />
+    </>
   );
 }

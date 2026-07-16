@@ -9,6 +9,7 @@ import { EmptyState, Loading } from '@/components/ui';
 import { Pop, AppearItem } from '@/components/anim';
 import { useComments, SORT_LABEL } from '@/components/comments/useComments';
 import { CommentCard } from '@/components/comments/CommentCard';
+import { BlockedCommentPopup } from '@/components/comments/BlockedCommentPopup';
 
 // Page « Commentaires » (copie TV Time) : ouverte depuis la rangée
 // « Commentaires N › » au bas de la fiche. Cartes blanches sur fond gris,
@@ -35,6 +36,8 @@ export default function CommentsScreen() {
     setReplyText,
     post,
     postReply,
+    postError,
+    clearPostError,
     heart,
     remove,
     shareComment,
@@ -44,9 +47,11 @@ export default function CommentsScreen() {
     if (!text.trim() || busy) return;
     setBusy(true);
     try {
-      await post(text);
-      setText('');
-      setComposer(false);
+      const ok = await post(text);
+      if (ok) {
+        setText('');
+        setComposer(false);
+      }
     } finally {
       setBusy(false);
     }
@@ -115,7 +120,7 @@ export default function CommentsScreen() {
             placeholder="Partager un avis…"
             placeholderTextColor={COLORS.textMuted}
             value={text}
-            onChangeText={setText}
+            onChangeText={(t) => { setText(t); if (postError) clearPostError(); }}
             multiline
             autoFocus
           />
@@ -124,6 +129,9 @@ export default function CommentsScreen() {
           </Pressable>
         </View>
       </Modal>
+
+      {/* Popup de modération : commentaire/réponse rejeté (règles communauté). */}
+      <BlockedCommentPopup message={postError} onClose={clearPostError} />
     </Pop>
   );
 }

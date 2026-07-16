@@ -1,8 +1,17 @@
 import { useMemo, useState } from 'react';
 import { Platform, Share } from 'react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
 import type { CommentDto } from './types';
+
+const BLOCKED_FALLBACK = 'Ce commentaire enfreint les règles de la communauté et ne peut pas être publié.';
+
+// Traduit une erreur de publication en message affichable, ou la relaie.
+// Renvoie le message de modération (serveur) quand le commentaire est bloqué.
+function moderationMessage(e: unknown): string | null {
+  if (e instanceof ApiError && e.code === 'comment_blocked') return e.serverMessage || BLOCKED_FALLBACK;
+  return null;
+}
 
 export type SortKey = 'pertinents' | 'recents';
 export const SORT_LABEL: Record<SortKey, string> = { pertinents: 'Les plus pertinents', recents: 'Les plus récents' };
@@ -19,6 +28,9 @@ export function useComments(mediaId: string, title?: string) {
   const [openReplies, setOpenReplies] = useState<Record<string, boolean>>({});
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const [replyText, setReplyText] = useState('');
+  // Message d'erreur de publication (modération) partagé par le commentaire et
+  // les réponses (même route serveur). null = pas d'erreur.
+  const [postError, setPostError] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['comments', mediaId],
@@ -36,18 +48,42 @@ export function useComments(mediaId: string, title?: string) {
 
   const toggleReplies = (id: string) => setOpenReplies((o) => ({ ...o, [id]: !o[id] }));
 
-  const post = async (body: string) => {
-    if (!body.trim()) return;
-    await api.post(`/api/media/${mediaId}/comments`, { body: body.trim() });
-    invalidate();
+  // Publie un commentaire. Renvoie true si publié, false si rejeté par la
+  // modération (message dans `postError`). Les autres erreurs sont relancées.
+  const post = async (body: string): Promise<boolean> => {
+    if (!body.trim()) return false;
+    setPostError(null);
+    try {
+      await api.post(`/api/media/${mediaId}/comments`, { body: body.trim() });
+      invalidate();
+      return true;
+    } catch (e) {
+      const msg = moderationMessage(e);
+      if (msg) {
+        setPostError(msg);
+        return false;
+      }
+      throw e;
+    }
   };
-  const postReply = async (parentId: string) => {
-    if (!replyText.trim()) return;
-    await api.post(`/api/media/${mediaId}/comments`, { body: replyText.trim(), parentId });
-    setReplyText('');
-    setReplyTo(null);
-    setOpenReplies((o) => ({ ...o, [parentId]: true }));
-    invalidate();
+  const postReply = async (parentId: string): Promise<boolean> => {
+    if (!replyText.trim()) return false;
+    setPostError(null);
+    try {
+      await api.post(`/api/media/${mediaId}/comments`, { body: replyText.trim(), parentId });
+      setReplyText('');
+      setReplyTo(null);
+      setOpenReplies((o) => ({ ...o, [parentId]: true }));
+      invalidate();
+      return true;
+    } catch (e) {
+      const msg = moderationMessage(e);
+      if (msg) {
+        setPostError(msg);
+        return false;
+      }
+      throw e;
+    }
   };
   // Cœur TV Time : bascule OPTIMISTE de la réaction ❤️ — le cœur se remplit au
   // doigt, le serveur confirme derrière (rollback si échec).
@@ -120,6 +156,8 @@ export function useComments(mediaId: string, title?: string) {
     setReplyText,
     post,
     postReply,
+    postError,
+    clearPostError: () => setPostError(null),
     heart,
     remove,
     shareComment,

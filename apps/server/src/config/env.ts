@@ -30,6 +30,14 @@ const envSchema = z.object({
     .string()
     .optional()
     .transform((v) => (v == null ? false : v.trim().toLowerCase() === 'true' || v.trim() === '1')),
+  // Inscription e-mail/mot de passe : désactivée en prod (`ALLOW_EMAIL_SIGNUP=false`)
+  // pour que les NOUVEAUX comptes passent forcément par Google/Discord (aucun mot
+  // de passe → aucune perte). Par défaut ON (les tests créent des comptes via
+  // /api/auth/register ; le login e-mail des comptes existants reste inchangé).
+  ALLOW_EMAIL_SIGNUP: z
+    .string()
+    .optional()
+    .transform((v) => (v == null ? true : v.trim().toLowerCase() === 'true' || v.trim() === '1')),
   TVDB_API_KEY: z.string().default(''),
   TVDB_PIN: z.string().default(''),
   TWITCH_CLIENT_ID: z.string().default(''),

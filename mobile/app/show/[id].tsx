@@ -17,6 +17,7 @@ import { MarkPreviousPopup, hasUnwatchedPrevious } from '@/components/MarkPrevio
 import { EpisodeSheet, type EpisodeSheetTarget } from '@/components/EpisodeSheet';
 import { genresFr, statusFr, airDayFr, compactCount } from '@/lib/frMedia';
 import { FicheSkeleton } from '@/components/FicheSkeleton';
+import { ReportModal } from '@/components/ReportModal';
 
 const INTEREST = ['LES ACTEURS', 'LA PRÉMISSE', 'LES CRÉATEURS', 'LA CHAÎNE/LA PLATEFORME', "LA FRANCHISE OU L'UNIVERS", 'AUTRE'];
 const STATUS_LABELS: Record<string, string> = {
@@ -38,6 +39,7 @@ export default function ShowDetail() {
   const [persoMenu, setPersoMenu] = useState(false);
   const [artwork, setArtwork] = useState<'poster' | 'banner' | null>(null);
   const [listsOpen, setListsOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
 
   // Bandeau jaune éphémère en bas d'écran (façon « AJOUTÉE ! » de TV Time).
   const showToast = (msg: string) => {
@@ -153,6 +155,26 @@ export default function ShowDetail() {
       return;
     }
     Share.share({ message }).catch(() => undefined);
+  };
+
+  // Signalement : envoie l'œuvre à l'équipe de modération (tri manuel).
+  // Échec silencieux — toast neutre dans tous les cas.
+  const submitReport = async () => {
+    setReportOpen(false);
+    const m: MediaDto | undefined = detail.data?.media;
+    if (!m) return;
+    try {
+      await api.post('/api/report', {
+        mediaType: isMovie ? 'movie' : 'show',
+        mediaId: m.id,
+        tmdbId: m.tmdbId ?? undefined,
+        title: m.title,
+        reason: 'adult',
+      });
+    } catch {
+      // Erreur silencieuse : on remercie quand même (pas de fuite d'état serveur).
+    }
+    showToast('Merci, signalement envoyé 👍');
   };
 
   // En-tête repliable façon TV Time : la bannière se réduit en barre compacte
@@ -324,9 +346,12 @@ export default function ShowDetail() {
               onPress={() => { setMenu(false); removeTracking.mutate(); }}
             />
           ) : null}
-          <SheetItem icon="share-2" label="Partager" onPress={() => { setMenu(false); share(); }} last />
+          <SheetItem icon="share-2" label="Partager" onPress={() => { setMenu(false); share(); }} />
+          <SheetItem icon="flag" label="Signaler" onPress={() => { setMenu(false); setReportOpen(true); }} last />
         </View>
       </Modal>
+
+      <ReportModal visible={reportOpen} onClose={() => setReportOpen(false)} onConfirm={submitReport} />
 
       <PersonalizeMenu
         visible={persoMenu}

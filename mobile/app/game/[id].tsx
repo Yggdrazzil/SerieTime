@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, Pressable, Modal, TextInput, ActivityIndicator, Image, Platform, Linking } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, ScrollView, StyleSheet, Pressable, Modal, TextInput, ActivityIndicator, Image, Platform, Linking, Animated, Easing } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import { goBack } from '@/lib/nav';
@@ -12,17 +12,22 @@ import { Pop, PressableScale, SlideUpBar } from '@/components/anim';
 import { Stars } from '@/components/Stars';
 import { shareMedia } from '@/lib/share';
 import { FicheSkeleton } from '@/components/FicheSkeleton';
+import { ReportModal } from '@/components/ReportModal';
 import { shortDateFr } from '@/lib/format';
+import { useReduceMotion } from '@/lib/useReduceMotion';
 
 // Miroir de la réponse GET /api/games/:id (serveur : apps/server/src/modules/games/routes.ts).
 type GameDetailDto = {
   id: string;
+  igdbId: string | null;
   title: string;
   posterPath: string | null;
   year: number | null;
   voteAverage: number | null;
   platforms: string | null;
   userStatus: string | null;
+  // « Je possède » — booléen indépendant du statut (interrupteur de la fiche).
+  isOwned: boolean;
   playtimeMinutes: number | null;
   overview: string | null;
   backdropPath: string | null;
@@ -49,10 +54,14 @@ type RelatedGameDto = {
   kind: 'edition' | 'extension';
 };
 
+// « Possédé » n'est plus un statut : c'est l'interrupteur « Je possède »
+// (isOwned), indépendant — on peut être « En cours » ET posséder le jeu.
 const GAME_STATUSES = ['wishlist', 'playing', 'completed', 'abandoned'] as const;
 type GameStatus = (typeof GAME_STATUSES)[number];
+// « Voulu » au singulier ici : le chip désigne CE jeu (décision produit d'Étienne).
+// L'onglet Jeux garde « VOULUS » au pluriel (collection).
 const STATUS_LABELS: Record<GameStatus, string> = {
-  wishlist: 'Voulus',
+  wishlist: 'Voulu',
   playing: 'En cours',
   completed: 'Terminé',
   abandoned: 'Abandonné',
@@ -79,6 +88,7 @@ export default function GameDetail() {
   const [persoMenu, setPersoMenu] = useState(false);
   const [artwork, setArtwork] = useState<'poster' | 'banner' | null>(null);
   const [listsOpen, setListsOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -116,11 +126,20 @@ export default function GameDetail() {
     onSettled: refresh,
   });
 
+  // Interrupteur « Je possède » — indépendant du statut (mise à jour optimiste).
+  const setOwned = useMutation({
+    mutationFn: (owned: boolean) => api.post(`/api/games/${id}/owned`, { owned }),
+    onMutate: (owned: boolean) => patch({ isOwned: owned }),
+    onError: (_e, _v, ctx) => rollback(ctx),
+    onSettled: refresh,
+  });
+
   const removeTracking = useMutation({
     mutationFn: () => api.del(`/api/games/${id}/tracking`),
     onMutate: () => {
       showToast('Jeu retiré');
-      return patch({ userStatus: null });
+      // DELETE /tracking supprime toute la ligne — « Je possède » part avec.
+      return patch({ userStatus: null, isOwned: false });
     },
     onError: (_e, _v, ctx) => rollback(ctx),
     onSettled: refresh,
@@ -137,6 +156,25 @@ export default function GameDetail() {
     if (!detail.data) return;
     const url = typeof window !== 'undefined' ? window.location.href : undefined;
     shareMedia(detail.data.title, url);
+  };
+
+  // Signalement : envoie l'œuvre à l'équipe de modération (tri manuel).
+  // Échec silencieux — toast neutre dans tous les cas.
+  const submitReport = async () => {
+    setReportOpen(false);
+    if (!detail.data) return;
+    try {
+      await api.post('/api/report', {
+        mediaType: 'game',
+        mediaId: detail.data.id,
+        igdbId: detail.data.igdbId ?? undefined,
+        title: detail.data.title,
+        reason: 'adult',
+      });
+    } catch {
+      // Erreur silencieuse : on remercie quand même (pas de fuite d'état serveur).
+    }
+    showToast('Merci, signalement envoyé 👍');
   };
 
   if (detail.isLoading) return <FicheSkeleton heroHeight={200} />;
@@ -173,32 +211,25 @@ export default function GameDetail() {
                 sur fond blanc (le bloc chevauche la bannière). */}
             <Text style={styles.title} numberOfLines={1}>{game.title}</Text>
             {game.voteAverage ? <Stars rating10={game.voteAverage} size={19} /> : null}
+            {/* Infos compactes À CÔTÉ de la jaquette (remplit le vide à droite) :
+                Genre / Sortie / Note presse — retirées du factList du bas pour
+                ne pas doubler. Sous les étoiles = déjà sur fond blanc. */}
+            <View style={styles.headFacts}>
+              {game.genres ? (
+                <Text style={styles.headFact} numberOfLines={2}><Text style={styles.factLabel}>Genre : </Text>{game.genres}</Text>
+              ) : null}
+              {game.releaseDate ? (
+                <Text style={styles.headFact}><Text style={styles.factLabel}>Sortie le </Text>{shortDateFr(game.releaseDate)}</Text>
+              ) : null}
+              {game.criticScore ? (
+                <Text style={styles.headFact}><Text style={styles.factLabel}>Note presse : </Text>{game.criticScore}/100</Text>
+              ) : null}
+            </View>
           </View>
         </View>
 
-        {/* Fiche d'identité — bloc dédié SOUS l'en-tête (fond blanc garanti :
-            le headRow chevauche la bannière sombre, texte noir illisible là-haut). */}
-        <View style={styles.factList}>
-          {game.genres ? (
-            <Text style={styles.fact}><Text style={styles.factLabel}>Genre : </Text>{game.genres}</Text>
-          ) : null}
-          {game.releaseDate ? (
-            <Text style={styles.fact}><Text style={styles.factLabel}>Sortie le </Text>{shortDateFr(game.releaseDate)}</Text>
-          ) : null}
-          {game.platforms ? <Text style={styles.fact}>{game.platforms}</Text> : null}
-          {game.developer ? (
-            <Text style={styles.fact}><Text style={styles.factLabel}>Développeur : </Text>{game.developer}</Text>
-          ) : null}
-          {game.publisher ? (
-            <Text style={styles.fact}><Text style={styles.factLabel}>Éditeur : </Text>{game.publisher}</Text>
-          ) : null}
-          {game.criticScore ? (
-            <Text style={styles.fact}><Text style={styles.factLabel}>Note presse : </Text>{game.criticScore}/100</Text>
-          ) : null}
-        </View>
-
-        {game.videoId ? <TrailerPreview videoId={game.videoId} /> : null}
-
+        {/* Suivi REMONTÉ juste sous la jaquette/titre (avant le trailer) :
+            l'utilisateur coche son statut sans scroller. */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Suivi</Text>
           <View style={styles.statusRow}>
@@ -216,7 +247,39 @@ export default function GameDetail() {
               </Pressable>
             ))}
           </View>
+          {/* « Je possède » : interrupteur INDÉPENDANT du statut (Game Pass,
+              collection…) — même style que les toggles des Paramètres. */}
+          <OwnedToggle
+            on={game.isOwned}
+            disabled={setOwned.isPending}
+            onToggle={(v) => setOwned.mutate(v)}
+          />
         </View>
+
+        {game.videoId ? <TrailerPreview videoId={game.videoId} /> : null}
+
+        {/* Fiche d'identité complète (Genre/Sortie/Note presse vivent à côté de
+            la jaquette) : Plateformes / Développeur / Éditeur / Modes / Temps
+            de jeu — l'ancienne section « Informations » est fusionnée ici. */}
+        {game.platforms || game.developer || game.publisher || game.gameModes || game.playtimeMinutes ? (
+          <View style={[styles.section, styles.factList]}>
+            {game.platforms ? (
+              <Text style={styles.fact}><Text style={styles.factLabel}>Plateformes : </Text>{game.platforms}</Text>
+            ) : null}
+            {game.developer ? (
+              <Text style={styles.fact}><Text style={styles.factLabel}>Développeur : </Text>{game.developer}</Text>
+            ) : null}
+            {game.publisher ? (
+              <Text style={styles.fact}><Text style={styles.factLabel}>Éditeur : </Text>{game.publisher}</Text>
+            ) : null}
+            {game.gameModes ? (
+              <Text style={styles.fact}><Text style={styles.factLabel}>Modes : </Text>{game.gameModes}</Text>
+            ) : null}
+            {game.playtimeMinutes ? (
+              <Text style={styles.fact}><Text style={styles.factLabel}>Temps de jeu : </Text>{formatPlaytime(game.playtimeMinutes)}</Text>
+            ) : null}
+          </View>
+        ) : null}
 
         {game.overview ? (
           <View style={styles.section}>
@@ -224,17 +287,6 @@ export default function GameDetail() {
             <Text style={styles.overview}>{game.overview}</Text>
           </View>
         ) : null}
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Informations</Text>
-          {game.gameModes ? <InfoRow icon="users" label={game.gameModes} /> : null}
-          {game.playtimeMinutes ? (
-            <InfoRow icon="clock" label={`Temps de jeu : ${formatPlaytime(game.playtimeMinutes)}`} />
-          ) : null}
-          {!game.gameModes && !game.playtimeMinutes ? (
-            <Text style={styles.muted}>Non disponible</Text>
-          ) : null}
-        </View>
 
         <RelatedGamesRow items={game.related ?? []} />
 
@@ -271,9 +323,12 @@ export default function GameDetail() {
               onPress={() => { setMenu(false); removeTracking.mutate(); }}
             />
           ) : null}
-          <SheetItem icon="share-2" label="Partager" onPress={() => { setMenu(false); share(); }} last />
+          <SheetItem icon="share-2" label="Partager" onPress={() => { setMenu(false); share(); }} />
+          <SheetItem icon="flag" label="Signaler" onPress={() => { setMenu(false); setReportOpen(true); }} last />
         </View>
       </Modal>
+
+      <ReportModal visible={reportOpen} onClose={() => setReportOpen(false)} onConfirm={submitReport} />
 
       <PersonalizeMenu
         visible={persoMenu}
@@ -296,11 +351,39 @@ export default function GameDetail() {
   );
 }
 
-function InfoRow({ icon, label }: { icon: keyof typeof Feather.glyphMap; label: string }) {
+// Interrupteur « Je possède » — réplique du ToggleRow des Paramètres
+// (settings.tsx, non exporté) : piste qui change de couleur + bouton qui
+// glisse. Couleurs interpolées → driver JS obligatoire.
+function OwnedToggle({ on, disabled, onToggle }: { on: boolean; disabled?: boolean; onToggle: (v: boolean) => void }) {
+  const reduce = useReduceMotion();
+  const v = useRef(new Animated.Value(on ? 1 : 0)).current;
+  useEffect(() => {
+    Animated.timing(v, { toValue: on ? 1 : 0, duration: reduce ? 0 : 180, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+  }, [on, reduce, v]);
   return (
-    <View style={styles.infoRow}>
-      <Feather name={icon} size={20} color={COLORS.black} />
-      <Text style={styles.infoText}>{label}</Text>
+    <View style={styles.ownedRow}>
+      <Feather name="archive" size={20} color={COLORS.black} />
+      <Text style={styles.ownedLabel}>Je possède</Text>
+      <Pressable
+        onPress={() => onToggle(!on)}
+        disabled={disabled}
+        hitSlop={8}
+        accessibilityRole="switch"
+        accessibilityLabel="Je possède"
+        accessibilityState={{ checked: on }}
+      >
+        <Animated.View style={[styles.toggle, { backgroundColor: v.interpolate({ inputRange: [0, 1], outputRange: [COLORS.chipSelected, COLORS.yellow] }) }]}>
+          <Animated.View
+            style={[
+              styles.knob,
+              {
+                backgroundColor: v.interpolate({ inputRange: [0, 1], outputRange: ['#ffffff', '#000000'] }),
+                transform: [{ translateX: v.interpolate({ inputRange: [0, 1], outputRange: [0, 22] }) }],
+              },
+            ]}
+          />
+        </Animated.View>
+      </Pressable>
     </View>
   );
 }
@@ -699,8 +782,12 @@ const styles = StyleSheet.create({
   posterEmpty: { alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: 21, fontFamily: FONTS.extraBold, color: '#fff' },
   meta: { fontFamily: FONTS.regular, fontSize: 15, color: 'rgba(255,255,255,0.85)', marginTop: 4 },
-  // Fiche d'identité du jeu (Genre / Sortie / Plateformes / Dev / Éditeur / Note presse).
-  factList: { paddingHorizontal: 20, paddingTop: 2, paddingBottom: 6, gap: 3 },
+  // Infos compactes à droite de la jaquette (Genre / Sortie / Note presse).
+  headFacts: { marginTop: 8, gap: 3 },
+  headFact: { fontFamily: FONTS.regular, fontSize: 12.5, lineHeight: 17, color: COLORS.textMuted },
+  // Fiche d'identité du jeu (Plateformes / Dev / Éditeur / Modes / Temps de jeu) —
+  // combinée avec styles.section (padding + bordure), ne garde que l'interligne.
+  factList: { gap: 5 },
   fact: { fontFamily: FONTS.regular, fontSize: 13, lineHeight: 18, color: COLORS.textMuted },
   factLabel: { fontFamily: FONTS.bold, color: COLORS.black },
   section: { paddingHorizontal: 20, paddingVertical: 18, borderBottomWidth: 1, borderBottomColor: COLORS.borderLight },
@@ -719,9 +806,11 @@ const styles = StyleSheet.create({
   statusChipText: { color: COLORS.text, fontFamily: FONTS.bold, fontSize: 14 },
   statusChipTextSel: { color: COLORS.onAccent },
   overview: { color: COLORS.text, fontFamily: FONTS.regular, fontSize: 16, lineHeight: 23 },
-  infoRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
-  infoText: { color: COLORS.text, fontFamily: FONTS.regular, fontSize: 16, flexShrink: 1 },
-  muted: { color: COLORS.textMuted, fontFamily: FONTS.regular, fontSize: 15 },
+  // Interrupteur « Je possède » (cotes du ToggleRow des Paramètres).
+  ownedRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 16 },
+  ownedLabel: { flex: 1, color: COLORS.text, fontFamily: FONTS.bold, fontSize: 14 },
+  toggle: { width: 52, height: 30, borderRadius: 15, padding: 3 },
+  knob: { width: 24, height: 24, borderRadius: 12 },
   commentsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   toastBar: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: COLORS.yellow, paddingTop: 18, alignItems: 'center' },
   toastRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },

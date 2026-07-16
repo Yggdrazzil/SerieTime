@@ -1,13 +1,34 @@
 import type { Media, Episode, UserMediaStatus } from '@prisma/client';
 import type { EpisodeDto, MediaDto } from '@serietime/types';
+import { parseTranslations } from '../../services/tmdb/enrich.js';
 
-export function serializeMedia(media: Media, status?: UserMediaStatus | null): MediaDto {
+type TranslatableMedia = Pick<Media, 'title' | 'localizedTitle' | 'translationsJson'>;
+
+// Traduction pour la langue de contenu de l'utilisateur. fr (défaut) et jeux
+// (pas de translationsJson) → {} : on retombe sur les champs existants.
+function translationFor(
+  media: Pick<Media, 'translationsJson'>,
+  lang?: string | null,
+): { title?: string; overview?: string } {
+  if (!lang || lang === 'fr') return {};
+  return parseTranslations(media.translationsJson)[lang] ?? {};
+}
+
+// Titre affiché d'un média dans la langue de contenu demandée (fallback
+// silencieux sur localizedTitle/title) — pour les routes qui construisent le
+// titre à la main (showTitle des épisodes, fil social, recherche locale).
+export function mediaTitle(media: TranslatableMedia, lang?: string | null): string {
+  return translationFor(media, lang).title ?? media.localizedTitle ?? media.title;
+}
+
+export function serializeMedia(media: Media, status?: UserMediaStatus | null, lang?: string | null): MediaDto {
+  const translated = translationFor(media, lang);
   return {
     id: media.id,
     type: media.type as MediaDto['type'],
-    title: media.localizedTitle ?? media.title,
+    title: translated.title ?? media.localizedTitle ?? media.title,
     originalTitle: media.originalTitle,
-    overview: media.localizedOverview ?? media.overview,
+    overview: translated.overview ?? media.localizedOverview ?? media.overview,
     posterPath: media.posterPath,
     backdropPath: media.backdropPath,
     year: media.year,

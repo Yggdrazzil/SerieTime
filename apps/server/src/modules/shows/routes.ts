@@ -4,13 +4,18 @@ import type { QueueItemDto, UpcomingItemDto } from '@serietime/types';
 import { nextEpisodeToWatch, remainingAiredCount, upcomingGroupLabel, pastGroupLabel } from '@serietime/core';
 import { prisma } from '../../db/client.js';
 import { requireAuth } from '../auth/routes.js';
-import { serializeEpisode, serializeMedia } from '../media/serialize.js';
+import { mediaTitle, serializeEpisode, serializeMedia } from '../media/serialize.js';
+import { getUserLang } from '../media/userLang.js';
 import { createWatchEvent, markEpisodeWatched, recalculateShowStatus } from '../media/actions.js';
+import { scheduleRecompute } from '../gamification/service.js';
+import { isAllowedImageUrl } from '../media/imageUrl.js';
 import { nextFavoriteOrder } from '../media/favorites.js';
 import { refreshStaleContinuingShows, resyncAllUserShows, isResyncRunning } from './refresh.js';
 import {
+  parseTranslations,
   syncCreditsFromTmdb,
   syncProvidersFromTmdb,
+  syncTranslationsFromTmdb,
   orderProvidersForMedia,
   syncShowEpisodesFromTmdb,
   tmdbVideos,
@@ -37,12 +42,13 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
 
   // Liste des séries suivies (avec statut utilisateur).
   app.get('/api/shows', async (request) => {
+    const lang = await getUserLang(request.userId);
     const statuses = await prisma.userMediaStatus.findMany({
       where: { userId: request.userId, media: { type: 'show' } },
       include: { media: true },
       orderBy: { lastWatchedAt: 'desc' },
     });
-    return { shows: statuses.map((s) => serializeMedia(s.media, s)) };
+    return { shows: statuses.map((s) => serializeMedia(s.media, s, lang)) };
   });
 
   // Spec §17 : file "À voir" groupée.
@@ -57,6 +63,7 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
 
   app.get('/api/shows/queue', async (request) => {
     const userId = request.userId;
+    const lang = await getUserLang(userId);
     // Balayage d'arrière-plan (fire-and-forget) : les séries en cours périmées
     // sont resynchronisées pour que les nouvelles saisons rejoignent « À voir ».
     void refreshStaleContinuingShows(userId).catch(() => undefined);
@@ -172,9 +179,9 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
 
       items.push({
         group,
-        media: serializeMedia(status.media, status),
+        media: serializeMedia(status.media, status, lang),
         nextEpisode: nextEpisode
-          ? serializeEpisode(nextEpisode, show, status.media.localizedTitle ?? status.media.title, null)
+          ? serializeEpisode(nextEpisode, show, mediaTitle(status.media, lang), null)
           : null,
         remainingCount: Math.max(0, remaining - 1),
         badges,
@@ -202,6 +209,7 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
   // Historique de visionnage (façon TV Time) : derniers épisodes cochés,
   // affiché au-dessus de la file « À voir » quand on fait défiler vers le haut.
   app.get('/api/shows/history', async (request) => {
+    const lang = await getUserLang(request.userId);
     const rows = await prisma.userEpisodeStatus.findMany({
       where: { userId: request.userId, status: 'watched', watchedAt: { not: null } },
       orderBy: { watchedAt: 'desc' },
@@ -210,11 +218,11 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
     });
     return {
       items: rows.map((r) => ({
-        media: serializeMedia(r.episode.show.media, null),
+        media: serializeMedia(r.episode.show.media, null, lang),
         episode: serializeEpisode(
           r.episode,
           r.episode.show,
-          r.episode.show.media.localizedTitle ?? r.episode.show.media.title,
+          mediaTitle(r.episode.show.media, lang),
           r,
         ),
         watchedAt: r.watchedAt?.toISOString() ?? null,
@@ -225,6 +233,7 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
   // Spec §18 : épisodes à venir groupés par date.
   app.get('/api/shows/upcoming', async (request) => {
     const userId = request.userId;
+    const lang = await getUserLang(userId);
     const statuses = await prisma.userMediaStatus.findMany({
       where: { userId, media: { type: 'show' }, isHidden: false, status: { notIn: ['abandoned', 'watchlist'] } },
       include: { media: { include: { show: true } } },
@@ -259,13 +268,13 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
       const isPast = ep.airDate < startOfToday;
       const label = isPast ? pastGroupLabel(ep.airDate, now) : upcomingGroupLabel(ep.airDate, now);
       const target = isPast ? past : groups;
-      const dto = serializeEpisode(ep, ep.show, status.media.localizedTitle ?? status.media.title, null);
+      const dto = serializeEpisode(ep, ep.show, mediaTitle(status.media, lang), null);
       const list = target.get(label) ?? [];
       const sameShow = list.find((i) => i.media.id === status.media.id);
       if (sameShow) sameShow.episodes.push(dto);
       else
         list.push({
-          media: serializeMedia(status.media, status),
+          media: serializeMedia(status.media, status, lang),
           episodes: [dto],
           date: ep.airDate.toISOString(),
         });
@@ -282,6 +291,7 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
 
   // Spec §22 : Profil > Séries groupées par statut.
   app.get('/api/shows/profile', async (request) => {
+    const lang = await getUserLang(request.userId);
     const includeHidden = (request.query as { hidden?: string }).hidden === 'true';
     const statuses = await prisma.userMediaStatus.findMany({
       where: {
@@ -301,7 +311,7 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
       termine: [],
     };
     for (const s of statuses) {
-      const media = serializeMedia(s.media, s);
+      const media = serializeMedia(s.media, s, lang);
       if (s.status === 'abandoned') groups.abandonne!.push(media);
       else if (s.status === 'completed') groups.termine!.push(media);
       else if (s.status === 'not_started' || s.status === 'watchlist') groups.pas_commence!.push(media);
@@ -316,6 +326,7 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
   // avec statut, dates et progression (épisodes DIFFUSÉS vus / diffusés). Le tri
   // et les filtres (Progress) sont appliqués côté client.
   app.get('/api/shows/library', async (request) => {
+    const lang = await getUserLang(request.userId);
     const now = Date.now();
     const statuses = await prisma.userMediaStatus.findMany({
       where: { userId: request.userId, media: { type: 'show' }, isHidden: false },
@@ -334,7 +345,7 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
       const aired = eps.filter((e) => e.seasonNumber > 0 && (!e.airDate || e.airDate.getTime() <= now));
       const watchedCount = aired.filter((e) => watchedSet.has(e.id)).length;
       return {
-        ...serializeMedia(s.media, s),
+        ...serializeMedia(s.media, s, lang),
         progress: { watched: watchedCount, total: aired.length },
         addedAt: s.addedAt.toISOString(),
         lastWatchedAt: s.lastWatchedAt?.toISOString() ?? null,
@@ -346,6 +357,7 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
   // Fiche série.
   app.get('/api/shows/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
+    const lang = await getUserLang(request.userId);
     let media = await getShowWithUserData(request.userId, id);
     if (!media) return reply.code(404).send({ error: 'not_found' });
 
@@ -380,6 +392,12 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
     }
     await syncProvidersFromTmdb(media.id).catch(() => undefined);
     await syncCreditsFromTmdb(media.id).catch(() => undefined);
+    // Langue de contenu ≠ fr et traduction absente : récupérée à la volée
+    // (une requête TMDb, cache 7 j) — même pattern que providers/credits.
+    if (lang !== 'fr' && !parseTranslations(media.translationsJson)[lang]?.title) {
+      const json = await syncTranslationsFromTmdb(media).catch(() => null);
+      if (json) media.translationsJson = json;
+    }
 
     const [providers, credits] = await Promise.all([
       prisma.provider.findMany({ where: { mediaId: media.id } }),
@@ -403,7 +421,7 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
     };
     let recommendations: RecItem[] = [];
     if (media.tmdbId) {
-      const recs = await tmdbRecommendations('tv', media.tmdbId).catch(() => []);
+      const recs = await tmdbRecommendations('tv', media.tmdbId, lang).catch(() => []);
       const ids = recs.slice(0, 10).map((r) => String(r.id));
       // Marquage « déjà dans ma bibliothèque » (coche jaune façon TV Time).
       const locals = await prisma.media.findMany({
@@ -435,7 +453,7 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
       .map((e) => e.airDate!.getTime());
     const endYear = airTimes.length ? new Date(Math.max(...airTimes)).getFullYear() : null;
     return {
-      media: serializeMedia(media, status),
+      media: serializeMedia(media, status, lang),
       addedByCount,
       endYear,
       show: media.show
@@ -502,13 +520,14 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
   // Saisons + épisodes + progression.
   app.get('/api/shows/:id/episodes', async (request, reply) => {
     const { id } = request.params as { id: string };
+    const lang = await getUserLang(request.userId);
     const media = await getShowWithUserData(request.userId, id);
     if (!media?.show) return reply.code(404).send({ error: 'not_found' });
     const statuses = await prisma.userEpisodeStatus.findMany({
       where: { userId: request.userId, episode: { showId: media.show.id } },
     });
     const statusMap = new Map(statuses.map((s) => [s.episodeId, s]));
-    const title = media.localizedTitle ?? media.title;
+    const title = mediaTitle(media, lang);
 
     const seasons = media.show.seasons.map((season) => {
       const episodes = media.show!.episodes
@@ -649,7 +668,7 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
 
   app.post('/api/shows/:id/poster', async (request, reply) => {
     const { id } = request.params as { id: string };
-    const { posterPath } = z.object({ posterPath: z.string() }).parse(request.body);
+    const { posterPath } = z.object({ posterPath: z.string().refine(isAllowedImageUrl) }).parse(request.body);
     const media = await prisma.media.findFirst({ where: { id, type: 'show' } });
     if (!media) return reply.code(404).send({ error: 'not_found' });
     await prisma.media.update({ where: { id }, data: { posterPath } });
@@ -658,7 +677,7 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
 
   app.post('/api/shows/:id/banner', async (request, reply) => {
     const { id } = request.params as { id: string };
-    const { backdropPath } = z.object({ backdropPath: z.string() }).parse(request.body);
+    const { backdropPath } = z.object({ backdropPath: z.string().refine(isAllowedImageUrl) }).parse(request.body);
     const media = await prisma.media.findFirst({ where: { id, type: 'show' } });
     if (!media) return reply.code(404).send({ error: 'not_found' });
     await prisma.media.update({ where: { id }, data: { backdropPath } });
@@ -688,6 +707,7 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
     }
     await createWatchEvent(request.userId, id, 'watched', { markAll: true, season: body.seasonNumber });
     await recalculateShowStatus(request.userId, media.show.id, now);
+    scheduleRecompute(request.userId); // gamification : coche de masse (upserts directs, hors markEpisodeWatched)
     return { ok: true, count: episodes.length };
   });
 
@@ -711,6 +731,7 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
     }
     await createWatchEvent(request.userId, id, 'marked_unwatched', { markAll: true, season: body.seasonNumber });
     await recalculateShowStatus(request.userId, media.show.id, null);
+    scheduleRecompute(request.userId); // gamification : dé-coche de masse (recompute idempotent)
     return { ok: true, count: episodes.length };
   });
 
@@ -725,6 +746,7 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
         where: { userId: request.userId, episode: { showId: media.show.id } },
       });
     }
+    scheduleRecompute(request.userId); // gamification : retrait du suivi (recompute idempotent)
     return { ok: true };
   });
 

@@ -1,4 +1,4 @@
-# État d'avancement — SerieTime
+# État d'avancement — PlotTime (ex-SerieTime)
 
 > **Ce fichier est la source de vérité de l'avancement du projet.**
 > Merci de le mettre à jour **après chaque modification ou ajout de fonctionnalité** :
@@ -7,6 +7,9 @@
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
 Dernière mise à jour : **2026-07-16** (Claude) — Rose du logo en accent secondaire du THÈME NUIT UNIQUEMENT (pastilles de section, points de notification, compteurs « +N ») ; thèmes Clair et Sunset inchangés
+Dernière mise à jour : **2026-07-17** (Claude) — Jeux : « Possédé » devient un interrupteur « Je possède » (booléen `isOwned`) indépendant du statut (retour Étienne) ; fiche jeu réorganisée (infos à côté de la jaquette, statuts remontés avant le trailer, section Informations fusionnée dans la fiche d'identité)
+
+Mise à jour précédente : **2026-07-16** (Claude) — Popup de migration douce vers le SSO : invite les comptes e-mail connectés (web) qui n'ont lié ni Google ni Discord, non bloquante (« Plus tard »)
 
 ---
 
@@ -19,15 +22,16 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
 
 - **Branche de référence : `main`** (à cloner / puller). Le développement passe
   par des branches courtes fusionnées via pull request.
-- Tests : `pnpm test` (77 tests au 2026-07-08 : 25 core + 52 serveur).
+- Tests : `pnpm test` (310 tests au 2026-07-17 : 158 core + 152 serveur).
 - Lancement local : voir `README.md` (serveur `pnpm dev:server`, mobile `npx expo start -c`).
 
 ## État par domaine
 
 | Domaine | État | Notes |
 |---|---|---|
-| Authentification multi-comptes (e-mail + mot de passe) | ✅ Fait | Inscription/connexion, sessions 30 j, données isolées par compte (testé) |
+| Authentification multi-comptes (e-mail + mot de passe) | ✅ Fait | Inscription/connexion, sessions 30 j, données isolées par compte (testé) ; mot de passe oublié → réinitialisation par ré-auth SSO Google/Discord (testé) |
 | SSO Google / Facebook | ⏸ Préparé, désactivé | Prêt côté serveur (`/api/auth/oauth`) ; nécessite ids OAuth + dev build Expo |
+| Migration douce e-mail → SSO (popup) | ✅ Fait | `mobile/components/LinkAccountPrompt.tsx` : popup dismissible (web uniquement, SSO web-only) proposant de lier Google/Discord aux comptes connectés qui n'ont ni l'un ni l'autre ; montée dans `(tabs)/_layout.tsx` |
 | Contenu séries via TheTVDB | ✅ Fait | Recherche, fiche, saisons/épisodes, titres/synopsis FR, artworks ; clé dans `apps/server/.env` |
 | Contenu films / tendances via TMDb | ✅ Fait | Clé TMDb (compte Benjamin) configurée sur le serveur de prod ; flux Explorer et images films actifs |
 | File « À voir » / « À venir » | ✅ Fait | Groupes TV Time (pas commencé, à voir, etc.) ; « Regarder plus tard » exclu des deux |
@@ -37,7 +41,7 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
 | Recherche (design TV Time) | ✅ Fait | Onglets SÉRIES ET FILMS / JEUX / UTILISATEURS, « Annuler », `+` jaunes, debounce |
 | Social : abonnements, fil d'activité | ✅ Fait | Follow/unfollow, fil des visionnages/commentaires des personnes suivies |
 | Social : commentaires, réponses, réactions | ✅ Fait | Fils de discussion, réactions multi-emoji (❤️👍😂😮😢) |
-| Profil public + confidentialité | ✅ Fait | Écran `/user/[id]`, profils privés masqués aux non-abonnés |
+| Profil public + confidentialité | ✅ Fait | Écran `/user/[id]` : pastille niveau + titre + streak, section Trophées (badges débloqués), compteurs Séries/Films/Épisodes/Jeux, favoris séries/films/jeux, séries récentes. Gamification (réputation) visible même sur un profil privé ; stats/récents/favoris masqués aux non-abonnés |
 | Notifications in-app | ✅ Fait | Cloche + badge ; ami qui commente/favorise, réponse ou réaction à un commentaire |
 | Notifications push (OS) | ⏸ Non commencé | Nécessite dev build Expo + tokens Expo Push (la génération d'événements existe déjà) |
 | Import ZIP TV Time | ✅ Fait (v. initiale) | Analyse, matching, résolution manuelle, application |
@@ -47,13 +51,19 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
 | Distribution native (APK / stores) | ⏳ Optionnel | EAS Build documenté dans le README ; la web app couvre déjà l'usage quotidien |
 | Jeux vidéo — modèle de données | ✅ Fait | Table `Game` (plateformes, développeur, éditeur, modes, Steam App ID, DLC) + `Media.igdbId` + `UserMediaStatus.playtimeMinutes` (migration `add_games`) |
 | Jeux vidéo — provider IGDB | ✅ Fait | `apps/server/src/services/igdb/` : auth Twitch (client credentials, cache mémoire), requêtes Apicalypse avec cache `ApiCache`, mapper `igdbToMedia` |
-| Jeux vidéo — module API | ✅ Fait | `apps/server/src/modules/games/routes.ts` : `GET /api/games/search`, `POST /api/games/add-from-igdb`, `GET /api/games` (bibliothèque groupée par statut wishlist/playing/completed/abandoned), `POST /api/games/:id/status`, `GET /api/games/:id` (enrichissement paresseux), `GET /api/games/discover`, `GET /api/games/upcoming`, `POST /api/games/steam/import`, `DELETE /api/games/:id/tracking` |
-| Jeux vidéo — onglet Jeux (mobile) | ✅ Fait | `mobile/app/(tabs)/games.tsx` : bibliothèque par statut, carrousels « Populaires »/« À venir » (découverte, tap = ajoute + ouvre la fiche), « Sorties à venir » (jeux suivis, groupés par mois) ; recherche déplacée dans l'onglet Explorer |
+| Jeux vidéo — module API | ✅ Fait | `apps/server/src/modules/games/routes.ts` : `GET /api/games/search`, `POST /api/games/add-from-igdb`, `GET /api/games` (groupes par statut wishlist/playing/completed/abandoned + groupe `owned` = vue collection `isOwned`, recoupement possible), `POST /api/games/:id/status`, `POST /api/games/:id/owned` (interrupteur « Je possède », booléen `isOwned` indépendant du statut, sans XP), `GET /api/games/:id` (enrichissement paresseux), `GET /api/games/discover`, `GET /api/games/upcoming`, `POST /api/games/steam/import`, `DELETE /api/games/:id/tracking` |
+| Jeux vidéo — onglet Jeux (mobile) | ✅ Fait | `mobile/app/(tabs)/games.tsx` : bibliothèque par statut (VOULUS / EN COURS / TERMINÉS / ABANDONNÉS) + section POSSÉDÉS = vue collection `isOwned` (peut recouper les autres groupes), carrousels « Populaires »/« À venir » (découverte, tap = ajoute + ouvre la fiche), « Sorties à venir » (jeux suivis, groupés par mois) ; recherche déplacée dans l'onglet Explorer |
 | Jeux vidéo — connexion Steam (mobile) | ✅ Fait | Bloc « Jeux — Steam » dans `mobile/app/settings.tsx` (onglet Compte) : SteamID/URL de profil → import bibliothèque possédée |
-| Jeux vidéo — fiche jeu (mobile) | ✅ Fait | `mobile/app/game/[id].tsx` : parité avec la fiche série/film — menu « … » (Personnaliser affiche/bannière via `GET/POST /api/games/:id/images|poster|banner`, Favoris `POST /api/games/:id/favorite`, Ajouter à une liste, Partager, Retirer), aperçu bande-annonce 16:9 (miniature YouTube + iframe autoplay sur web / ouverture YouTube sur natif, `videoId` IGDB), sélecteur de statut, temps de jeu, commentaires ; suivi optimiste avec rollback |
+| Jeux vidéo — fiche jeu (mobile) | ✅ Fait | `mobile/app/game/[id].tsx` : parité avec la fiche série/film — menu « … » (Personnaliser affiche/bannière via `GET/POST /api/games/:id/images|poster|banner`, Favoris `POST /api/games/:id/favorite`, Ajouter à une liste, Partager, Retirer), ordre : jaquette + infos compactes (Genre/Sortie/Note presse) → statuts + interrupteur « Je possède » → bande-annonce 16:9 → fiche d'identité (Plateformes/Développeur/Éditeur/Modes/Temps de jeu) → résumé → éditions/extensions → commentaires ; suivi optimiste avec rollback |
 | Jeux vidéo — notifications de sortie | ✅ Fait | Passe du worker de fond (`apps/server/src/services/sync-worker.ts`) : `Notification` de type `game_release` quand `Media.releaseDate` d'un jeu suivi (non masqué) tombe aujourd'hui, dédupliquée par `(userId, mediaId, type)` |
 | Gamification — serveur (XP, badges, streaks, défis, classement) | ✅ Fait | Modèles `UserProgress`/`UserBadge`/`UserChallenge`, `modules/gamification/` (recompute idempotent débouncé + backfill au boot), `GET /api/gamification/me` + `/leaderboard`, items `badge` dans le fil social, XP rétroactif à l'import |
 | Gamification — mobile (page Trophées, toasts, pastille niveau) | ✅ Fait | Page `/trophies` (niveau + XP, streak, défis du mois, grille de badges à paliers, classement hebdo), pastille niveau + rangée Trophées sur le profil, items badge dans le fil, toasts de déblocage globaux (`GamificationToastHost`) |
+| Flux Explorer — variété + personnalisation (serveur) | ✅ Fait | `GET /api/explore/feed` + `GET /api/explore/games` : mémoire des impressions (`ExploreImpression`, exclusion 3 j, garde anti-famine, purge 14 j), profil de goût par genres (favoris ×3, watchlist/en cours ×2, terminés ×1, dislikés ×−2) → viviers TMDb Discover/IGDB par genre, recs tirées parmi 30 graines, pages 1..8, 2 décennies, offsets IGDB aléatoires (`modules/explore/`, testé) |
+| Modération — commentaires (haine/insultes graves) | ✅ Fait | Module pur `packages/core/src/moderation/` (blocklist curée multilingue fr/en/es/de/it/pt × racisme/antisémitisme/homophobie/sexisme/injures sexuelles/violence + filtre tolérant leetspeak/répétitions/séparateurs/accents, frontière de mot pour termes courts) ; `POST /api/media/:id/comments` rejette (400 `comment_blocked`) commentaires **et** réponses ; mobile affiche le message renvoyé (testé, 0 faux positif sur la batterie légitime) |
+| Modération — suggestions (contenu adulte / porno) | ✅ Fait | Détection **porno ciblée** (sans bloquer la violence 18+) : module pur `packages/core/src/moderation/adultContent.ts` (`containsAdultContent` + `ADULT_MARKERS` multilingues fr/en/es/de/it/pt + japonais romanisé, tolérant leet/répétitions/séparateurs). TMDb : `include_adult=false` + `adult === true` + `containsAdultContent(titre/résumé)` sur flux/recherche/recos, **et** `without_keywords` (ids mots-clés porno via `/search/keyword`, désormais **nom exact** — plus de sur-blocage sentai/senpai/porco) sur `/discover`ᐧ **Hentai** détecté par item via `tmdbKeywordNames` (mot-clé `erotic`, animés uniquement) + mot-clé `erotic` ajouté au `without_keywords` des viviers animés. IGDB : thème « Erotic » (id 42) + `containsAdultContent(name, summary)` dans `isSafeGame` (testé) |
+| Contenu 18+ — interrupteur par utilisateur | ✅ Fait | Paramètres > Suggestions > « Contenu 18+ » (défaut **désactivé**) : `allowAdultContent` (`UserSetting`, helper caché `modules/settings/adultContent.ts`). Activé = débraye tout le filtrage adulte pour ce compte (`include_adult=true`, pas de `without_keywords`, pas de `containsAdultContent`, pas de thème IGDB 42, pas de vérif mots-clés) sur `/api/explore/feed`, `/explore/discover`, `/api/search`, `/api/explore/games` ; `include_adult`/clause IGDB font partie de la **clé de cache** → aucune contamination entre comptes (testé). Bibliothèque jamais filtrée |
+| Signalement d'œuvre inappropriée | ✅ Fait | Modèle `Report` (migration `reports`) + module `apps/server/src/modules/reports/routes.ts` (`POST /api/report`, anti-doublon par œuvre/statut pending). Action « Signaler » (icône `flag`) dans le menu ⋯ des fiches série/film (`show/[id].tsx`) et jeu (`game/[id].tsx`) → `ReportModal` de confirmation partagé, `reason: 'adult'`, toast neutre. Tri manuel ultérieur (pas d'écran admin) |
+| Langue de contenu par utilisateur | ✅ Fait | Paramètres > Langue (fr/en/es/de/it/pt) : titres/résumés des séries et films traduits partout (À voir, À venir, bibliothèque, profil, fiches, recherche, explorer, fil social, listes) via TMDb `/translations` (`Media.translationsJson`, une requête par média, backfill en fond au changement de langue) ; jeux IGDB hors périmètre (nom international) |
 
 ## Prochaines étapes (par priorité)
 
@@ -88,6 +98,388 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
 - Vérifié au banc dans les trois thèmes (captures + relevé au pixel) :
   Clair/Sunset strictement identiques à avant, rose en Nuit seulement.
 
+### 2026-07-17 — Jeux : « Je possède » (interrupteur) + fiche jeu réorganisée (retours Étienne)
+Deux retours d'Étienne sur les jeux, liés :
+- **« Possédé » n'est plus un statut exclusif** (le modèle d'hier était faux :
+  on peut être « En cours » ET posséder le jeu, ou jouer via Game Pass sans le
+  posséder) → **booléen `isOwned` indépendant** sur `UserMediaStatus`
+  (migration `20260716215631_game_owned_flag`, défaut `false` ; aucune donnée
+  à migrer — 0 ligne `status='owned'` en prod).
+  - `POST /api/games/:id/owned` body `{ owned: boolean }` : upsert — si la
+    ligne existe, ne touche que `isOwned` ; sinon création avec
+    `status: 'wishlist'` (fallback documenté : un jeu possédé sans autre
+    interaction doit exister quelque part, wishlist est le moins faux). Pas de
+    `scheduleRecompute` (posséder ne donne aucun XP ; `gamesCompleted` reste
+    basé sur `status='completed'` uniquement).
+  - `GET /api/games` : groupes par statut wishlist/playing/completed/abandoned
+    + groupe `owned` = TOUTES les lignes `isOwned` (vue « collection », peut
+    recouper les autres groupes). Même forme de réponse — l'onglet Jeux
+    (section POSSÉDÉS) fonctionne sans changement.
+  - `serializeGame` + fiche `GET /api/games/:id` exposent `isOwned`.
+  - Fiche mobile : chips réduits à Voulu/En cours/Terminé/Abandonné +
+    **interrupteur « Je possède »** (icône `archive`, toggle animé répliqué du
+    ToggleRow des Paramètres — non exporté) avec mise à jour optimiste.
+  - Tests serveur (`games.test.ts`) : recoupement playing+owned, fallback
+    wishlist, `owned` rejeté par `POST /status` (152 tests verts).
+- **Haut de la fiche jeu réorganisé** (`mobile/app/game/[id].tsx`) — « trop
+  vide à côté de la jaquette », « chiant de scroller pour cocher le statut » :
+  1. à côté de la jaquette : infos compactes Genre / Sortie le / Note presse ;
+  2. chips de statut + « Je possède » remontés juste sous la jaquette/titre ;
+  3. bande-annonce en dessous ;
+  4. fiche d'identité ensuite : « Plateformes : » (libellé ajouté devant la
+     liste brute), Développeur, Éditeur, « Modes : » (ex-section
+     « Informations », fusionnée puis supprimée) et « Temps de jeu : » ;
+  5. reste inchangé (résumé, éditions/extensions, commentaires).
+
+### 2026-07-16 — Popup de migration douce vers le SSO
+Objectif : inciter en douceur les comptes e-mail existants à se lier à un
+fournisseur SSO (Google/Discord) pour pouvoir récupérer leur compte, sans
+bloquer personne.
+- **`mobile/components/LinkAccountPrompt.tsx`** (nouveau) : modal centré style
+  TV Time (overlay `COLORS.overlay`, carte `COLORS.white` arrondie), titre
+  « Sécurise ton compte », texte explicatif, bouton principal jaune « Lier mon
+  compte » (→ `router.push('/linked-accounts')`) et bouton discret « Plus
+  tard ». `useQuery(['auth','me'])` sur `GET /api/auth/me` (staleTime 5 min).
+  Condition d'affichage exacte : `ssoWebAvailable()` **et** la requête a
+  répondu **et** `!linkedProviders?.google && !linkedProviders?.discord`
+  **et** pas encore rejetée cette session (état local, non persisté — la
+  popup revient au prochain lancement). Les deux boutons ont
+  `accessibilityRole="button"` + `accessibilityLabel`.
+- **Montage** : `<LinkAccountPrompt />` dans `mobile/app/(tabs)/_layout.tsx`
+  (à côté des `<Tabs>`, dans un fragment) — jamais dans le root `_layout.tsx`,
+  qui affiche aussi l'écran de connexion. Les tabs ne rendent qu'une fois
+  connecté, ce qui garantit un utilisateur authentifié.
+- SSO étant web-only (`ssoWebAvailable()`), la popup ne s'affiche jamais côté
+  natif (la requête est même désactivée sur natif via `enabled`).
+- `cd mobile && npm run typecheck` → 0 erreur.
+
+### 2026-07-16 — Statut jeu « Possédé », libellé « Voulu », signalement d'œuvre
+Trois évolutions demandées par Étienne.
+- **Statut « Possédé » (collectionneurs)** : nouveau statut de jeu `owned`
+  (« Possédé ») ajouté à `GAME_STATUSES` côté serveur (`modules/games/routes.ts`)
+  et mobile (`app/game/[id].tsx`, `app/(tabs)/games.tsx` — section POSSÉDÉS entre
+  VOULUS et EN COURS). C'est une string libre : pas de migration. `completedAt`
+  reste posé UNIQUEMENT pour `completed`, et la gamification (`gamesCompleted`) ne
+  compte que `completed` → un jeu possédé non terminé ne donne aucun XP de fin.
+- **Libellé « Voulu » (singulier)** sur la fiche jeu : `STATUS_LABELS.wishlist`
+  passe de « Voulus » à « Voulu » (le chip désigne CE jeu). Le titre de section
+  « VOULUS » de l'onglet Jeux reste au pluriel (collection).
+- **Signalement d'œuvre** : modèle Prisma `Report`
+  (`reporterId`/`mediaId?`/`mediaType`/`tmdbId?`/`igdbId?`/`title`/`reason`/`note?`/`status`,
+  migration `reports`, indices `[status, createdAt]` et `[reporterId]`) +
+  module `modules/reports/routes.ts` (`POST /api/report`, zod, `reason` défaut
+  `'adult'`, anti-doublon : même user + même œuvre + status pending ⇒ pas de
+  2e ligne, 200 quand même). Action « Signaler » (icône `flag`) ajoutée au menu ⋯
+  des fiches série/film et jeu, ouvrant un `ReportModal` de confirmation partagé
+  (`components/ReportModal.tsx`) ; sur confirmation, `POST /api/report` puis toast
+  « Merci, signalement envoyé 👍 » (erreur silencieuse). Stockage seul, tri
+  manuel ultérieur (pas d'écran admin). Tests : `apps/server/src/__tests__/reports.test.ts`.
+### 2026-07-16 — Nouvelle identité : icône/logo SerieTime partout + thème « Nuit »
+- **Pack d'icônes intégré** (`mobile/assets/branding/`, source : pack fourni par
+  Étienne) : icône universelle iOS/générale 1024, icône adaptative Android
+  (calques avant + monochrome, fond `#0B075A`), icône Google Play, favicon web,
+  icônes PWA 192/512 + apple-touch-icon (remplacées dans `public/`).
+- **Écrans de démarrage au nouveau logo** : splash natif (`app.json` : logo sur
+  fond bleu nuit `#0B075A`), écran de lancement PWA (`manifest.json`
+  `background_color`), écran de chargement des polices (`_layout.tsx` : logo sur
+  bleu nuit à la place du spinner blanc) et **logo sur l'écran de connexion**
+  (`setup.tsx`). Anciens `assets/icon.png`/`adaptive-icon.png` supprimés.
+- **4ᵉ thème « Nuit — les couleurs SerieTime »** (`midnight`) : fond bleu nuit
+  du logo `#0B075A`, cartes indigo `#160F73`, accent **jaune `#FBAE00`** (texte
+  bleu nuit posé dessus, comme l'icône), liens **violet `#B39DFF`**, favoris et
+  alertes **rose `#FF4D9E`**, bouton « où regarder » violet logo. Ajouté à
+  `theme.ts` (+ `IS_DARK` inclut `midnight`), à la pré-peinture `+html.tsx`
+  (barres système avant premier rendu) et aux Paramètres. Vérifié au
+  navigateur : file À voir, fiche série, Paramètres, connexion — 286 tests verts.
+
+### 2026-07-16 — Profil public enrichi : niveau, trophées, streak et favoris
+Le profil public d'un utilisateur (`/user/[id]`) ne montrait que 3 compteurs et
+une rangée de séries récentes. Il expose désormais la **gamification** (niveau,
+titre, streak, badges débloqués) et les **goûts** (favoris séries/films/jeux),
+pour valoriser la réputation et coller à ce qu'on voit sur son propre profil.
+- **Serveur (`GET /api/users/:id`, `modules/social/routes.ts`)** : réutilise
+  `meView(id)` (lecture pure, aucune écriture/notification) via un helper
+  `publicGamification(id)` qui renvoie un sous-ensemble PUBLIC
+  `{ level, levelTitle, xp, nextLevelXp, currentStreak, bestStreak, badges }` où
+  `badges` = **uniquement les paliers débloqués** (`tier > 0`), triés par palier
+  décroissant puis déblocage récent, chacun `{ id, label, icon, tier, tierCount }`
+  (les **défis restent privés**, jamais exposés). Ajout des `favoriteShows`/
+  `favoriteMovies`/`favoriteGames` (12 max, `isFavorite`, `serializeMedia`, langue
+  du visiteur) et du `gamesCount` aux stats. `meView` + les favoris sont en
+  `Promise.all` avec les requêtes existantes (pas de N+1).
+- **Confidentialité** : la **gamification reste visible même en `restricted`**
+  (niveau + trophées = réputation), tandis que stats détaillées, séries récentes
+  et favoris restent masqués (`favoriteShows: []`, etc.).
+- **Mobile (`mobile/app/user/[id].tsx`)** : pastille de niveau jaune sur l'avatar
+  + titre (« Niveau 52 · Sérievore ») et petite ligne streak (« 🔥 12 jours »)
+  sous le nom ; section **Trophées** (rangée horizontale de pastilles colorées par
+  palier via `TIER_COLORS`, icône Feather avec fallback `award`, label), visible
+  même sur un profil privé ; compteur **Jeux** ajouté (Séries/Films/Épisodes/Jeux) ;
+  sections **Séries/Films/Jeux préférés** en rangées d'affiches (tap → `/show/:id`,
+  `/show/:id?type=movie`, `/game/:id`), masquées si vides ; rangée « séries
+  récentes » conservée.
+- **Tests** : nouveau cas serveur dans `social.test.ts` (profil public expose
+  `gamification.level` + `favoriteMovies`, `challenges` absent ; profil privé
+  non-suivi masque les favoris mais garde la gamification). `pnpm --filter
+  @serietime/server typecheck` + `test` verts (143 serveur), `mobile` typecheck 0 erreur.
+
+### 2026-07-16 — Interrupteur « contenu 18+ » par utilisateur + détection hentai renforcée
+Ajout d'un réglage **par compte** pour afficher (ou non) le contenu
+pornographique/hentai dans les suggestions, et durcissement de la détection du
+hentai qui échappait encore aux filtres.
+- **Réglage `allowAdultContent`** (défaut **false**) : ajouté au schéma zod fermé
+  et aux `DEFAULTS` de `apps/server/src/modules/settings/routes.ts` (stockage
+  `UserSetting` par utilisateur). Helper de lecture caché
+  `apps/server/src/modules/settings/adultContent.ts` (`allowsAdultContent` /
+  `invalidateAdultContent`, TTL 60 s), calqué sur `media/userLang.ts` ;
+  invalidé au `POST /api/settings`.
+- **`true` = débrayage total** pour ce compte : `include_adult=true` transmis à
+  TMDb, plus aucun `without_keywords`, ni `containsAdultContent`, ni exclusion
+  IGDB thème 42, ni vérification de mots-clés. Surfaces : `/api/explore/feed`,
+  `/api/explore/discover`, `/api/search`, `/api/explore/games` (+
+  `/api/games/search`, `/api/games/discover`). La **bibliothèque n'est jamais
+  filtrée**.
+- **Isolation de cache** : `include_adult` est surchargeable **par appel** et
+  fait partie de la **clé `ApiCache`** (via les `URLSearchParams` de
+  `cachedFetch`) ; côté IGDB la clause thème 42 est dans le corps Apicalypse
+  (= clé). Un compte 18+ n'empoisonne donc jamais le cache d'un compte standard
+  (testé).
+- **Correction du sur-blocage `getAdultKeywordIds()`** : on ne retenait que le
+  premier résultat flou de `/search/keyword` — « hentai » ramenait aussi
+  *sentai/senpai/mental*, « porno » ramenait *porco* (Porco Rosso), tous exclus
+  en silence des animés légitimes. Désormais **correspondance de nom EXACT**
+  (casse/espaces normalisés) contre une liste curée
+  (`hentai, pornography, pornographic, pornographic video, pornographic
+  animation, porn, porno, softcore, hardcore porn, sex film, erotic movie,
+  eroge`).
+- **Détection réelle du hentai** (compte standard) : (a) le mot-clé EXACT
+  `erotic` est ajouté au `without_keywords` des **seuls viviers animés**
+  (`genres:[16]`/`language:'ja'`, option `excludeErotic` de `tmdbDiscover`) — pas
+  des requêtes grand public (thrillers érotiques préservés) ; (b) nouvelle
+  fonction `tmdbKeywordNames(type, tmdbId)` (`/tv|movie/{id}/keywords`, cachée
+  30 j) appliquée aux items d'**animation de la sélection finale** de
+  `/api/explore/feed` et `/api/search`, en `Promise.all` : exclusion si un
+  mot-clé ∈ `{hentai, erotic, pornographic animation/video, pornography, porno,
+  erotic movie, softcore, hardcore}`. Vérifié : *Jimihen* (TMDb 113360, taggé
+  `erotic`) est exclu.
+- **Mobile** (`mobile/app/settings.tsx`) : nouvelle rangée « Contenu 18+ »
+  (section **Suggestions**) réutilisant le `ToggleRow` animé existant (enrichi
+  d'`accessibilityRole="switch"` + label + `checked`) ; bascule optimiste sur
+  `/api/settings`, puis `invalidateQueries(['explore'])`.
+- **Tests** (`apps/server/src/__tests__/adult-toggle.test.ts`, 4) :
+  `getAdultKeywordIds` nom exact (sentai/senpai/porco exclus) ; défaut = hentai
+  `erotic` + porno exclus, animé sain conservé ; `allowAdultContent=true` =
+  hentai/porno visibles + `include_adult=true` transmis ; isolation de cache
+  entre deux comptes opposés. **285 tests verts** (143 core + 142 serveur),
+  `typecheck` serveur et mobile OK.
+
+### 2026-07-16 — Détection pornographie renforcée + popup drôle au commentaire bloqué
+Durcissement anti-porno pour ne **rien** laisser passer de pornographique
+(hentai, porno, softcore, X, eroge) sur séries/films/animés **et** jeux, **sans**
+bloquer la violence (un contenu 18+ pour gore/meurtre/langage reste autorisé) :
+on cible les **signaux de pornographie**, pas le classement d'âge.
+- **Module pur** `packages/core/src/moderation/adultContent.ts` (exporté depuis
+  `@serietime/core`) : `containsAdultContent(text, ...more)` normalise (réutilise
+  `normalizeForModeration` : minuscules, accents, leetspeak, répétitions,
+  séparateurs) puis cherche des marqueurs **sans ambiguïté**. `ADULT_MARKERS`
+  (exportée, extensible, commentée) couvre fr/en/es/de/it/pt + japonais romanisé
+  (hentai/eroge/nukige/ahegao/bukkake/futanari/jav…). Deux modes : sous-chaîne
+  pour les racines non ambiguës (« porn » couvre porno/pornographic/pornographie/
+  pornografia/pornografico/pornostar…), frontière de mot pour les courts/ambigus
+  (`xxx`, `jav`, `milf` → évite « MaXXXine », « milfoil », « Java »). **Exclus**
+  volontairement : `erotic`/`erotique`, `ecchi`, `sexy`, `nude`, `sex` seuls
+  (« Sex Education », « Basic Instinct », « Nymphomaniac » restent grand public).
+- **TMDb** : `getAdultKeywordIds()` récupère dynamiquement les ids de mots-clés
+  porno via `GET /search/keyword?query=…` (termes : hentai, pornographic,
+  pornography, porno, erotic movie), doublement cachés (ApiCache 30 j + mémoire
+  process), passés en `without_keywords` sur **toutes** les requêtes
+  `tmdbDiscover`. Post-filtre `containsAdultContent(titre/résumé)` (en plus de
+  `adult === true`) partout où des résultats TMDb deviennent des cartes de flux
+  ou de recherche : `/api/search`, les 3 boucles du flux Explorer (recos + pools),
+  `/api/explore/discover`.
+- **IGDB** : `isSafeGame` exclut désormais aussi `containsAdultContent(name,
+  summary)` (visual novels/eroge explicites sans thème 42) — thème « Erotic »
+  (id 42) conservé, `summary`/`name` déjà dans les `FIELDS`.
+- **Popup drôle au commentaire bloqué.** Serveur (`social/routes.ts`) : message
+  `comment_blocked` remplacé par un texte léger et complice (« Hop hop hop ! 🙅 La
+  politesse est de mise sur SerieTime, chenapan… 😇 »). Mobile : nouveau composant
+  `mobile/components/comments/BlockedCommentPopup.tsx` (petit modal centré,
+  overlay semi-transparent, bouton « OK compris » avec `accessibilityLabel`, thème
+  COLORS/FONTS) remplace le message inline sous la saisie, branché sur `postError`
+  du hook partagé `useComments` → couvre les **deux** points d'envoi (composeur du
+  `CommentsSheet` TikTok **et** écran plein écran `app/comments/[id]`).
+- **Tests** : +44 core (blocage porno multilingue + contournements ; batterie
+  non-régression 0 faux positif : Sex Education, Basic Instinct, Nymphomaniac,
+  Game of Thrones/The Boys/horreur gore, ecchi, MaXXXine/milfoil/Java) et +2
+  serveur (item TMDb `adult:false` au titre « Hentai » exclu, jeu IGDB sans
+  thème 42 au nom/résumé porno exclu, **item violent conservé**). Core 143,
+  serveur 138, `typecheck` serveur + mobile OK.
+- **Limites connues** : collision « xXx » (film Vin Diesel 2002) — le token isolé
+  `xxx` est un signal porno trop fort pour être relâché, tradeoff assumé
+  (« MaXXXine » 2024 est, elle, épargnée par la frontière de mot). `tmdbTrending`
+  et `tmdbRecommendations` ne supportent pas `without_keywords` → couverts par le
+  seul post-filtre.
+
+### 2026-07-16 — Modération en deux volets (commentaires haineux + contenu adulte)
+Deux garde-fous de communauté, sans changement visuel hors le message d'erreur.
+- **Volet A — Commentaires (haine/insultes graves, multilingue).** Nouveau
+  module PUR `packages/core/src/moderation/` :
+  - `blocklist.ts` : liste **curée** de slurs/injures haineuses, organisée par
+    catégorie (`racism`, `antisemitism`, `homophobia`, `sexism`, `sexual_slur`,
+    `violent_slur`) et couvrant fr/en/es/de/it/pt. Volontairement **sans termes
+    ambigus** (exclus : « negro » = couleur ES/PT/IT, « chink » idiome EN, « fag »
+    = cigarette UK, « viado » ≈ « enviado » PT, « retard » = en retard FR…).
+    Extensible.
+  - `filter.ts` : `normalizeForModeration` (minuscules, accents NFD, leetspeak
+    `0→o 1→i 3→e 4→a 5→s 7→t @→a $→s`, répétitions réduites, séparateurs → espace)
+    + `findBlockedTerm` (frontière de mot pour termes < 5 lettres → évite
+    « Scunthorpe »/« assassin » ; sous-chaîne pour slurs longs ; patterns
+    tolérants aux répétitions).
+  - Serveur : `POST /api/media/:id/comments` (commentaires **et** réponses, même
+    route) rejette en `400 { error: 'comment_blocked', message }` avant création ;
+    seule la **catégorie** est journalisée, jamais le texte.
+  - Mobile : `useComments` remonte le message de modération (`postError`) ;
+    `CommentsSheet` et `app/comments/[id]` l'affichent sous la barre de saisie ;
+    `ApiError.serverMessage` expose le `message` serveur.
+- **Volet B — Suggestions (porno/hentai/contenu sexuel).**
+  - TMDb : `include_adult=false` par défaut dans `cachedFetch` (toutes requêtes)
+    + exclusion `adult === true` dans le mapping du flux Explorer (recommandations
+    + viviers) et de la recherche (`TmdbSearchResult.adult` ajouté).
+  - IGDB : exclusion du thème **« Erotic » (id 42)** ajoutée à chaque clause
+    `where` (recherche/populaire/récents/genres/upcoming), `themes.id,themes.name`
+    ajoutés aux `FIELDS`, garde `isSafeGame(g)` appliquée après `isMainGame`
+    (le champ déprécié `category` n'est pas touché).
+- **Tests** : +37 core (chaque catégorie × plusieurs langues, contournements
+  leet/répétitions/séparateurs/accents, batterie de non-régression à **0 faux
+  positif**) et +4 serveur (rejet commentaire/réponse, exclusion TMDb `adult`,
+  exclusion IGDB thème 42). Total **235** (99 core + 136 serveur), les 194
+  existants intacts ; `typecheck` serveur + mobile OK.
+
+### 2026-07-16 — Checkup complet : sécurité, correction, perf, infra (invisible)
+Lot de durcissement issu d'un audit à 4 volets, **sans changement visible** pour
+l'utilisateur (mêmes réponses API, même UX).
+- **Sécurité** : vérification de l'audience des jetons OAuth Facebook/Discord
+  (empêche le rejeu d'un token émis pour une autre app → prise de contrôle de
+  compte) ; validation d'hôte des URLs poster/bannière (whitelist TMDb/TheTVDB/
+  IGDB) contre le vandalisme du catalogue partagé ; réglages passés
+  **par-utilisateur** (`UserSetting`, migration des valeurs globales existantes)
+  au lieu d'une ligne partagée par tous les comptes ; rate limit sur
+  `/api/auth/oauth` et `/api/auth/link`.
+- **Bugs** : `completedAt` posé sur les jeux terminés (le classement hebdo les
+  ignorait) ; `scheduleRecompute` ajouté aux actions de masse (tout marquer vu,
+  retrait de suivi) ; recompute gamification réentrant (mutex par utilisateur →
+  plus de notifications en double) ; conteneur en `TZ=Europe/Paris` (fin des
+  bornes « aujourd'hui » divergentes stats/file).
+- **Perf** : formatter `Intl` mis en cache dans la gamification (~30 000
+  créations d'objet en moins par appel de `/me` sur une grosse bibliothèque) ;
+  index SQLite ajoutés (`Media.igdbId`, `UserEpisodeStatus(userId,status,
+  watchedAt)`, `WatchEvent(userId,eventDate)`, `Notification(userId,date)`).
+- **Infra / hygiène** : `.dockerignore` (contexte de build allégé), healthcheck
+  Docker sur `/health`, code mort retiré (`services/tvmaze`, dépendance
+  `csv-parse` côté serveur), `.gitignore` corrigé (chemins morts, `mobile/
+  android|ios`), README aligné sur ONBOARDING. Côté VPS : rotation des backups
+  (5 DB + 3 web) et purge du cache de build Docker (~18 Go récupérés).
+- 11 tests d'intégration ajoutés (URL images, isolation des réglages, OAuth
+  refusant un token étranger, completedAt jeux). **132 tests serveur verts**.
+
+### 2026-07-16 — Flux Explorer varié et personnalisé (serveur)
+- Problème : `GET /api/explore/feed` et `GET /api/explore/games` proposaient
+  toujours les mêmes titres (aucune mémoire de ce qui avait été montré, pages
+  aléatoires étroites 1..3 sur des classements quasi statiques, vivier jeux figé).
+- **Prisma** : modèle `ExploreImpression` (`userId` + `itemKey` uniques,
+  `servedAt`, cascade User) — migration `explore_impressions`. Clés :
+  `show:tmdb:123` / `movie:tmdb:456` / `game:igdb:789`.
+- **`modules/explore/impressions.ts`** : les items servis il y a moins de
+  3 jours sont exclus du tirage suivant ; garde ANTI-FAMINE (si le vivier
+  restant < cible — 66 cartes feed / 60 jeux — les items vus les plus anciens
+  repassent d'abord, jamais de flux vide) ; enregistrement en
+  `deleteMany` + `createMany` transactionnels (pas de N+1) ; purge
+  fire-and-forget des lignes > 14 jours.
+- **`modules/explore/taste.ts`** : profil de goût par genres (favoris ×3,
+  watchlist/en cours/wishlist/playing ×2, terminés ×1, dislikés `isHidden`
+  ×−2) sur `Media.genres` (CSV de noms — fr TMDb ou anglais IGDB) ; mapping
+  statique nom→id des genres TMDb standards (tv + movie, variantes fr/en) et
+  IGDB ; tirage pondéré sans remise (`pickWeighted`) + genre d'EXPLORATION
+  hors profil.
+- **Feed séries/films** : à chaque refresh, 2 genres pondérés + 1 genre
+  d'exploration → viviers `tmdbDiscover` dédiés (tv + movie) ; recs tirées de
+  8 graines AU HASARD parmi 30 candidats (avant : toujours les 8 mêmes) ;
+  pages 1..8 pour discover/classiques/anime (1..3 conservé pour trending),
+  DEUX décennies aléatoires au lieu d'une. Plafond PER_CAT et dédup inchangés.
+- **Jeux** : `igdbPopular`/`igdbRecent` acceptent un `offset` Apicalypse
+  aléatoire (fenêtre glissante dans les classements) + `igdbByGenres(genreIds,
+  {offset})` (1-2 pools selon le profil de goût jeux). La clé `ApiCache` étant
+  le corps Apicalypse exact, offsets/genres différents = entrées de cache
+  différentes (le hasard n'est pas figé par le cache 24 h).
+- **Tests** (`explore-taste.test.ts` unitaire + `explore-impressions.test.ts`
+  intégration, fetch TMDb/Twitch/IGDB mocké) : pondérations du profil,
+  mappings de genres, tirage pondéré, exclusion d'un item servi au 1er appel,
+  format des clés en DB, garde anti-famine sur vivier minuscule entièrement
+  vu, exclusion des jeux suivis. 121 tests serveur verts.
+
+### 2026-07-16 — Langue de contenu par utilisateur (titres/résumés traduits)
+- L'utilisateur choisit sa langue dans Paramètres > APPLICATION > « Langue »
+  (Français par défaut, English, Español, Deutsch, Italiano, Português) : les
+  titres (et résumés quand disponibles) des séries et films s'affichent dans
+  cette langue partout. Les jeux (IGDB) gardent leur nom international.
+- **Prisma** : `User.language` (défaut `fr`) + `Media.translationsJson`
+  (JSON `{ en: { title, overview }, … }` — le fr reste porté par
+  `localizedTitle`/`localizedOverview`) — migration
+  `user_language_media_translations`.
+- **Serveur** :
+  - `services/tmdb` : `tmdbTranslations()` (endpoint `/translations`, cache
+    7 j) + `syncTranslationsFromTmdb(media)` (une requête TMDb récupère les 5
+    langues cibles en/es/de/it/pt, upsert `translationsJson`, skip silencieux
+    sans tmdbId) + `backfillUserTranslations(userId, lang)` (bibliothèque
+    complète en série, throttle 150 ms, un seul backfill par utilisateur).
+  - `serializeMedia(media, status, lang?)` : 3e paramètre optionnel — titre et
+    overview traduits si présents, fallback silencieux sinon ; helper
+    `mediaTitle(media, lang)` pour les titres construits à la main
+    (`showTitle` des épisodes, fil social, recherche locale).
+  - `modules/media/userLang.ts` : `getUserLang(userId)` (cache mémoire 60 s) +
+    `invalidateUserLang(userId)` ; langue threadée dans TOUTES les routes qui
+    renvoient des médias (shows queue/upcoming/history/profile/library/:id/
+    episodes, movies liste/profile/:id, profile + favoris, lists/:id, search,
+    disliked, explore feed, social feed + profil public).
+  - Flux Explorer / recherche TMDb / recommandations : paramètre `language`
+    TMDb par langue utilisateur (cache `ApiCache` par langue).
+  - Fiche (`GET /api/shows/:id`, `GET /api/movies/:id`) : traduction manquante
+    récupérée à la volée (awaité — une requête cachée 7 j, même pattern que
+    providers/credits).
+  - `POST /api/settings { language }` : met à jour `User.language`, invalide le
+    cache, lance le backfill en fond (réponse immédiate `started: true`) ;
+    `GET /api/settings` et `GET /api/auth/me` exposent `language`.
+- **Mobile** (`mobile/app/settings.tsx`) : section « Langue » sous « Thème »
+  (mêmes `RadioRow` que le thème), sélection → POST + message « Bibliothèque en
+  cours de traduction… » + invalidation GLOBALE du cache React Query (les
+  titres changent partout).
+- Tests : `apps/server/src/__tests__/language.test.ts` (7 tests : serializeMedia
+  en/fallbacks, POST/GET settings + /me, titre traduit dans `GET /api/shows`,
+  `syncTranslationsFromTmdb` avec fetch mocké, skip sans tmdbId) — 106 tests
+  serveur verts, typecheck serveur + mobile OK.
+
+### 2026-07-16 — Mot de passe oublié : réinitialisation par ré-authentification SSO (Google/Discord)
+- Cas d'usage : « Modifier le mot de passe » exigeait l'ancien mot de passe —
+  impossible justement quand on l'a oublié. Si un compte Google/Discord est lié,
+  on prouve son identité par le SSO (même mécanique web que le login) et on pose
+  un nouveau mot de passe sans l'ancien.
+- **Prisma** : modèle `PasswordResetToken` (usage unique, 10 min, cascade à la
+  suppression du compte) — migration `20260716120827_password_reset_tokens`.
+- **Serveur** (`apps/server/src/modules/auth/routes.ts`) :
+  `POST /api/auth/reset-password/init` (jeton provider Google/Discord vérifié
+  côté serveur → compte identifié UNIQUEMENT par (provider, providerId), jamais
+  par e-mail → jeton de reset) et `POST /api/auth/reset-password`
+  (`{ resetToken, newPassword ≥ 8 }` → nouveau hash bcrypt, jeton consommé,
+  autres sessions invalidées). Rate-limités comme le login. Le flux OAuth de
+  login et le changement classique avec ancien mot de passe sont inchangés.
+- **Mobile** (`mobile/app/settings.tsx`) : dans la modale « Modifier le mot de
+  passe », lien « Mot de passe oublié ? Réinitialiser via Google ou Discord »
+  (visible uniquement si un compte est lié ET configuré, web seulement comme le
+  SSO existant) → ré-auth Google (bouton officiel) ou Discord (popup) →
+  formulaire nouveau mot de passe + confirmation → succès.
+- Tests : `apps/server/src/__tests__/password-reset.test.ts` (8 tests : flux
+  complet avec login au nouveau mot de passe, jeton expiré/déjà utilisé/inconnu,
+  identité SSO non liée refusée, autres champs intacts) — 99 tests serveur verts.
 ### 2026-07-16 — Claude (9)
 - **Fiches série ET film : sections à l'échelle harmonisée** (les cotes lues
   sur les captures TV Time brutes rendaient « énormes » — retour récurrent) :

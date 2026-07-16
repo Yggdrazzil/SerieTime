@@ -4,8 +4,15 @@ import { prisma } from '../../db/client.js';
 import { requireAuth } from '../auth/routes.js';
 import { igdbGame, igdbRelated, igdbSearch, igdbToMedia, igdbImageUrl, isMainGame } from '../../services/igdb/index.js';
 import { nextFavoriteOrder } from '../media/favorites.js';
+import { isAllowedImageUrl } from '../media/imageUrl.js';
 import { scheduleRecompute } from '../gamification/service.js';
+import { filterSeenWithFallback, loadRecentImpressions, recordImpressions } from '../explore/impressions.js';
+import { genreProfile, igdbGenreWeights, pickWeighted } from '../explore/taste.js';
+import { allowsAdultContent } from '../settings/adultContent.js';
 
+// « Possédé » n'est PAS un statut : c'est l'interrupteur indépendant `isOwned`
+// (on peut être « En cours » ET posséder le jeu, ou y jouer via Game Pass sans
+// le posséder) — cf. POST /api/games/:id/owned.
 const GAME_STATUSES = ['wishlist', 'playing', 'completed', 'abandoned'] as const;
 
 // Crée/à-jour le Media (type game) + Game à partir d'un id IGDB. Miroir de ensureMediaFromTmdb.
@@ -23,12 +30,13 @@ export async function ensureGameFromIgdb(igdbId: string) {
   return created;
 }
 
-function serializeGame(m: { id: string; title: string; posterPath: string | null; year: number | null; voteAverage: number | null; igdbId: string | null; game?: { platforms: string | null } | null }, status?: { status: string; playtimeMinutes: number | null } | null) {
+function serializeGame(m: { id: string; title: string; posterPath: string | null; year: number | null; voteAverage: number | null; igdbId: string | null; game?: { platforms: string | null } | null }, status?: { status: string; playtimeMinutes: number | null; isOwned: boolean } | null) {
   return {
     id: m.id, title: m.title, posterPath: m.posterPath, year: m.year,
     voteAverage: m.voteAverage, igdbId: m.igdbId,
     platforms: m.game?.platforms ?? null,
     userStatus: status?.status ?? null,
+    isOwned: status?.isOwned ?? false,
     playtimeMinutes: status?.playtimeMinutes ?? null,
   };
 }
@@ -59,7 +67,8 @@ export async function gamesRoutes(app: FastifyInstance): Promise<void> {
       take: 10,
     });
     const seen = new Set(local.map((m) => m.igdbId).filter(Boolean));
-    const games = await igdbSearch(needle).catch(() => []);
+    const allowAdult = await allowsAdultContent(request.userId);
+    const games = await igdbSearch(needle, allowAdult).catch(() => []);
     return {
       results: [
         ...local.map((m) => ({
@@ -89,10 +98,11 @@ export async function gamesRoutes(app: FastifyInstance): Promise<void> {
     const media = await ensureGameFromIgdb(igdbId);
     if (!media) return { mediaId: null };
     if (status) {
+      const completedAt = status === 'completed' ? new Date() : null;
       await prisma.userMediaStatus.upsert({
         where: { userId_mediaId: { userId: request.userId, mediaId: media.id } },
-        create: { userId: request.userId, mediaId: media.id, status },
-        update: { status },
+        create: { userId: request.userId, mediaId: media.id, status, completedAt },
+        update: { status, completedAt },
       });
     }
     return { mediaId: media.id };
@@ -104,12 +114,35 @@ export async function gamesRoutes(app: FastifyInstance): Promise<void> {
       include: { media: { include: { game: true } } },
       orderBy: { updatedAt: 'desc' },
     });
-    const groups: Record<string, ReturnType<typeof serializeGame>[]> = { wishlist: [], playing: [], completed: [], abandoned: [] };
+    // wishlist/playing/completed/abandoned = groupes PAR STATUT (exclusifs) ;
+    // `owned` = vue « collection » : TOUTES les lignes isOwned, quel que soit
+    // le statut — un jeu peut donc apparaître dans deux groupes (En cours +
+    // Possédés), c'est voulu. Même forme de réponse qu'avant pour le mobile.
+    const groups: Record<string, ReturnType<typeof serializeGame>[]> = { wishlist: [], owned: [], playing: [], completed: [], abandoned: [] };
     for (const r of rows) {
       const bucket = groups[r.status];
       if (bucket) bucket.push(serializeGame(r.media, r));
+      if (r.isOwned) groups.owned!.push(serializeGame(r.media, r));
     }
     return groups;
+  });
+
+  // Interrupteur « Je possède » — booléen INDÉPENDANT du statut. Un jeu marqué
+  // possédé sans autre interaction doit bien exister dans UserMediaStatus : on
+  // crée alors la ligne avec `status: 'wishlist'` (fallback le moins faux — pas
+  // d'XP, pas de completedAt, et le jeu apparaît dans la bibliothèque).
+  // Pas de scheduleRecompute : posséder un jeu ne donne aucun XP.
+  app.post('/api/games/:id/owned', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const { owned } = z.object({ owned: z.boolean() }).parse(request.body);
+    const media = await prisma.media.findFirst({ where: { id, type: 'game' } });
+    if (!media) return reply.code(404).send({ error: 'not_found' });
+    await prisma.userMediaStatus.upsert({
+      where: { userId_mediaId: { userId: request.userId, mediaId: id } },
+      create: { userId: request.userId, mediaId: id, status: 'wishlist', isOwned: owned },
+      update: { isOwned: owned },
+    });
+    return { ok: true, isOwned: owned };
   });
 
   app.post('/api/games/:id/status', async (request, reply) => {
@@ -117,10 +150,14 @@ export async function gamesRoutes(app: FastifyInstance): Promise<void> {
     const { status } = z.object({ status: z.enum(GAME_STATUSES) }).parse(request.body);
     const media = await prisma.media.findFirst({ where: { id, type: 'game' } });
     if (!media) return reply.code(404).send({ error: 'not_found' });
+    // Horodate la fin du jeu (comme les films) : sans `completedAt`, le
+    // classement hebdo (gamification, filtre `completedAt >= lundi`) ne compte
+    // jamais les jeux terminés.
+    const completedAt = status === 'completed' ? new Date() : null;
     await prisma.userMediaStatus.upsert({
       where: { userId_mediaId: { userId: request.userId, mediaId: id } },
-      create: { userId: request.userId, mediaId: id, status },
-      update: { status },
+      create: { userId: request.userId, mediaId: id, status, completedAt },
+      update: { status, completedAt },
     });
     scheduleRecompute(request.userId); // gamification : jeu terminé (ou plus terminé)
     return { ok: true };
@@ -173,7 +210,7 @@ export async function gamesRoutes(app: FastifyInstance): Promise<void> {
 
   app.post('/api/games/:id/poster', async (request, reply) => {
     const { id } = request.params as { id: string };
-    const { posterPath } = z.object({ posterPath: z.string() }).parse(request.body);
+    const { posterPath } = z.object({ posterPath: z.string().refine(isAllowedImageUrl) }).parse(request.body);
     const media = await prisma.media.findFirst({ where: { id, type: 'game' } });
     if (!media) return reply.code(404).send({ error: 'not_found' });
     await prisma.media.update({ where: { id }, data: { posterPath } });
@@ -182,7 +219,7 @@ export async function gamesRoutes(app: FastifyInstance): Promise<void> {
 
   app.post('/api/games/:id/banner', async (request, reply) => {
     const { id } = request.params as { id: string };
-    const { backdropPath } = z.object({ backdropPath: z.string() }).parse(request.body);
+    const { backdropPath } = z.object({ backdropPath: z.string().refine(isAllowedImageUrl) }).parse(request.body);
     const media = await prisma.media.findFirst({ where: { id, type: 'game' } });
     if (!media) return reply.code(404).send({ error: 'not_found' });
     await prisma.media.update({ where: { id }, data: { backdropPath } });
@@ -280,8 +317,9 @@ export async function gamesRoutes(app: FastifyInstance): Promise<void> {
     };
   });
 
-  app.get('/api/games/discover', async () => {
+  app.get('/api/games/discover', async (request) => {
     const { igdbPopular, igdbUpcoming, igdbImageUrl } = await import('../../services/igdb/index.js');
+    const allowAdult = await allowsAdultContent(request.userId);
     const card = (g: { id: number; name: string; first_release_date?: number; cover?: { image_id: string } }) => ({
       igdbId: String(g.id), title: g.name,
       year: g.first_release_date ? new Date(g.first_release_date * 1000).getFullYear() : null,
@@ -291,6 +329,7 @@ export async function gamesRoutes(app: FastifyInstance): Promise<void> {
     // (gros succès des 18 derniers mois / jeux les plus attendus) : les
     // carrousels changent à chaque rafraîchissement sans appel IGDB
     // supplémentaire — l'app reste vivante, la latence reste celle du cache.
+    // `allowAdult` (18+) reste honoré via les paramètres des viviers.
     const sample = <T>(arr: T[], n: number): T[] => {
       const a = [...arr];
       for (let i = a.length - 1; i > 0; i--) {
@@ -299,35 +338,54 @@ export async function gamesRoutes(app: FastifyInstance): Promise<void> {
       }
       return a.slice(0, n);
     };
-    const [popular, upcoming] = await Promise.all([igdbPopular(), igdbUpcoming()]);
+    const [popular, upcoming] = await Promise.all([igdbPopular({ allowAdult }), igdbUpcoming(allowAdult)]);
     return { popular: sample(popular, 15).map(card), upcoming: sample(upcoming, 15).map(card) };
   });
 
   // Flux « JEUX » de l'Explorer TikTok : cartes plein écran (mêmes champs que le
   // feed séries/films), alimentées par IGDB (populaires + à venir).
   app.get('/api/explore/games', async (request) => {
-    const { igdbPopular, igdbUpcoming, igdbRecent, igdbImageUrl } = await import('../../services/igdb/index.js');
-    const [popular, upcoming, recent, tracked] = await Promise.all([
-      igdbPopular(),
-      igdbUpcoming(),
-      igdbRecent(),
-      // Jeux déjà suivis par l'utilisateur : exclus du flux (comme le feed
-      // séries/films exclut la bibliothèque) — liker un jeu le fait sortir
-      // du tirage au prochain rafraîchissement.
-      prisma.userMediaStatus.findMany({
-        where: { userId: request.userId, media: { type: 'game' } },
-        select: { media: { select: { igdbId: true } } },
-      }),
+    const { igdbPopular, igdbUpcoming, igdbRecent, igdbByGenres, igdbImageUrl } = await import('../../services/igdb/index.js');
+    // Jeux déjà suivis : exclus du flux (liker un jeu le fait sortir du tirage)
+    // ET matière du profil de goût par genres (mêmes pondérations que le feed
+    // séries/films : favoris ×3, wishlist/en cours ×2, terminés ×1, cachés ×−2).
+    const tracked = await prisma.userMediaStatus.findMany({
+      where: { userId: request.userId, media: { type: 'game' } },
+      select: { status: true, isFavorite: true, isHidden: true, media: { select: { igdbId: true, genres: true } } },
+    });
+    const weights = igdbGenreWeights(
+      genreProfile(
+        tracked.map((t) => ({ status: t.status, isFavorite: t.isFavorite, isHidden: t.isHidden, genres: t.media.genres })),
+      ),
+    );
+    // 1-2 genres préférés tirés au hasard pondéré → viviers IGDB dédiés.
+    const genreIds = pickWeighted(weights, 2).map(Number);
+    const allowAdult = await allowsAdultContent(request.userId);
+    // Offsets aléatoires : fenêtre glissante dans les classements IGDB, le
+    // vivier change à chaque appel (la clé ApiCache = corps Apicalypse exact,
+    // offset, genres ET clause thème compris — le cache ne fige pas le hasard
+    // et ne mélange pas comptes 18+ / standards).
+    const randOffset = (max: number) => Math.floor(Math.random() * (max + 1));
+    const [popular, upcoming, recent, seenRecently, byGenre] = await Promise.all([
+      igdbPopular({ offset: randOffset(200), allowAdult }),
+      igdbUpcoming(allowAdult),
+      igdbRecent({ offset: randOffset(100), allowAdult }),
+      // Mémoire du flux : items servis < 3 jours exclus (garde anti-famine plus bas).
+      loadRecentImpressions(request.userId),
+      Promise.all(genreIds.map((gid) => igdbByGenres([gid], { offset: randOffset(150), allowAdult }))),
     ]);
     const trackedIds = new Set(tracked.map((t) => t.media.igdbId).filter((x): x is string => Boolean(x)));
     const seen = new Set<number>();
-    const pool = [...popular, ...recent, ...upcoming]
+    const candidates = [...popular, ...recent, ...byGenre.flat(), ...upcoming]
       .filter((g) => !trackedIds.has(String(g.id)) && (seen.has(g.id) ? false : (seen.add(g.id), true)))
-      // Mélange PAR REQUÊTE (les requêtes IGDB sont cachées 24 h) : le
-      // pull-to-refresh / nouveau tirage propose un ordre et un échantillon
-      // différents à chaque fois, comme le feed séries/films.
-      .sort(() => Math.random() - 0.5)
-      .slice(0, 60);
+      // Mélange PAR REQUÊTE : le pull-to-refresh / nouveau tirage propose un
+      // ordre et un échantillon différents à chaque fois.
+      .sort(() => Math.random() - 0.5);
+    // Anti-répétition (impressions < 3 jours) avec garde anti-famine : si le
+    // vivier restant est trop maigre, les items les plus anciens repassent.
+    const GAMES_TARGET = 60;
+    const itemKey = (g: { id: number }) => `game:igdb:${g.id}`;
+    const pool = filterSeenWithFallback(candidates, itemKey, seenRecently, GAMES_TARGET).slice(0, GAMES_TARGET);
     const feed = pool.map((g) => ({
       id: null,
       igdbId: String(g.id),
@@ -351,6 +409,8 @@ export async function gamesRoutes(app: FastifyInstance): Promise<void> {
       stats: { likes: 0, watched: 0, comments: 0 },
       me: { liked: false, watched: false },
     }));
+    // Mémorise ce qui vient d'être servi (exclu des tirages pendant 3 jours).
+    await recordImpressions(request.userId, pool.map(itemKey));
     return { feed };
   });
 

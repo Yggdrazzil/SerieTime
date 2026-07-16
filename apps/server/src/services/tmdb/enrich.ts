@@ -1,12 +1,14 @@
 import type { Media } from '@prisma/client';
 import { prisma } from '../../db/client.js';
 import {
+  CONTENT_LANGS,
   tmdbCredits,
   tmdbFindByExternalId,
   tmdbEnabled,
   tmdbMovieDetails,
   tmdbSeasonDetails,
   tmdbShowDetails,
+  tmdbTranslations,
   tmdbWatchProviders,
 } from './client.js';
 import { env } from '../../config/env.js';
@@ -269,6 +271,66 @@ export async function ensureTmdbIdFromTvdb(mediaId: string): Promise<boolean> {
   if (!hit?.id) return false;
   await prisma.media.update({ where: { id: mediaId }, data: { tmdbId: String(hit.id) } });
   return true;
+}
+
+// Traductions de titres/résumés (langue de contenu par utilisateur) : UNE seule
+// requête TMDb (/translations) récupère les 5 langues cibles (en/es/de/it/pt),
+// stockées dans Media.translationsJson. Le français reste porté par
+// localizedTitle/localizedOverview. Retourne le JSON à jour (ou null si skip).
+export async function syncTranslationsFromTmdb(
+  media: Pick<Media, 'id' | 'type' | 'tmdbId' | 'translationsJson'>,
+): Promise<string | null> {
+  if (!media.tmdbId || !tmdbEnabled()) return null; // skip silencieux (ex. série TVDB seule)
+  if (media.type !== 'show' && media.type !== 'movie') return null;
+  const data = await tmdbTranslations(media.type === 'show' ? 'tv' : 'movie', media.tmdbId);
+  if (!data?.translations) return null;
+  const existing = parseTranslations(media.translationsJson);
+  const next: Record<string, { title?: string; overview?: string }> = { ...existing };
+  for (const lang of CONTENT_LANGS) {
+    const t = data.translations.find((tr) => tr.iso_639_1 === lang);
+    const title = (t?.data?.name || t?.data?.title || '').trim();
+    if (!title) continue;
+    const overview = (t?.data?.overview ?? '').trim();
+    next[lang] = { title, ...(overview ? { overview } : {}) };
+  }
+  const json = JSON.stringify(next);
+  await prisma.media.update({ where: { id: media.id }, data: { translationsJson: json } });
+  return json;
+}
+
+export function parseTranslations(
+  json: string | null | undefined,
+): Record<string, { title?: string; overview?: string }> {
+  if (!json) return {};
+  try {
+    return JSON.parse(json) as Record<string, { title?: string; overview?: string }>;
+  } catch {
+    return {};
+  }
+}
+
+// Backfill (changement de langue dans les Paramètres) : traduit EN SÉRIE toute
+// la bibliothèque suivie de l'utilisateur (séries + films avec tmdbId auxquels
+// il manque la langue), avec throttle — même pattern que la phase sync de
+// l'import TV Time. Un seul backfill à la fois par utilisateur.
+const backfillRunning = new Set<string>();
+
+export async function backfillUserTranslations(userId: string, lang: string): Promise<void> {
+  if (backfillRunning.has(userId) || !tmdbEnabled()) return;
+  backfillRunning.add(userId);
+  try {
+    const statuses = await prisma.userMediaStatus.findMany({
+      where: { userId, media: { type: { in: ['show', 'movie'] }, tmdbId: { not: null } } },
+      select: { media: { select: { id: true, type: true, tmdbId: true, translationsJson: true } } },
+    });
+    for (const { media } of statuses) {
+      if (parseTranslations(media.translationsJson)[lang]?.title) continue;
+      await syncTranslationsFromTmdb(media).catch(() => undefined);
+      await new Promise((r) => setTimeout(r, 150)); // throttle TMDb
+    }
+  } finally {
+    backfillRunning.delete(userId);
+  }
 }
 
 export async function syncCreditsFromTmdb(mediaId: string): Promise<void> {

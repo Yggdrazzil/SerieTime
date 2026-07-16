@@ -3,13 +3,17 @@ import { z } from 'zod';
 import { prisma } from '../../db/client.js';
 import { requireAuth } from '../auth/routes.js';
 import { serializeMedia } from '../media/serialize.js';
+import { getUserLang } from '../media/userLang.js';
 import { createWatchEvent } from '../media/actions.js';
 import { scheduleRecompute } from '../gamification/service.js';
+import { isAllowedImageUrl } from '../media/imageUrl.js';
 import { nextFavoriteOrder } from '../media/favorites.js';
 import {
   ensureMediaFromTmdb,
+  parseTranslations,
   syncCreditsFromTmdb,
   syncProvidersFromTmdb,
+  syncTranslationsFromTmdb,
   orderProvidersForMedia,
   tmdbVideos,
   tmdbRecommendations,
@@ -20,6 +24,7 @@ export async function movieRoutes(app: FastifyInstance): Promise<void> {
 
   // Films de l'utilisateur : à voir (watchlist/non vus) et à venir.
   app.get('/api/movies', async (request) => {
+    const lang = await getUserLang(request.userId);
     const statuses = await prisma.userMediaStatus.findMany({
       where: { userId: request.userId, media: { type: 'movie' }, isHidden: false },
       include: { media: true },
@@ -29,11 +34,11 @@ export async function movieRoutes(app: FastifyInstance): Promise<void> {
     const toWatch = statuses
       .filter((s) => s.status !== 'completed')
       .filter((s) => !s.media.releaseDate || s.media.releaseDate <= now)
-      .map((s) => serializeMedia(s.media, s));
+      .map((s) => serializeMedia(s.media, s, lang));
     const upcoming = statuses
       .filter((s) => s.media.releaseDate && s.media.releaseDate > now)
       .sort((a, b) => a.media.releaseDate!.getTime() - b.media.releaseDate!.getTime())
-      .map((s) => ({ media: serializeMedia(s.media, s), releaseDate: s.media.releaseDate!.toISOString() }));
+      .map((s) => ({ media: serializeMedia(s.media, s, lang), releaseDate: s.media.releaseDate!.toISOString() }));
     return { toWatch, upcoming };
   });
 
@@ -46,6 +51,7 @@ export async function movieRoutes(app: FastifyInstance): Promise<void> {
         hidden: z.coerce.boolean().default(false),
       })
       .parse(request.query ?? {});
+    const lang = await getUserLang(request.userId);
     const statuses = await prisma.userMediaStatus.findMany({
       where: {
         userId: request.userId,
@@ -59,8 +65,8 @@ export async function movieRoutes(app: FastifyInstance): Promise<void> {
       if (query.sort === 'last_added') return b.addedAt.getTime() - a.addedAt.getTime();
       return (b.lastWatchedAt?.getTime() ?? 0) - (a.lastWatchedAt?.getTime() ?? 0);
     });
-    const seen = sorted.filter((s) => s.status === 'completed').map((s) => serializeMedia(s.media, s));
-    const unseen = sorted.filter((s) => s.status !== 'completed').map((s) => serializeMedia(s.media, s));
+    const seen = sorted.filter((s) => s.status === 'completed').map((s) => serializeMedia(s.media, s, lang));
+    const unseen = sorted.filter((s) => s.status !== 'completed').map((s) => serializeMedia(s.media, s, lang));
     return {
       seen: query.filter === 'unseen' ? [] : seen,
       unseen: query.filter === 'seen' ? [] : unseen,
@@ -69,6 +75,7 @@ export async function movieRoutes(app: FastifyInstance): Promise<void> {
 
   app.get('/api/movies/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
+    const lang = await getUserLang(request.userId);
     const media = await prisma.media.findFirst({
       where: { id, type: 'movie' },
       include: { statuses: { where: { userId: request.userId } }, movie: true },
@@ -76,6 +83,12 @@ export async function movieRoutes(app: FastifyInstance): Promise<void> {
     if (!media) return reply.code(404).send({ error: 'not_found' });
     await syncProvidersFromTmdb(media.id).catch(() => undefined);
     await syncCreditsFromTmdb(media.id).catch(() => undefined);
+    // Langue de contenu ≠ fr et traduction absente : récupérée à la volée
+    // (une requête TMDb, cache 7 j) — même pattern que providers/credits.
+    if (lang !== 'fr' && !parseTranslations(media.translationsJson)[lang]?.title) {
+      const json = await syncTranslationsFromTmdb(media).catch(() => null);
+      if (json) media.translationsJson = json;
+    }
     const [providers, credits] = await Promise.all([
       prisma.provider.findMany({ where: { mediaId: media.id } }),
       prisma.credit.findMany({
@@ -98,7 +111,7 @@ export async function movieRoutes(app: FastifyInstance): Promise<void> {
     };
     let recommendations: RecItem[] = [];
     if (media.tmdbId) {
-      const recs = await tmdbRecommendations('movie', media.tmdbId).catch(() => []);
+      const recs = await tmdbRecommendations('movie', media.tmdbId, lang).catch(() => []);
       const ids = recs.slice(0, 10).map((r) => String(r.id));
       const locals = await prisma.media.findMany({
         where: { type: 'movie', tmdbId: { in: ids } },
@@ -122,7 +135,7 @@ export async function movieRoutes(app: FastifyInstance): Promise<void> {
     }
     const addedByCount = await prisma.userMediaStatus.count({ where: { mediaId: media.id } });
     return {
-      media: serializeMedia(media, media.statuses[0] ?? null),
+      media: serializeMedia(media, media.statuses[0] ?? null, lang),
       addedByCount,
       recommendations,
       providers: orderProvidersForMedia(providers, media).map((p) => ({
@@ -225,7 +238,7 @@ export async function movieRoutes(app: FastifyInstance): Promise<void> {
   // Personnalisation de l'affiche et de la bannière (même API que les séries).
   app.post('/api/movies/:id/poster', async (request, reply) => {
     const { id } = request.params as { id: string };
-    const { posterPath } = z.object({ posterPath: z.string() }).parse(request.body);
+    const { posterPath } = z.object({ posterPath: z.string().refine(isAllowedImageUrl) }).parse(request.body);
     const media = await prisma.media.findFirst({ where: { id, type: 'movie' } });
     if (!media) return reply.code(404).send({ error: 'not_found' });
     await prisma.media.update({ where: { id }, data: { posterPath } });
@@ -234,7 +247,7 @@ export async function movieRoutes(app: FastifyInstance): Promise<void> {
 
   app.post('/api/movies/:id/banner', async (request, reply) => {
     const { id } = request.params as { id: string };
-    const { backdropPath } = z.object({ backdropPath: z.string() }).parse(request.body);
+    const { backdropPath } = z.object({ backdropPath: z.string().refine(isAllowedImageUrl) }).parse(request.body);
     const media = await prisma.media.findFirst({ where: { id, type: 'movie' } });
     if (!media) return reply.code(404).send({ error: 'not_found' });
     await prisma.media.update({ where: { id }, data: { backdropPath } });
@@ -270,6 +283,7 @@ export async function movieRoutes(app: FastifyInstance): Promise<void> {
     const media = await prisma.media.findFirst({ where: { id, type: 'movie' } });
     if (!media) return reply.code(404).send({ error: 'not_found' });
     await prisma.userMediaStatus.deleteMany({ where: { userId: request.userId, mediaId: id } });
+    scheduleRecompute(request.userId); // gamification : retrait du suivi (recompute idempotent, parité jeux)
     return { ok: true };
   });
 

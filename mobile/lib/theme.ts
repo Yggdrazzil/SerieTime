@@ -1,4 +1,4 @@
-// Design tokens SerieTime (spec §10) — thèmes Clair / Sombre / Sunset.
+// Design tokens PlotTime (spec §10) — thèmes Clair / Sombre / Sunset.
 import { Appearance, Platform } from 'react-native';
 
 // Police unique de l'app (native + web) : Mulish — sans-serif humaniste fine,
@@ -21,8 +21,8 @@ export const FONTS = {
 // Tout style qui utilise COLORS.* devient donc thémable sans être réécrit.
 // ---------------------------------------------------------------------------
 
-export type ThemePreference = 'system' | 'light' | 'dark' | 'sunset';
-export type ThemeName = 'light' | 'dark' | 'sunset';
+export type ThemePreference = 'system' | 'light' | 'dark' | 'sunset' | 'midnight';
+export type ThemeName = 'light' | 'dark' | 'sunset' | 'midnight';
 
 const LIGHT = {
   bg: '#FFFFFF',
@@ -86,13 +86,12 @@ const DARK: Palette = {
   overlay: 'rgba(0,0,0,0.72)',
   provider: '#00A8E1',
   onAccent: '#101014',
-  // THÈME NUIT UNIQUEMENT : rose du logo (éclairci pour rester vif sur le
-  // charbon) sur les pastilles, notifications et compteurs — casse le
-  // monochrome (demande produit 16/07).
-  pillBg: '#FF4D97',
-  pillFg: '#FFFFFF',
-  notif: '#FF4D97',
-  plusCount: '#FF4D97',
+  // « Sombre » reste sobre : le rose du logo est réservé au thème NUIT
+  // (midnight) — demande produit 16/07.
+  pillBg: '#6A6A76',
+  pillFg: '#1B1B22',
+  notif: '#E36067',
+  plusCount: '#9C9CA8',
   imagePlaceholder: '#2A2A32',
 };
 
@@ -128,9 +127,45 @@ const SUNSET: Palette = {
   imagePlaceholder: '#E7DBCB',
 };
 
+// Nuit : les couleurs du logo PlotTime — fond bleu nuit #0B075A, accents
+// jaune #FBAE00 / rose #E6027F / violet #6401F0 (éclaircis pour la lisibilité
+// sur fond sombre). Le texte posé sur l'accent jaune est bleu nuit, comme le
+// motif de l'icône.
+const MIDNIGHT: Palette = {
+  bg: '#0B075A',
+  pageMuted: '#070440',
+  surface: '#160F73',
+  text: '#F3F1FF',
+  textMuted: '#A9A3E0',
+  textSoft: '#7D76C2',
+  border: '#3A32A8',
+  borderLight: '#251D8C',
+  yellow: '#FBAE00',
+  yellowSoft: 'rgba(251,174,0,0.28)',
+  black: '#F3F1FF',
+  white: '#160F73',
+  pillGrey: '#5C55B4',
+  chipGrey: '#1E1780',
+  chipSelected: '#39309F',
+  blue: '#B39DFF', // liens : violet du logo, éclairci
+  red: '#FF4D9E', // rose du logo, éclairci (favoris, alertes)
+  green: '#62D600',
+  checkBg: '#1E1780',
+  overlay: 'rgba(3,2,34,0.74)',
+  provider: '#7A2BFF', // violet du logo (bouton « où regarder »)
+  onAccent: '#0B075A', // bleu nuit sur les boutons jaunes, comme l'icône
+  // ROSE du logo sur les pastilles de section, notifications et compteurs
+  // « +N » : casse le monochrome bleu du thème Nuit (demande produit 16/07).
+  pillBg: '#FF4D9E',
+  pillFg: '#FFFFFF',
+  notif: '#FF4D9E',
+  plusCount: '#FF4D9E',
+  imagePlaceholder: '#221B8A',
+};
+
 // NB : si un `bg` change ici, reporter la valeur dans le script pré-peinture
 // de `app/+html.tsx` (barres système Android teintées avant le premier rendu).
-const PALETTES: Record<ThemeName, Palette> = { light: LIGHT, dark: DARK, sunset: SUNSET };
+const PALETTES: Record<ThemeName, Palette> = { light: LIGHT, dark: DARK, sunset: SUNSET, midnight: MIDNIGHT };
 
 const STORAGE_KEY = 'serietime-theme';
 
@@ -142,7 +177,7 @@ const STORAGE_KEY = 'serietime-theme';
 export function getThemePreference(): ThemePreference {
   if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
     const v = localStorage.getItem(STORAGE_KEY);
-    if (v === 'light' || v === 'dark' || v === 'sunset' || v === 'system') return v;
+    if (v === 'light' || v === 'dark' || v === 'sunset' || v === 'midnight' || v === 'system') return v;
   }
   return 'system';
 }
@@ -160,7 +195,9 @@ function resolveTheme(pref: ThemePreference): ThemeName {
 
 // Thème ACTIF de cette session (résolu une fois, au chargement).
 export const THEME: ThemeName = resolveTheme(getThemePreference());
-export const IS_DARK = THEME === 'dark';
+// « Sombre » au sens large : pilote la barre de statut claire, le colorScheme
+// du document et les ombres renforcées. Nuit est un thème sombre.
+export const IS_DARK = THEME === 'dark' || THEME === 'midnight';
 
 export const COLORS: Palette = { ...PALETTES[THEME] };
 

@@ -47,12 +47,12 @@ export default function Root({ children }: PropsWithChildren) {
               (function () {
                 try {
                   var pref = localStorage.getItem('serietime-theme');
-                  var theme = (pref === 'light' || pref === 'dark' || pref === 'sunset')
+                  var theme = (pref === 'light' || pref === 'dark' || pref === 'sunset' || pref === 'midnight')
                     ? pref
                     : (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-                  var bg = theme === 'dark' ? '#121217' : theme === 'sunset' ? '#FAF5EE' : '#FFFFFF';
+                  var bg = theme === 'dark' ? '#121217' : theme === 'midnight' ? '#0B075A' : theme === 'sunset' ? '#FAF5EE' : '#FFFFFF';
                   document.documentElement.style.backgroundColor = bg;
-                  document.documentElement.style.colorScheme = theme === 'dark' ? 'dark' : 'light';
+                  document.documentElement.style.colorScheme = (theme === 'dark' || theme === 'midnight') ? 'dark' : 'light';
                   var metas = document.querySelectorAll('meta[name="theme-color"]');
                   for (var i = 0; i < metas.length; i++) metas[i].setAttribute('content', bg);
                 } catch (e) {}
