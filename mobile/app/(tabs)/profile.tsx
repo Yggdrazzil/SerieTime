@@ -9,7 +9,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api, tmdbImage } from '@/lib/api';
 import type { GamificationMeDto, MediaDto, ProfileStatsDto } from '@/lib/types';
 import { watchTime } from '@/lib/format';
-import { COLORS, FONTS } from '@/lib/theme';
+import { COLORS, FONTS, setThemeColorMeta, currentThemeColorMeta } from '@/lib/theme';
 import { Loading, LoadError, Poster } from '@/components/ui';
 import { AppearItem, PopIn } from '@/components/anim';
 import { useTabResetSeq } from '@/lib/tabReset';
@@ -59,10 +59,9 @@ function ProfileScreenInner() {
   // suivi dynamiquement par Android) pour la fondre avec la couverture.
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof document === 'undefined' || !focused) return;
-    const meta = document.querySelector('meta[name="theme-color"]');
-    const prev = meta?.getAttribute('content') ?? '#FFFFFF';
-    meta?.setAttribute('content', '#20202a');
-    return () => meta?.setAttribute('content', prev);
+    const prev = currentThemeColorMeta();
+    setThemeColorMeta('#20202a');
+    return () => setThemeColorMeta(prev);
   }, [focused]);
   const { data, isLoading, isError, refetch, isRefetching } = useQuery({
     queryKey: ['profile'],

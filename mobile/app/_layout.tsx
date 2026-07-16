@@ -13,15 +13,17 @@ import {
   Mulish_700Bold,
   Mulish_800ExtraBold,
 } from '@expo-google-fonts/mulish';
-import { COLORS, IS_DARK } from '@/lib/theme';
+import { COLORS, IS_DARK, setThemeColorMeta } from '@/lib/theme';
 import { GamificationToastHost } from '@/lib/useGamificationToasts';
 
-// Web : le fond du document et la couleur de la barre du navigateur suivent le
-// thème (sinon bandes blanches autour de l'app en sombre/Sunset).
+// Web : le fond du document et la couleur des barres du navigateur suivent le
+// thème (sinon bandes blanches autour de l'app en sombre/Sunset). Le
+// `color-scheme` de la racine pilote aussi la barre de gestes Android en PWA
+// installée (elle restait blanche en sombre sans lui).
 if (typeof document !== 'undefined') {
   document.body.style.backgroundColor = COLORS.bg;
-  const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute('content', COLORS.bg);
+  document.documentElement.style.colorScheme = IS_DARK ? 'dark' : 'light';
+  setThemeColorMeta(COLORS.bg);
 }
 
 const queryClient = new QueryClient({

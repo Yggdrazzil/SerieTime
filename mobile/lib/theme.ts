@@ -146,6 +146,21 @@ export const IS_DARK = THEME === 'dark';
 
 export const COLORS: Palette = { ...PALETTES[THEME] };
 
+// Web : applique une couleur à TOUS les metas theme-color. Il y en a trois
+// (un sans `media` + un par variante `prefers-color-scheme`) : en PWA
+// installée, Chrome/Android choisit la barre système via le meta dont le
+// `media` correspond au thème SYSTÈME du téléphone — si on ne mettait à jour
+// que le premier, la barre de gestes restait blanche quand l'app est sombre
+// sur un téléphone en clair (liseré blanc en bas).
+export function setThemeColorMeta(color: string): void {
+  if (typeof document === 'undefined') return;
+  document.querySelectorAll('meta[name="theme-color"]').forEach((m) => m.setAttribute('content', color));
+}
+export function currentThemeColorMeta(): string {
+  if (typeof document === 'undefined') return PALETTES[THEME].bg;
+  return document.querySelector('meta[name="theme-color"]')?.getAttribute('content') ?? PALETTES[THEME].bg;
+}
+
 // Enregistre la préférence puis recharge la web app pour appliquer la palette
 // (les couleurs sont figées dans les styles au chargement — un rechargement
 // est le seul moyen fiable de TOUT re-thémer, web comme le fait Twitter/X).

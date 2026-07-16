@@ -32,6 +32,8 @@ export type IgdbGame = {
   aggregated_rating?: number;
   // Thèmes IGDB : sert à exclure le thème « Erotic » (id 42) — contenu sexuel.
   themes?: { id: number; name?: string }[];
+  // Nombre de « follows » avant sortie : proxy IGDB des jeux les plus attendus.
+  hypes?: number;
 };
 
 // Thème IGDB « Erotic » = id 42. Clause Apicalypse ajoutée à chaque `where` de
@@ -55,7 +57,7 @@ const FIELDS =
   'fields name,summary,first_release_date,cover.image_id,artworks.image_id,genres.name,' +
   'platforms.name,involved_companies.developer,involved_companies.publisher,involved_companies.company.name,' +
   'game_modes.name,total_rating,total_rating_count,release_dates.date,release_dates.human,release_dates.platform.name,' +
-  'dlcs.name,expansions.name,videos.video_id,videos.name,screenshots.image_id,game_type,version_parent,parent_game,aggregated_rating,themes.id,themes.name';
+  'dlcs.name,expansions.name,videos.video_id,videos.name,screenshots.image_id,game_type,version_parent,parent_game,aggregated_rating,themes.id,themes.name,hypes';
 
 // « Vrai jeu » pour la recherche/découverte : exclut les rééditions (Deluxe,
 // GOTY… = version_parent), les DLC/extensions/bundles/updates (game_type 1, 2,
@@ -109,17 +111,30 @@ const themesClause = (allowAdult: boolean) => (allowAdult ? '' : ` & ${SAFE_THEM
 const applySafe = (games: IgdbGame[], allowAdult: boolean) =>
   allowAdult ? games : games.filter(isSafeGame);
 
+// « Populaires » du MOMENT : gros succès sortis dans les 18 derniers mois
+// (la fenêtre glissante suit d'elle-même la saisonnalité des sorties),
+// classés par nombre de notes (proxy de popularité, pas la note elle-même
+// qui figeait le carrousel sur le top all-time : Zelda/Metroid éternels).
+// Le timestamp est arrondi au JOUR pour que la clé de cache reste stable 24 h ;
+// `offset` (flux Explorer) et `allowAdult` (18+) restent supportés.
+export function popularQueryBody(opts: { offset?: number; allowAdult?: boolean } = {}): string {
+  const today = Math.floor(Date.now() / 86_400_000) * 86_400; // minuit UTC, en secondes
+  const window = today - 548 * 86_400; // ~18 mois
+  return `${FIELDS}; where first_release_date > ${window} & first_release_date < ${today} & total_rating_count > 5${themesClause(opts.allowAdult ?? false)}; sort total_rating_count desc; limit 60;${offsetClause(opts.offset)}`;
+}
+
 export async function igdbPopular(opts: { offset?: number; allowAdult?: boolean } = {}): Promise<IgdbGame[]> {
-  const body = `${FIELDS}; where total_rating_count > 200${themesClause(opts.allowAdult ?? false)}; sort total_rating desc; limit 50;${offsetClause(opts.offset)}`;
-  return applySafe(((await igdbQuery<IgdbGame[]>('games', body, DAY)) ?? []).filter(isMainGame), opts.allowAdult ?? false);
+  return applySafe(((await igdbQuery<IgdbGame[]>('games', popularQueryBody(opts), DAY)) ?? []).filter(isMainGame), opts.allowAdult ?? false);
 }
 
 // Sorties récentes bien notées (2 dernières années) : élargit le vivier du
 // flux Explorer au-delà du top all-time, pour que chaque tirage varie.
+// Sorties récentes bien notées (2 dernières années) : timestamp arrondi au jour
+// (cache stable 24 h), `offset`/`allowAdult` supportés pour le flux Explorer.
 export async function igdbRecent(opts: { offset?: number; allowAdult?: boolean } = {}): Promise<IgdbGame[]> {
-  const now = Math.floor(Date.now() / 1000);
-  const twoYearsAgo = now - 2 * 365 * 86_400;
-  const body = `${FIELDS}; where first_release_date > ${twoYearsAgo} & first_release_date < ${now} & total_rating_count > 20${themesClause(opts.allowAdult ?? false)}; sort total_rating desc; limit 50;${offsetClause(opts.offset)}`;
+  const today = Math.floor(Date.now() / 86_400_000) * 86_400;
+  const twoYearsAgo = today - 2 * 365 * 86_400;
+  const body = `${FIELDS}; where first_release_date > ${twoYearsAgo} & first_release_date < ${today} & total_rating_count > 20${themesClause(opts.allowAdult ?? false)}; sort total_rating desc; limit 50;${offsetClause(opts.offset)}`;
   return applySafe(((await igdbQuery<IgdbGame[]>('games', body, DAY)) ?? []).filter(isMainGame), opts.allowAdult ?? false);
 }
 
@@ -137,10 +152,16 @@ export async function igdbByGenres(genreIds: number[], opts: { offset?: number; 
   );
 }
 
+// « À venir » : les jeux LES PLUS ATTENDUS (hypes = follows IGDB avant sortie),
+// pas les prochaines dates du fond du store — trier par date seule remontait du
+// shovelware obscur (« Slime Slider »…). `allowAdult` (18+) supporté.
+export function upcomingQueryBody(allowAdult = false): string {
+  const today = Math.floor(Date.now() / 86_400_000) * 86_400;
+  return `${FIELDS}; where first_release_date > ${today} & hypes > 4${themesClause(allowAdult)}; sort hypes desc; limit 60;`;
+}
+
 export async function igdbUpcoming(allowAdult = false): Promise<IgdbGame[]> {
-  const now = Math.floor(Date.now() / 1000);
-  const body = `${FIELDS}; where first_release_date > ${now}${themesClause(allowAdult)}; sort first_release_date asc; limit 30;`;
-  return applySafe(((await igdbQuery<IgdbGame[]>('games', body, DAY)) ?? []).filter(isMainGame), allowAdult);
+  return applySafe(((await igdbQuery<IgdbGame[]>('games', upcomingQueryBody(allowAdult), DAY)) ?? []).filter(isMainGame), allowAdult);
 }
 
 export function igdbToMedia(g: IgdbGame) {

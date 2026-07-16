@@ -21,6 +21,7 @@ export function PullToRefresh({
   style,
   contentContainerStyle,
   stickyHeaderIndices,
+  onScroll,
 }: {
   refreshing: boolean;
   onRefresh: () => void;
@@ -28,6 +29,8 @@ export function PullToRefresh({
   style?: object;
   contentContainerStyle?: object;
   stickyHeaderIndices?: number[];
+  // Relais du défilement interne (ex. pastille de section flottante).
+  onScroll?: (e: { nativeEvent: { contentOffset: { y: number } } }) => void;
 }) {
   const reduce = useReduceMotion();
   const pull = useRef(new Animated.Value(0)).current;
@@ -111,7 +114,7 @@ export function PullToRefresh({
       <Animated.View style={{ flex: 1, transform: [{ translateY: pull }] }}>
         <ScrollView
           scrollEnabled={!locked}
-          onScroll={(e) => { scrollY.current = e.nativeEvent.contentOffset.y; }}
+          onScroll={(e) => { scrollY.current = e.nativeEvent.contentOffset.y; onScroll?.(e); }}
           scrollEventThrottle={16}
           contentContainerStyle={contentContainerStyle}
           stickyHeaderIndices={stickyHeaderIndices}

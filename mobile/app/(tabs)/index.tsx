@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, ScrollView, StyleSheet, Pressable, Image, ActivityIndicator, RefreshControl } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -110,6 +110,20 @@ function QueueView() {
 
   const { refreshing, onRefresh } = usePullRefresh([refetch, history.refetch]);
 
+  // Anti-flash : l'historique est rendu AU-DESSUS de « À voir » puis le scroll
+  // se cale en dessous (onLayout) — entre les deux, l'utilisateur voyait
+  // l'historique une fraction de seconde. On masque la liste jusqu'au calage
+  // (pas d'historique → rien à caler, on affiche directement).
+  const [settled, setSettled] = useState(false);
+  const historyCount = history.data?.items?.length ?? 0;
+  useEffect(() => {
+    if (settled) return;
+    if ((history.isSuccess && historyCount === 0) || history.isError) setSettled(true);
+    // Ceinture et bretelles : jamais plus de 700 ms masqué, quoi qu'il arrive.
+    const t = setTimeout(() => setSettled(true), 700);
+    return () => clearTimeout(t);
+  }, [settled, history.isSuccess, history.isError, historyCount]);
+
   if (isLoading) return <QueueSkeleton />;
   if (isError && !data) return <LoadError onRetry={refetch} busy={isRefetching} />;
   // Du plus ancien au plus récent : le dernier épisode coché juste au-dessus
@@ -130,6 +144,7 @@ function QueueView() {
     <View style={{ flex: 1 }}>
     <ScrollView
       ref={scrollRef}
+      style={{ opacity: settled ? 1 : 0 }}
       contentContainerStyle={{ paddingBottom: 16 }}
       onScroll={onListScroll}
       scrollEventThrottle={16}
@@ -140,11 +155,13 @@ function QueueView() {
           onLayout={(e) => {
             registerSection('Historique de visionnage')(e);
             // Une fois l'historique mesuré, on cale le scroll juste en dessous
-            // pour ouvrir l'écran sur « À voir » (l'historique reste au-dessus).
+            // pour ouvrir l'écran sur « À voir » (l'historique reste au-dessus) ;
+            // la liste ne devient visible qu'une fois le scroll appliqué.
             const h = e.nativeEvent.layout.height;
             if (!didInitialScroll.current && h > 0) {
               didInitialScroll.current = true;
               scrollRef.current?.scrollTo({ y: h, animated: false });
+              requestAnimationFrame(() => setSettled(true));
             }
           }}
         >
@@ -219,6 +236,16 @@ function UpcomingView() {
       }>('/api/shows/upcoming'),
   });
   const { refreshing, onRefresh } = usePullRefresh([refetch]);
+  // Anti-flash (même mécanique que « À voir ») : liste masquée jusqu'au
+  // calage du scroll sous l'historique des sorties passées.
+  const [settled, setSettled] = useState(false);
+  const pastCount = data?.past?.length ?? 0;
+  useEffect(() => {
+    if (settled) return;
+    if (data && pastCount === 0) setSettled(true);
+    const t = setTimeout(() => setSettled(true), 700);
+    return () => clearTimeout(t);
+  }, [settled, data, pastCount]);
   if (isLoading) return <QueueSkeleton />;
   if (isError && !data) return <LoadError onRetry={refetch} busy={isRefetching} />;
   const pastGroups = data?.past ?? [];
@@ -228,6 +255,7 @@ function UpcomingView() {
   return (
     <ScrollView
       ref={scrollRef}
+      style={{ opacity: settled ? 1 : 0 }}
       contentContainerStyle={{ paddingBottom: 16 }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.yellow} colors={[COLORS.yellow]} />}
     >
@@ -238,6 +266,7 @@ function UpcomingView() {
             if (!didInitialScroll.current && h > 0) {
               didInitialScroll.current = true;
               scrollRef.current?.scrollTo({ y: h, animated: false });
+              requestAnimationFrame(() => setSettled(true));
             }
           }}
         >

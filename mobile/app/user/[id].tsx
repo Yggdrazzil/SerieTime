@@ -8,7 +8,7 @@ import { useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, tmdbImage } from '@/lib/api';
-import { COLORS, FONTS } from '@/lib/theme';
+import { COLORS, FONTS, setThemeColorMeta, currentThemeColorMeta } from '@/lib/theme';
 import { Loading, LoadError } from '@/components/ui';
 import { AppearItem, Pop, PressableScale } from '@/components/anim';
 
@@ -39,10 +39,9 @@ export default function UserProfileScreen() {
   // (icônes claires en natif, zone teintée via theme-color sur la web app).
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof document === 'undefined' || !focused) return;
-    const meta = document.querySelector('meta[name="theme-color"]');
-    const prev = meta?.getAttribute('content') ?? '#FFFFFF';
-    meta?.setAttribute('content', '#20202a');
-    return () => meta?.setAttribute('content', prev);
+    const prev = currentThemeColorMeta();
+    setThemeColorMeta('#20202a');
+    return () => setThemeColorMeta(prev);
   }, [focused]);
 
   const { data, isLoading, isError, refetch, isRefetching } = useQuery({

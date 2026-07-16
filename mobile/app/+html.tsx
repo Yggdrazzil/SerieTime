@@ -26,12 +26,21 @@ export default function Root({ children }: PropsWithChildren) {
             Le script ci-dessous remplace cette valeur par le fond du thème actif
             AVANT le premier rendu. */}
         <meta name="theme-color" content="#FFFFFF" />
+        {/* En PWA installée, Chrome/Android choisit la couleur des barres
+            système via le meta theme-color dont le `media` correspond au thème
+            SYSTÈME du téléphone (supporté depuis Chrome 93, PWA uniquement) :
+            sans ces deux variantes, la barre de gestes restait blanche quand
+            l'app est sombre sur un téléphone réglé en clair. Le script
+            ci-dessous met les TROIS metas à la couleur du thème choisi. */}
+        <meta name="theme-color" media="(prefers-color-scheme: light)" content="#FFFFFF" />
+        <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#FFFFFF" />
         {/* Thème AVANT peinture : Android échantillonne la couleur des barres
             système (statut + barre de gestes en bas) au chargement de la page —
             attendre le bundle JS laissait un liseré blanc en bas en Sombre/Sunset.
             Les fonds ci-dessous doivent rester alignés sur `bg` des palettes de
             `lib/theme.ts`. Teinter <html> évite aussi le flash blanc au reload
-            (changement de thème). */}
+            (changement de thème), et `color-scheme` fait suivre la barre de
+            gestes (et les scrollbars) au thème de l'app, pas à celui du système. */}
         <script
           dangerouslySetInnerHTML={{
             __html: `
@@ -43,8 +52,9 @@ export default function Root({ children }: PropsWithChildren) {
                     : (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
                   var bg = theme === 'dark' ? '#121217' : theme === 'sunset' ? '#FAF5EE' : '#FFFFFF';
                   document.documentElement.style.backgroundColor = bg;
-                  var meta = document.querySelector('meta[name="theme-color"]');
-                  if (meta) meta.setAttribute('content', bg);
+                  document.documentElement.style.colorScheme = theme === 'dark' ? 'dark' : 'light';
+                  var metas = document.querySelectorAll('meta[name="theme-color"]');
+                  for (var i = 0; i < metas.length; i++) metas[i].setAttribute('content', bg);
                 } catch (e) {}
               })();
             `,

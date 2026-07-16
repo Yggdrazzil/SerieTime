@@ -6,7 +6,7 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
-Dernière mise à jour : **2026-07-16** (Claude) — Interrupteur « contenu 18+ » par utilisateur (débraye le filtrage porno/hentai) + détection hentai renforcée (mot-clé TMDb « erotic » sur les animés, correction du sur-blocage des mots-clés) ; puis modération (commentaires haineux + anti-porno renforcé, popup drôle) et lot UX du 16/07 d'Étienne
+Dernière mise à jour : **2026-07-16** (Claude) — Interrupteur « Contenu 18+ » + filtre hentai renforcé (Claude) et lot jeux/profil/thème d'Étienne (populaires 18 mois, à venir par hypes, séries sans flash, stats profil en SQL)
 
 ---
 
@@ -335,6 +335,63 @@ l'utilisateur (mêmes réponses API, même UX).
 - Tests : `apps/server/src/__tests__/password-reset.test.ts` (8 tests : flux
   complet avec login au nouveau mot de passe, jeton expiré/déjà utilisé/inconnu,
   identité SSO non liée refusée, autres champs intacts) — 99 tests serveur verts.
+### 2026-07-16 — Claude (9)
+- **Fiches série ET film : sections à l'échelle harmonisée** (les cotes lues
+  sur les captures TV Time brutes rendaient « énormes » — retour récurrent) :
+  titres de section 20→16, synopsis 16/23→13,5/20, méta 17→14, pastilles
+  plateformes/icônes/étoiles réduites, rangée « Vu » film 16→14 + coche 44,
+  « Similaire à » 20/16→16/13,5. Le menu « … » (validé pixel-perfect) est
+  inchangé. Styles partagés `AboutTab`/`MovieBody` → les deux fiches d'un coup.
+- **Barre de gestes Android (liseré blanc en bas) — cause racine trouvée** :
+  en PWA installée, Chrome choisit la couleur des barres système via le meta
+  `theme-color` dont l'attribut `media` correspond au thème SYSTÈME du
+  téléphone (supporté depuis Chrome 93, PWA uniquement) et via le
+  `color-scheme` de la page — app sombre sur téléphone en clair ⇒ barre
+  blanche. Correctif : TROIS metas `theme-color` (sans media + variantes
+  clair/sombre) tous mis à la couleur du thème choisi par le script
+  pré-peinture de `+html.tsx`, + `color-scheme` posé sur `<html>` ;
+  helper `setThemeColorMeta()` (lib/theme) utilisé par le layout et les
+  en-têtes sombres (Profil, profil public — les 3 metas suivent puis sont
+  restaurés). Natif : rien à faire (edge-to-edge + `userInterfaceStyle`
+  automatic déjà en place, la barre est transparente sur le contenu thémé).
+- Vérifié au banc Playwright (12/12) : 3 metas à `#121217` et
+  `color-scheme: dark` AVANT l'exécution du bundle (thème sombre forcé,
+  émulation système clair — le cas exact du bug), persistance après
+  chargement, bascule `#20202a` du Profil sur les 3 metas, et tailles
+  16px/14px mesurées au DOM sur fiche série + fiche film.
+
+### 2026-07-16 — Claude (8)
+- **Onglet Séries : plus de flash au chargement.** L'historique de visionnage
+  (rendu AU-DESSUS de « À voir », scroll calé en dessous après mesure) restait
+  visible une fraction de seconde. La liste reste masquée (opacité 0) jusqu'au
+  calage du scroll initial — garde-fou 700 ms pour ne jamais rester masqué.
+  Même correctif sur « À VENIR » (historique des sorties passées) — seuls
+  écrans à scroll initial différé de l'app.
+- **Onglet Jeux : tirer-pour-actualiser façon Instagram** (le même composant
+  que le Profil, web + natif) ; `PullToRefresh` relaie désormais `onScroll`
+  (pastille de section flottante conservée).
+- **Profil : rafraîchissement quasi instantané.** `computeStats` chargeait
+  TOUTES les lignes d'épisodes vus (jointure à 3 niveaux, 20 000+ lignes sur
+  une vraie bibliothèque) pour sommer des durées → agrégats SQL (`SUM CASE`,
+  mêmes règles que `packages/core` : runtime épisode > 0 sinon série sinon
+  40 min ; films 110 min). `/api/profile` mesuré à ~20 ms sur le banc.
+- **Découverte jeux vivante** (`/api/games/discover`) :
+  - « Populaires » = gros succès des **18 derniers mois** (tri par nombre de
+    notes, fenêtre glissante = saisonnalité) — fini le top all-time figé
+    (Zelda/Metroid éternels) ;
+  - « À venir » = **jeux les plus attendus** (champ IGDB `hypes` = follows
+    avant sortie, tri décroissant) — fini le shovelware trié par simple date ;
+  - **échantillon aléatoire à chaque requête** (15 jeux tirés d'un vivier de
+    60 mis en cache 24 h) : les carrousels changent à chaque pull-to-refresh
+    sans appel IGDB supplémentaire. Corps Apicalypse stables sur la journée
+    (timestamp arrondi au jour) pour rester adressables par l'ApiCache ;
+    `popularQueryBody`/`upcomingQueryBody` exportés pour les bancs.
+- Vérifié au banc Playwright (5/5) : échantillonnage du rendu pendant tout le
+  chargement de l'onglet Séries (aucune frame fautive, scroll calé), carrousel
+  Jeux alimenté puis RE-TIRÉ différemment après un geste de pull-to-refresh ;
+  + 2 appels `/discover` successifs différents et stats profil exactes via
+  curl. 91 tests serveur verts (les tests stats valident le SQL brut).
+
 ### 2026-07-16 — Claude (7)
 - **Fenêtre épisode : tailles harmonisées** (retour récurrent « textes trop
   gros ») — code épisode 30→22, dates/méta 17→14, titres de section 20→16,

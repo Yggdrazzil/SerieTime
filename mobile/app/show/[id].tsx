@@ -665,7 +665,7 @@ function WhereToWatch({ providers }: { providers: { name: string }[] }) {
     <View style={styles.section}>
       <View style={styles.sectionHeadRowTight}>
         <Text style={styles.sectionTitle}>Où regarder</Text>
-        <Feather name="settings" size={22} color={COLORS.black} />
+        <Feather name="settings" size={18} color={COLORS.black} />
       </View>
       {providers.length === 0 ? (
         <Text style={styles.muted}>Non disponible</Text>
@@ -673,7 +673,7 @@ function WhereToWatch({ providers }: { providers: { name: string }[] }) {
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingTop: 12 }}>
           {providers.map((p) => (
             <View key={p.name} style={styles.provBtn}>
-              <Ionicons name="play-circle-outline" size={20} color="#fff" />
+              <Ionicons name="play-circle-outline" size={17} color="#fff" />
               <Text style={styles.provText}>{p.name.toUpperCase()}</Text>
             </View>
           ))}
@@ -698,7 +698,7 @@ function SimilarTo({ item, isMovie }: { item: any; isMovie: boolean }) {
       {rec.busyId === item.tmdbId ? (
         <ActivityIndicator size="small" color={COLORS.black} />
       ) : (
-        <Feather name="chevron-right" size={22} color={COLORS.textMuted} />
+        <Feather name="chevron-right" size={20} color={COLORS.textMuted} />
       )}
     </PressableScale>
   );
@@ -713,19 +713,19 @@ function MetaRows({ show, media, addedByCount, isMovie }: any) {
     <View style={styles.metaRows}>
       {schedule ? (
         <View style={styles.metaItem}>
-          <Feather name="clock" size={20} color={COLORS.black} />
+          <Feather name="clock" size={16} color={COLORS.black} />
           <Text style={styles.metaText}>{schedule}</Text>
         </View>
       ) : null}
       {media.runtime ? (
         <View style={styles.metaItem}>
-          <Ionicons name="stopwatch-outline" size={21} color={COLORS.black} />
+          <Ionicons name="stopwatch-outline" size={17} color={COLORS.black} />
           <Text style={styles.metaText}>{media.runtime}m</Text>
         </View>
       ) : null}
       {addedByCount > 0 ? (
         <View style={styles.metaItem}>
-          <Feather name="users" size={20} color={COLORS.black} />
+          <Feather name="users" size={16} color={COLORS.black} />
           <Text style={styles.metaText}>
             {isMovie ? 'Film ajouté' : 'Série ajoutée'} par {compactCount(addedByCount)} personne{addedByCount > 1 ? 's' : ''}
           </Text>
@@ -880,7 +880,7 @@ function CommentsRowLink({ mediaId, title }: { mediaId: string; title: string })
       <Text style={styles.sectionTitle}>Commentaires</Text>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
         <Text style={styles.commentsCount}>{total}</Text>
-        <Feather name="chevron-right" size={24} color={COLORS.black} />
+        <Feather name="chevron-right" size={20} color={COLORS.black} />
       </View>
     </Pressable>
   );
@@ -924,7 +924,7 @@ function AboutTab({ media, detail, mediaId, interest, setInterest, onScroll }: a
         <Text style={styles.infoMeta}>
           {[yearRange(media, detail.endYear), genresFr(media.genres)].filter(Boolean).join(' • ')}
         </Text>
-        {media.voteAverage ? <Stars rating10={media.voteAverage} size={22} /> : null}
+        {media.voteAverage ? <Stars rating10={media.voteAverage} size={17} /> : null}
         {media.overview ? <Text style={styles.overview}>{media.overview}</Text> : null}
         <MetaRows show={detail.show} media={media} addedByCount={detail.addedByCount} isMovie={false} />
       </View>
@@ -943,10 +943,10 @@ function MovieBody({ media, detail, mediaId, onToggle, onScroll }: any) {
     <ScrollView onScroll={onScroll} scrollEventThrottle={16} contentContainerStyle={{ paddingBottom: 90 }}>
       <View style={[styles.section, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Feather name="eye" size={22} color={COLORS.black} />
-          <Text style={{ color: COLORS.text, fontFamily: FONTS.regular, fontSize: 16 }}>{seen ? 'Vu' : 'Pas vu'}</Text>
+          <Feather name="eye" size={18} color={COLORS.black} />
+          <Text style={{ color: COLORS.text, fontFamily: FONTS.regular, fontSize: 14 }}>{seen ? 'Vu' : 'Pas vu'}</Text>
         </View>
-        <CheckCircle checked={seen} onPress={onToggle} />
+        <CheckCircle size={44} checked={seen} onPress={onToggle} />
       </View>
 
       <WhereToWatch providers={detail.providers ?? []} />
@@ -956,7 +956,7 @@ function MovieBody({ media, detail, mediaId, onToggle, onScroll }: any) {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Informations sur le film</Text>
         <Text style={styles.infoMeta}>{[media.year, genresFr(media.genres)].filter(Boolean).join(' • ')}</Text>
-        {media.voteAverage ? <Stars rating10={media.voteAverage} size={22} /> : null}
+        {media.voteAverage ? <Stars rating10={media.voteAverage} size={17} /> : null}
         {media.overview ? <Text style={styles.overview}>{media.overview}</Text> : null}
         <MetaRows show={null} media={media} addedByCount={detail.addedByCount} isMovie />
       </View>
@@ -1324,26 +1324,29 @@ const styles = StyleSheet.create({
   sectionHeadRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, marginBottom: 14 },
   // Variante sans marges pour les entêtes DANS une section (Où regarder + rouage).
   sectionHeadRowTight: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  sectionTitle: { color: COLORS.text, fontSize: 20, fontFamily: FONTS.extraBold },
-  muted: { color: COLORS.textMuted, fontFamily: FONTS.regular, fontSize: 16, marginTop: 8 },
-  overview: { color: COLORS.text, fontFamily: FONTS.regular, fontSize: 16, lineHeight: 23, marginTop: 14 },
-  infoMeta: { color: COLORS.textMuted, fontFamily: FONTS.regular, fontSize: 15, marginTop: 6 },
+  // Cotes HARMONISÉES avec le reste de l'app (fenêtre épisode, pages profil) :
+  // titres de section 16, corps 13,5/20, méta 14 — les tailles lues sur les
+  // captures TV Time brutes rendaient « énormes » (retour récurrent).
+  sectionTitle: { color: COLORS.text, fontSize: 16, fontFamily: FONTS.extraBold },
+  muted: { color: COLORS.textMuted, fontFamily: FONTS.regular, fontSize: 13.5, marginTop: 8 },
+  overview: { color: COLORS.text, fontFamily: FONTS.regular, fontSize: 13.5, lineHeight: 20, marginTop: 10 },
+  infoMeta: { color: COLORS.textMuted, fontFamily: FONTS.regular, fontSize: 13, marginTop: 5 },
   // Pastilles noires « Où regarder » (TV Time affiche toutes les plateformes).
-  provBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#101014', borderRadius: 999, paddingHorizontal: 22, paddingVertical: 12 },
-  provText: { color: '#fff', fontSize: 14, fontFamily: FONTS.extraBold, letterSpacing: 0.3 },
+  provBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#101014', borderRadius: 999, paddingHorizontal: 16, paddingVertical: 9 },
+  provText: { color: '#fff', fontSize: 12, fontFamily: FONTS.extraBold, letterSpacing: 0.3 },
   question: { color: COLORS.text, textAlign: 'center', fontSize: 13, fontFamily: FONTS.extraBold, marginBottom: 14, letterSpacing: 0.2 },
   qbtn: { backgroundColor: COLORS.chipGrey, borderRadius: 8, paddingVertical: 12, marginBottom: 10, alignItems: 'center' },
   qbtnSel: { backgroundColor: COLORS.yellow },
   qbtnText: { color: COLORS.text, fontSize: 13.5, fontFamily: FONTS.bold },
-  // « Similaire à » : vignette ronde 56 + titre 20 / nom 16 (réf. TV Time).
-  similarRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  similarThumb: { width: 56, height: 56, borderRadius: 28, backgroundColor: COLORS.imagePlaceholder },
-  similarTitle: { color: COLORS.text, fontSize: 20, fontFamily: FONTS.extraBold },
-  similarName: { fontSize: 16, fontFamily: FONTS.regular, color: COLORS.textMuted, marginTop: 2 },
+  // « Similaire à » : vignette ronde + titre/nom à l'échelle de l'app.
+  similarRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  similarThumb: { width: 48, height: 48, borderRadius: 24, backgroundColor: COLORS.imagePlaceholder },
+  similarTitle: { color: COLORS.text, fontSize: 16, fontFamily: FONTS.extraBold },
+  similarName: { fontSize: 13.5, fontFamily: FONTS.regular, color: COLORS.textMuted, marginTop: 2 },
   // Rangées méta (horloge / chrono / personnes) sous le synopsis.
-  metaRows: { marginTop: 18, gap: 14 },
-  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  metaText: { color: COLORS.text, fontSize: 17, fontFamily: FONTS.regular },
+  metaRows: { marginTop: 14, gap: 11 },
+  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  metaText: { color: COLORS.text, fontSize: 14, fontFamily: FONTS.regular },
   // Distribution : cartes 108x148, bandeau sombre nom/rôle en bas.
   castCard: { width: 108, height: 148, borderRadius: 8, overflow: 'hidden', backgroundColor: COLORS.imagePlaceholder, justifyContent: 'flex-end' },
   castCap: { backgroundColor: 'rgba(0,0,0,0.55)', paddingHorizontal: 7, paddingVertical: 6 },
@@ -1360,7 +1363,7 @@ const styles = StyleSheet.create({
   dotOn: { backgroundColor: COLORS.black },
   // Rangée « Commentaires » (compteur + chevron) vers la page dédiée.
   commentsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  commentsCount: { fontSize: 17, fontFamily: FONTS.regular, color: COLORS.textMuted },
+  commentsCount: { fontSize: 14, fontFamily: FONTS.regular, color: COLORS.textMuted },
   eprow: { flexDirection: 'row', backgroundColor: COLORS.white, borderRadius: 5, minHeight: 92, overflow: 'hidden', marginBottom: 8, ...SHADOW.card },
   epThumb: { width: 90, backgroundColor: COLORS.imagePlaceholder },
   epCode: { color: COLORS.text, fontSize: 19, fontFamily: FONTS.extraBold },

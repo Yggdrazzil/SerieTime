@@ -298,8 +298,21 @@ export async function gamesRoutes(app: FastifyInstance): Promise<void> {
       year: g.first_release_date ? new Date(g.first_release_date * 1000).getFullYear() : null,
       posterPath: g.cover ? igdbImageUrl(g.cover.image_id) : null,
     });
+    // Échantillon aléatoire à CHAQUE requête dans un vivier mis en cache 24 h
+    // (gros succès des 18 derniers mois / jeux les plus attendus) : les
+    // carrousels changent à chaque rafraîchissement sans appel IGDB
+    // supplémentaire — l'app reste vivante, la latence reste celle du cache.
+    // `allowAdult` (18+) reste honoré via les paramètres des viviers.
+    const sample = <T>(arr: T[], n: number): T[] => {
+      const a = [...arr];
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j]!, a[i]!];
+      }
+      return a.slice(0, n);
+    };
     const [popular, upcoming] = await Promise.all([igdbPopular({ allowAdult }), igdbUpcoming(allowAdult)]);
-    return { popular: popular.map(card), upcoming: upcoming.map(card) };
+    return { popular: sample(popular, 15).map(card), upcoming: sample(upcoming, 15).map(card) };
   });
 
   // Flux « JEUX » de l'Explorer TikTok : cartes plein écran (mêmes champs que le

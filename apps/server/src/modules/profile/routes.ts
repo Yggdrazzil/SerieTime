@@ -1,46 +1,55 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { ProfileStatsDto } from '@serietime/types';
-import { episodesWatchTimeMinutes, moviesWatchTimeMinutes } from '@serietime/core';
 import { prisma } from '../../db/client.js';
 import { requireAuth } from '../auth/routes.js';
 import { serializeMedia } from '../media/serialize.js';
 import { getUserLang } from '../media/userLang.js';
 
 async function computeStats(userId: string): Promise<ProfileStatsDto> {
-  const [showsCount, moviesCount, ratingsCount, watchedEpisodes, watchedMovies, gamesCount, gamesPlayed] = await Promise.all([
+  // Temps de visionnage agrégé EN SQL : l'ancienne version chargeait TOUTES
+  // les lignes d'épisodes vus (jointure à 3 niveaux, 20 000+ lignes sur une
+  // vraie bibliothèque) juste pour sommer des durées — c'était la cause des
+  // rafraîchissements longs du profil. Mêmes règles que packages/core
+  // (`episodesWatchTimeMinutes` : runtime épisode > 0, sinon runtime série,
+  // sinon 40 min ; films : runtime > 0, sinon 110 min).
+  const [showsCount, moviesCount, ratingsCount, epAgg, movieAgg, gamesCount, gamesPlayed] = await Promise.all([
     prisma.userMediaStatus.count({ where: { userId, media: { type: 'show' } } }),
     prisma.userMediaStatus.count({ where: { userId, media: { type: 'movie' } } }),
     prisma.userEpisodeStatus.count({ where: { userId, rating: { not: null } } }).then(async (episodeRatings) => {
       const mediaRatings = await prisma.userMediaStatus.count({ where: { userId, rating: { not: null } } });
       return episodeRatings + mediaRatings;
     }),
-    prisma.userEpisodeStatus.findMany({
-      where: { userId, status: 'watched' },
-      select: { episode: { select: { runtime: true, show: { select: { media: { select: { runtime: true } } } } } } },
-    }),
-    prisma.userMediaStatus.findMany({
-      where: { userId, status: 'completed', media: { type: 'movie' } },
-      select: { media: { select: { runtime: true } } },
-    }),
+    prisma.$queryRaw<[{ n: bigint; minutes: bigint }]>`
+      SELECT COUNT(*) AS n,
+             COALESCE(SUM(CASE WHEN e.runtime > 0 THEN e.runtime
+                               WHEN m.runtime > 0 THEN m.runtime
+                               ELSE 40 END), 0) AS minutes
+      FROM UserEpisodeStatus ues
+      JOIN Episode e ON e.id = ues.episodeId
+      JOIN Show s ON s.id = e.showId
+      JOIN Media m ON m.id = s.mediaId
+      WHERE ues.userId = ${userId} AND ues.status = 'watched'`,
+    prisma.$queryRaw<[{ n: bigint; minutes: bigint }]>`
+      SELECT COUNT(*) AS n,
+             COALESCE(SUM(CASE WHEN m.runtime > 0 THEN m.runtime ELSE 110 END), 0) AS minutes
+      FROM UserMediaStatus ums
+      JOIN Media m ON m.id = ums.mediaId
+      WHERE ums.userId = ${userId} AND ums.status = 'completed' AND m.type = 'movie'`,
     prisma.userMediaStatus.count({ where: { userId, media: { type: 'game' }, isHidden: false } }),
     // « Joués » = en cours ou terminés (les « Voulus » n'ont pas été lancés).
     prisma.userMediaStatus.count({
       where: { userId, media: { type: 'game' }, isHidden: false, status: { in: ['playing', 'completed'] } },
     }),
   ]);
-  const showMinutes = episodesWatchTimeMinutes(
-    watchedEpisodes.map((e) => e.episode.runtime ?? e.episode.show.media.runtime),
-  );
-  const movieMinutes = moviesWatchTimeMinutes(watchedMovies.map((m) => m.media.runtime));
   return {
     showsCount,
     moviesCount,
     ratingsCount,
-    episodesWatched: watchedEpisodes.length,
-    moviesWatched: watchedMovies.length,
-    showMinutes,
-    movieMinutes,
+    episodesWatched: Number(epAgg[0]?.n ?? 0),
+    moviesWatched: Number(movieAgg[0]?.n ?? 0),
+    showMinutes: Number(epAgg[0]?.minutes ?? 0),
+    movieMinutes: Number(movieAgg[0]?.minutes ?? 0),
     gamesCount,
     gamesPlayed,
   };

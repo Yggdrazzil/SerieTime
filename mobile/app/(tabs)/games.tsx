@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import type { Href } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -8,6 +8,7 @@ import { api, tmdbImage } from '@/lib/api';
 import { COLORS, FONTS, RADIUS } from '@/lib/theme';
 import { PillHeader, EmptyState, Loading, LoadError, Poster } from '@/components/ui';
 import { AppearItem } from '@/components/anim';
+import { PullToRefresh } from '@/components/PullToRefresh';
 import { useFloatingSection, FloatingSectionPill } from '@/components/FloatingSection';
 import { useTabResetSeq } from '@/lib/tabReset';
 import { usePullRefresh } from '@/lib/usePullRefresh';
@@ -150,13 +151,13 @@ function GamesScreenInner() {
         // Vue intermédiaire flex:1 : la pastille flottante se positionne par
         // rapport à elle (sous la barre de statut, pas dessus).
         <View style={{ flex: 1 }}>
-        <ScrollView
+        {/* Tirer-pour-actualiser façon Instagram (le même que le Profil) —
+            fonctionne web + natif, contrairement au RefreshControl RN. */}
+        <PullToRefresh
+          refreshing={refreshing}
+          onRefresh={onRefresh}
           contentContainerStyle={{ paddingTop: 12, paddingBottom: 20 }}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.yellow} colors={[COLORS.yellow]} />
-          }
           onScroll={onListScroll}
-          scrollEventThrottle={16}
         >
           {library.data ? (
             <>
@@ -219,7 +220,7 @@ function GamesScreenInner() {
               ) : null}
             </>
           ) : null}
-        </ScrollView>
+        </PullToRefresh>
         {/* Pastille de statut flottante (suit le scroll, comme l'onglet Séries). */}
         <FloatingSectionPill label={floatLabel} />
         </View>
