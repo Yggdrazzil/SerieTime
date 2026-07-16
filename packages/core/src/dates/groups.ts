@@ -21,6 +21,19 @@ export function upcomingGroupLabel(date: Date, now = new Date()): string {
   return `${target.getDate()} ${MONTH_SHORT[target.getMonth()]} ${target.getFullYear()}`;
 }
 
+// Historique des sorties (au-dessus de « À venir ») : HIER, AVANT-HIER,
+// jour de la semaine dans les 7 derniers jours, puis "12 FÉVR. 2026".
+export function pastGroupLabel(date: Date, now = new Date()): string {
+  const target = startOfDay(date);
+  const today = startOfDay(now);
+  const diffDays = Math.round((today.getTime() - target.getTime()) / 86_400_000);
+  if (diffDays <= 0) return "AUJOURD'HUI";
+  if (diffDays === 1) return 'HIER';
+  if (diffDays === 2) return 'AVANT-HIER';
+  if (diffDays < 7) return DAY_NAMES[target.getDay()] ?? '';
+  return `${target.getDate()} ${MONTH_SHORT[target.getMonth()]} ${target.getFullYear()}`;
+}
+
 const MONTH_LONG_SHORT = [
   'janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin',
   'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.',

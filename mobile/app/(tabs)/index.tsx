@@ -228,21 +228,52 @@ function QueueView() {
 }
 
 function UpcomingView() {
+  // Historique des sorties (HIER, AVANT-HIER…) masqué au-dessus de la liste,
+  // comme l'historique de visionnage de « À voir » : le scroll initial se cale
+  // sur AUJOURD'HUI, on remonte pour rattraper une sortie manquée.
+  const scrollRef = useRef<ScrollView>(null);
+  const didInitialScroll = useRef(false);
   const { data, isLoading, isError, refetch, isRefetching } = useQuery({
     queryKey: ['shows', 'upcoming'],
-    queryFn: () => api.get<{ groups: { label: string; items: UpcomingItemDto[] }[] }>('/api/shows/upcoming'),
+    queryFn: () =>
+      api.get<{
+        groups: { label: string; items: UpcomingItemDto[] }[];
+        past?: { label: string; items: UpcomingItemDto[] }[];
+      }>('/api/shows/upcoming'),
   });
   const { refreshing, onRefresh } = usePullRefresh([refetch]);
   if (isLoading) return <QueueSkeleton />;
   if (isError && !data) return <LoadError onRetry={refetch} busy={isRefetching} />;
-  if (!data || data.groups.length === 0)
+  const pastGroups = data?.past ?? [];
+  if (!data || (data.groups.length === 0 && pastGroups.length === 0))
     return <EmptyState title="Aucun épisode à venir" message="Les prochaines diffusions apparaîtront ici." />;
 
   return (
     <ScrollView
+      ref={scrollRef}
       contentContainerStyle={{ paddingBottom: 16 }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.yellow} colors={[COLORS.yellow]} />}
     >
+      {pastGroups.length > 0 ? (
+        <View
+          onLayout={(e) => {
+            const h = e.nativeEvent.layout.height;
+            if (!didInitialScroll.current && h > 0) {
+              didInitialScroll.current = true;
+              scrollRef.current?.scrollTo({ y: h, animated: false });
+            }
+          }}
+        >
+          {pastGroups.map((g) => (
+            <View key={`p-${g.label}`} style={{ opacity: 0.82 }}>
+              <PillHeader label={g.label} />
+              {g.items.map((item) => (
+                <UpcomingCard key={`${item.media.id}-${item.date}`} item={item} />
+              ))}
+            </View>
+          ))}
+        </View>
+      ) : null}
       {data.groups.map((g) => (
         <View key={g.label}>
           <PillHeader label={g.label} />

@@ -18,6 +18,7 @@ import {
   scoreMatch,
   showProgress,
   upcomingGroupLabel,
+  pastGroupLabel,
 } from '../server.js';
 
 describe('normalizeTitle', () => {
@@ -171,6 +172,12 @@ describe('upcoming groups', () => {
     expect(upcomingGroupLabel(new Date('2026-02-06T06:00:00'), now)).toBe('DEMAIN');
     expect(upcomingGroupLabel(new Date('2026-02-07T15:00:00'), now)).toBe('SAMEDI');
     expect(upcomingGroupLabel(new Date('2026-02-12T15:00:00'), now)).toBe('12 FÉVR. 2026');
+  });
+  it('labels HIER / AVANT-HIER / weekday / full date for past releases', () => {
+    expect(pastGroupLabel(new Date('2026-02-04T22:00:00'), now)).toBe('HIER');
+    expect(pastGroupLabel(new Date('2026-02-03T06:00:00'), now)).toBe('AVANT-HIER');
+    expect(pastGroupLabel(new Date('2026-01-31T15:00:00'), now)).toBe('SAMEDI');
+    expect(pastGroupLabel(new Date('2026-01-20T15:00:00'), now)).toBe('20 JANV. 2026');
   });
 });
 

@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { QueueItemDto, UpcomingItemDto } from '@serietime/types';
-import { nextEpisodeToWatch, remainingAiredCount, upcomingGroupLabel } from '@serietime/core';
+import { nextEpisodeToWatch, remainingAiredCount, upcomingGroupLabel, pastGroupLabel } from '@serietime/core';
 import { prisma } from '../../db/client.js';
 import { requireAuth } from '../auth/routes.js';
 import { serializeEpisode, serializeMedia } from '../media/serialize.js';
@@ -230,12 +230,15 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
       include: { media: { include: { show: true } } },
     });
     const showIds = statuses.map((s) => s.media.show?.id).filter((id): id is string => !!id);
-    const horizonStart = new Date(Date.now() - 86_400_000);
+    // 14 jours d'historique : les sorties passées NON VUES sont renvoyées dans
+    // `past` (révélées en défilant vers le haut, comme l'historique de « À voir »),
+    // pour rattraper une sortie manquée.
+    const horizonStart = new Date(Date.now() - 14 * 86_400_000);
     const episodes = await prisma.episode.findMany({
       where: { showId: { in: showIds }, airDate: { gte: horizonStart } },
       include: { show: true },
       orderBy: { airDate: 'asc' },
-      take: 300,
+      take: 500,
     });
     const watched = await prisma.userEpisodeStatus.findMany({
       where: { userId, status: 'watched', episodeId: { in: episodes.map((e) => e.id) } },
@@ -245,14 +248,19 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
     const mediaByShowId = new Map(statuses.map((s) => [s.media.show?.id, s]));
 
     const groups = new Map<string, UpcomingItemDto[]>();
+    const past = new Map<string, UpcomingItemDto[]>();
     const now = new Date();
+    const startOfToday = new Date(now);
+    startOfToday.setHours(0, 0, 0, 0);
     for (const ep of episodes) {
       if (!ep.airDate || watchedSet.has(ep.id)) continue;
       const status = mediaByShowId.get(ep.showId);
       if (!status) continue;
-      const label = upcomingGroupLabel(ep.airDate, now);
+      const isPast = ep.airDate < startOfToday;
+      const label = isPast ? pastGroupLabel(ep.airDate, now) : upcomingGroupLabel(ep.airDate, now);
+      const target = isPast ? past : groups;
       const dto = serializeEpisode(ep, ep.show, status.media.localizedTitle ?? status.media.title, null);
-      const list = groups.get(label) ?? [];
+      const list = target.get(label) ?? [];
       const sameShow = list.find((i) => i.media.id === status.media.id);
       if (sameShow) sameShow.episodes.push(dto);
       else
@@ -261,10 +269,14 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
           episodes: [dto],
           date: ep.airDate.toISOString(),
         });
-      groups.set(label, list);
+      target.set(label, list);
     }
     return {
       groups: [...groups.entries()].map(([label, items]) => ({ label, items })),
+      // Du plus ancien au plus récent : « HIER » finit juste au-dessus
+      // d'« AUJOURD'HUI » (les épisodes étant triés airDate asc, l'ordre
+      // d'insertion des groupes est déjà chronologique).
+      past: [...past.entries()].map(([label, items]) => ({ label, items })),
     };
   });
 

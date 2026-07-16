@@ -71,6 +71,16 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
 
 ## Journal des modifications
 
+### 2026-07-16 — À venir : historique des sorties passées (HIER, AVANT-HIER…)
+- `/api/shows/upcoming` remonte 14 jours en arrière : les épisodes parus mais
+  NON VUS sont renvoyés dans `past` (groupes HIER / AVANT-HIER / jour de la
+  semaine / date), les séries arrêtées restant exclues.
+- Onglet À VENIR : l'historique est masqué au-dessus de la liste (scroll
+  initial calé sur AUJOURD'HUI) et se découvre en remontant — même pattern que
+  l'historique de visionnage de « À voir ». Une sortie manquée reste visible
+  14 jours.
+- `pastGroupLabel` ajouté à `packages/core` (testé).
+
 ### 2026-07-16 — Circuit « Arrêté » vérifié + finitions
 - Audit du circuit « Arrêter de regarder » : fiche → statut `abandoned`,
   barre rouge + section Arrêté dans la bibliothèque, exclusion de « À venir »,
