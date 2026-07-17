@@ -6,7 +6,7 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
-Dernière mise à jour : **2026-07-18** (Codex) — lot 6 Prisme : profil personnel
+Dernière mise à jour : **2026-07-18** (Codex) — correctif fonctionnel : export de sauvegarde
 
 ---
 
@@ -46,7 +46,7 @@ la migration visuelle doit encore être exécutée sans modifier la logique mét
 | Notifications in-app | ✅ Fait | Cloche + badge ; ami qui commente/favorise, réponse ou réaction à un commentaire |
 | Notifications push (OS) | ⏸ Non commencé | Nécessite dev build Expo + tokens Expo Push (la génération d'événements existe déjà) |
 | Import ZIP TV Time | ✅ Fait (v. initiale) | Analyse, matching, résolution manuelle, application |
-| Sauvegarde / restauration JSON | ⚠️ À corriger | Export cassé : client en `GET`, serveur en `POST` → 404 en production ; partage natif et interface de restauration absents |
+| Sauvegarde / restauration JSON | 🛠 Export réparé | Client aligné sur le `POST` serveur ; téléchargement JSON web, partage natif et erreur visible. L’interface de restauration reste à ajouter. |
 | Hébergement VPS | ✅ Fait | Prod sur le VPS Hostinger de Benjamin : `https://serietime.studio-vives.fr` (Docker isolé, HTTPS Let's Encrypt, backup DB nocturne) |
 | Web app (navigateur / écran d'accueil) | ✅ Fait | Export Expo web servi par Nginx à la racine du domaine (`/api` proxifié) ; utilisable iPhone + Android sans store |
 | Distribution native (APK / stores) | ⏳ Optionnel | EAS Build documenté dans le README ; la web app couvre déjà l'usage quotidien |
@@ -90,6 +90,15 @@ la migration visuelle doit encore être exécutée sans modifier la logique mét
 6. Publication native optionnelle (EAS Build APK, puis stores).
 
 ## Journal des modifications
+
+### 2026-07-18 — Codex : export de sauvegarde réparé
+- **Contrat API** : le client utilise désormais le `POST /api/backup/export`
+  réellement exposé par le serveur, au lieu du `GET` qui produisait une 404.
+- **Web et natif** : téléchargement `plottime-sauvegarde.json` sur le web et
+  ouverture du partage système sur iOS/Android avec le contenu JSON.
+- **Retour utilisateur** : double déclenchement bloqué, attente affichée et erreur
+  réseau explicite au lieu d’un échec silencieux.
+- **Validation** : typecheck mobile et contrôle de diff validés.
 
 ### 2026-07-18 — Codex : profil personnel Prisme
 - **Identité et progression** : couverture, avatar, niveau, édition, notifications

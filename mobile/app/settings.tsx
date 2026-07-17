@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, Pressable, Modal, TextInput, ActivityIndicator, Animated, Easing, Platform, Linking } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Pressable, Modal, TextInput, ActivityIndicator, Animated, Easing, Platform, Linking, Alert, Share } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -53,6 +53,7 @@ function AccountTab() {
   const { user, logout } = useAppStore();
   const [pwOpen, setPwOpen] = useState(false);
   const [delOpen, setDelOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
   // Nom d'utilisateur = nom d'affichage COURANT (source : profil serveur).
   // Le store local est figé à la connexion : après « Modifier le profil »,
   // il affichait encore l'ancien nom.
@@ -64,20 +65,32 @@ function AccountTab() {
 
   // Exporter : télécharge un JSON de toutes ses données (web) / partage (natif).
   const exportData = async () => {
+    if (exporting) return;
+    setExporting(true);
     try {
-      const data = await api.get<Record<string, unknown>>('/api/backup/export');
+      const data = await api.post<Record<string, unknown>>('/api/backup/export');
       const json = JSON.stringify(data, null, 2);
-      if (typeof document !== 'undefined') {
+      if (Platform.OS === 'web' && typeof document !== 'undefined') {
         const blob = new Blob([json], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'serietime-sauvegarde.json';
+        a.download = 'plottime-sauvegarde.json';
         a.click();
         URL.revokeObjectURL(url);
+        return;
       }
+      await Share.share({
+        title: 'Sauvegarde PlotTime',
+        message: json,
+      });
     } catch {
-      /* silencieux : bouton best-effort */
+      Alert.alert(
+        'Export impossible',
+        'La sauvegarde n’a pas pu être préparée. Vérifie ta connexion puis réessaie.',
+      );
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -97,7 +110,7 @@ function AccountTab() {
       <Divider />
       <SectionTitle>Import & sauvegarde</SectionTitle>
       <Row label="Importer mes données TV Time" onPress={() => router.push('/import')} />
-      <Row label="Exporter mes données PlotTime" onPress={exportData} />
+      <Row label={exporting ? 'Préparation de la sauvegarde…' : 'Exporter mes données PlotTime'} onPress={exporting ? undefined : exportData} />
       <ResyncLibraryRow />
       <Divider />
       <SectionTitle>Jeux — Steam</SectionTitle>
