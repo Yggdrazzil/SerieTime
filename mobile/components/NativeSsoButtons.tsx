@@ -202,7 +202,7 @@ function AppleButton({ onPress, busy }: { onPress: () => void; busy: boolean }) 
 const styles = StyleSheet.create({
   sep: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 8 },
   line: { flex: 1, height: 1, backgroundColor: COLORS.borderLight },
-  sepText: { color: COLORS.textMuted, fontFamily: FONTS.regular, fontSize: 13 },
+  sepText: { color: COLORS.text, fontFamily: FONTS.regular, fontSize: 13 },
   apple: { width: '100%', height: 46 },
   appleFallback: { backgroundColor: '#000', borderRadius: 999, height: 46, alignItems: 'center' },
   gg: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.border, borderRadius: 999, paddingVertical: 13 },

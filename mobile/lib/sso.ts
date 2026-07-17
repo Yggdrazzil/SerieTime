@@ -51,6 +51,8 @@ export async function initGoogleButton(
     },
   });
   el.innerHTML = '';
+  const containerWidth = Math.floor(el.getBoundingClientRect().width || 300);
+  const buttonWidth = Math.max(200, Math.min(300, containerWidth));
   g.accounts.id.renderButton(el, {
     type: 'standard',
     theme: 'outline',
@@ -58,7 +60,7 @@ export async function initGoogleButton(
     text: 'continue_with',
     shape: 'pill',
     logo_alignment: 'center',
-    width: 300,
+    width: buttonWidth,
   });
 }
 

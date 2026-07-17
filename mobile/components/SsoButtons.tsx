@@ -80,7 +80,7 @@ export function SsoButtons({
           <View style={styles.line} />
         </View>
       ) : null}
-      {cfg.google ? <View ref={gRef} style={{ alignItems: 'center' }} /> : null}
+      {cfg.google ? <View ref={gRef} style={styles.googleSlot} /> : null}
       {cfg.discord ? (
         <Pressable style={styles.dc} onPress={dc} disabled={dcBusy}>
           {dcBusy ? (
@@ -110,9 +110,10 @@ export function SsoButtons({
 }
 
 const styles = StyleSheet.create({
+  googleSlot: { width: '100%', alignItems: 'center' },
   sep: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 8 },
   line: { flex: 1, height: 1, backgroundColor: COLORS.borderLight },
-  sepText: { color: COLORS.textMuted, fontFamily: FONTS.regular, fontSize: 13 },
+  sepText: { color: COLORS.text, fontFamily: FONTS.regular, fontSize: 13 },
   fb: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: '#1877F2', borderRadius: 999, paddingVertical: 13 },
   dc: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: '#5865F2', borderRadius: 999, paddingVertical: 13 },
   fbText: { color: '#fff', fontFamily: FONTS.bold, fontSize: 15 },
