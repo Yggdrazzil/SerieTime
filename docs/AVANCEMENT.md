@@ -6,26 +6,29 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
-Dernière mise à jour : **2026-07-17** (Claude) — Auth NATIVE pour les builds stores (STORES.md A1) : Sign in with Apple côté serveur + boutons natifs Apple/Google/Discord (config-gated, en attente des credentials)
+Dernière mise à jour : **2026-07-17** (Codex) — audit de la refonte front Prisme, matrice de parité fonctionnelle et plan de migration
 
 ---
 
 ## Vue d'ensemble
 
-Application de suivi de séries / animés / films destinée à remplacer TV Time :
-app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma + SQLite**
-(`apps/server/`, workspace pnpm). Design et parcours calqués sur TV Time
-(références visuelles : `docs/screenshots/reference/`).
+Application de suivi de séries / animés / films / jeux vidéo : app mobile
+**React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma + SQLite**
+(`apps/server/`, workspace pnpm). L'interface historique proche de TV Time est
+désormais remplacée comme direction produit par l'identité originale **Prisme** ;
+la migration visuelle doit encore être exécutée sans modifier la logique métier.
 
-- **Branche de référence : `main`** (à cloner / puller). Le développement passe
-  par des branches courtes fusionnées via pull request.
-- Tests : `pnpm test` (327 tests au 2026-07-17 : 158 core + 169 serveur).
+- **Branche de référence : `main`** (à cloner / puller). Pour le chantier Prisme,
+  chaque lot vérifié est commité puis poussé directement sur `main`, conformément
+  au cadre demandé.
+- Tests : `pnpm test` (336 tests au 2026-07-17 : 158 core + 178 serveur).
 - Lancement local : voir `README.md` (serveur `pnpm dev:server`, mobile `npx expo start -c`).
 
 ## État par domaine
 
 | Domaine | État | Notes |
 |---|---|---|
+| Refonte front Prisme | 🧭 Audit terminé, migration à lancer | Matrice de parité : [`docs/feature-parity-matrix.md`](feature-parity-matrix.md) ; plan détaillé : [`docs/REFONTE_FRONT_PRISME.md`](REFONTE_FRONT_PRISME.md) |
 | Authentification multi-comptes (e-mail + mot de passe) | ✅ Fait | Inscription/connexion, sessions 30 j, données isolées par compte (testé) ; mot de passe oublié → réinitialisation par ré-auth SSO Google/Discord (testé) |
 | SSO Google / Facebook | ⏸ Préparé, désactivé | Prêt côté serveur (`/api/auth/oauth`) ; nécessite ids OAuth + dev build Expo |
 | Auth native stores (Apple / Google / Discord) | ⏸ Codé, en attente credentials | Serveur : vérif Sign in with Apple (JWT RS256, testée) + `/providers` enrichi. Mobile : `NativeSsoButtons` (bouton Apple officiel, Google expo-auth-session, Discord PKCE), config-gated — s'active dès que les vars env seront posées (voir STORES.md « A1 — état d'avancement ») |
@@ -43,7 +46,7 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
 | Notifications in-app | ✅ Fait | Cloche + badge ; ami qui commente/favorise, réponse ou réaction à un commentaire |
 | Notifications push (OS) | ⏸ Non commencé | Nécessite dev build Expo + tokens Expo Push (la génération d'événements existe déjà) |
 | Import ZIP TV Time | ✅ Fait (v. initiale) | Analyse, matching, résolution manuelle, application |
-| Sauvegarde / restauration JSON | ✅ Fait (v. initiale) | Par compte |
+| Sauvegarde / restauration JSON | ⚠️ À corriger | Export cassé : client en `GET`, serveur en `POST` → 404 en production ; partage natif et interface de restauration absents |
 | Hébergement VPS | ✅ Fait | Prod sur le VPS Hostinger de Benjamin : `https://serietime.studio-vives.fr` (Docker isolé, HTTPS Let's Encrypt, backup DB nocturne) |
 | Web app (navigateur / écran d'accueil) | ✅ Fait | Export Expo web servi par Nginx à la racine du domaine (`/api` proxifié) ; utilisable iPhone + Android sans store |
 | Distribution native (APK / stores) | ⏳ Optionnel | EAS Build documenté dans le README ; la web app couvre déjà l'usage quotidien |
@@ -67,7 +70,12 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
 
 ## Prochaines étapes (par priorité)
 
-0. **Retours Benjamin (08/07 aprem)** :
+0. **Migration front Prisme** : suivre le plan
+   [`docs/REFONTE_FRONT_PRISME.md`](REFONTE_FRONT_PRISME.md), maintenir à jour la
+   [`matrice de parité fonctionnelle`](feature-parity-matrix.md), puis migrer les
+   tokens, primitives, shell/navigation et écrans un par un avec validation de
+   non-régression.
+1. **Retours Benjamin (08/07 aprem)** :
    - **Barre de progression** sur les séries/animés (façon TV Time : mince barre
      épisodes vus / total sous les cartes « À voir » et sur le profil). Données
      watchedCount/totalCount à exposer côté serveur.
@@ -76,12 +84,30 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
      swipe droite = « À voir » (watchlist), swipe gauche = « Pas intéressé »
      (`/api/disliked`, `isHidden` — déjà en place). Gros chantier UI (gestes en web
      app), backend prêt.
-1. Option « Ne plus suivre » / gestion fine depuis les listes du profil (l'API existe : `DELETE /api/shows/:id/tracking`).
+2. Option « Ne plus suivre » / gestion fine depuis les listes du profil (l'API existe : `DELETE /api/shows/:id/tracking`).
 4. Notifications push (quand on passera au dev build Expo).
 5. SSO Google/Facebook (ids OAuth à créer, dev build requis).
 6. Publication native optionnelle (EAS Build APK, puis stores).
 
 ## Journal des modifications
+
+### 2026-07-17 — Codex : audit refonte front Prisme, matrice de parité et plan de migration
+- **Audit fonctionnel et technique** : cartographie d'environ **30 routes front**,
+  **132 routes serveur** et **33 modèles Prisma**, avec inventaire des parcours,
+  actions, stores, services, contrats API et principaux risques de régression.
+- **Parité et planification** : création de
+  [`docs/feature-parity-matrix.md`](feature-parity-matrix.md) et de
+  [`docs/REFONTE_FRONT_PRISME.md`](REFONTE_FRONT_PRISME.md) pour piloter la
+  migration écran par écran sans suppression de fonctionnalité.
+- **Prototype recadré** : Prisme devient la direction visuelle de référence,
+  enrichie de la densité Studio pour les longues listes ; le prototype reste une
+  source esthétique partielle et ne remplace ni le comportement du dépôt ni les
+  écrans absents à concevoir.
+- **Baseline de vérification** : typecheck mobile validé et **158 tests purs**
+  verts avant migration.
+- **Environnement Windows** : la suite serveur globale échoue au démarrage du
+  moteur de schéma Prisma avant les suites de migration ; ce point d'outillage
+  est identifié séparément de l'audit et de la future migration visuelle.
 
 ### 2026-07-17 — Claude : auth NATIVE builds stores — Apple / Google / Discord (STORES.md A1)
 - **Serveur — Sign in with Apple (`modules/auth/routes.ts`)** : `POST
