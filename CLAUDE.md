@@ -62,14 +62,16 @@ redéployer** (`npx expo export -p web` sur le VPS, géré par Benjamin).
 `npx expo start --web` quand un module natif est utilisé — le charger
 dynamiquement avec garde d'erreur, cf. expo-image-picker).
 
-## Design : copie fidèle de TV Time (règle produit)
+## Design : identité PlotTime (règle produit, révisée 2026-07-17)
 
-Objectif assumé : **répliquer l'esthétique et le fonctionnement de TV Time**
-(références : `docs/screenshots/reference/`). Pas de liberté créative — en cas
-de doute, comparer à la capture. Police : **Mulish** (sans-serif humaniste fine,
-proche du rendu net de TV Time ; voir `FONTS` dans `mobile/lib/theme.ts`) ;
-toujours utiliser `fontFamily: FONTS.x`, jamais `fontWeight` (Android ne
-synthétise pas les graisses embarquées).
+L'app a sa **propre identité** (nom PlotTime, logo, thèmes dont « Nuit » aux
+couleurs du logo). Le fonctionnement s'inspire des trackers du marché, mais
+l'**expression visuelle doit être originale** — ne PAS répliquer les écrans
+d'une app existante (risque juridique + rejet store « copycat », cf.
+`docs/STORES.md`). Étienne pilote le design/UX ; suivre ses maquettes et les
+patterns déjà en place dans l'app. Police : **Mulish** (voir `FONTS` dans
+`mobile/lib/theme.ts`) ; toujours `fontFamily: FONTS.x`, jamais `fontWeight`
+(Android ne synthétise pas les graisses embarquées).
 
 ## Suivi d'avancement (règle d'équipe)
 

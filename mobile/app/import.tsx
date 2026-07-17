@@ -159,6 +159,12 @@ export default function ImportScreen() {
           Récupère ton archive TV Time (dans l’app TV Time : Réglages → demande d’export de tes données ; tu reçois un
           fichier .zip par mail), puis importe-le ici.
         </Text>
+        {/* Mention légale (cf. docs/STORES.md / avis PI) : l'import du nom
+            « TV Time » est purement descriptif, pas une affiliation. */}
+        <Text style={styles.disclaimer}>
+          PlotTime est un service indépendant, non affilié à TV Time ni à Whip Media. L’import ne concerne que vos
+          propres données, exportées par vous.
+        </Text>
 
         {step === 'idle' || step === 'analyzed' || step === 'done' ? (
           <Pressable style={styles.btnYellow} onPress={pickFile}>
@@ -231,6 +237,7 @@ function Row({ label, value, strong }: { label: string; value: number; strong?: 
 
 const styles = StyleSheet.create({
   lead: { fontFamily: FONTS.regular, fontSize: 16, color: COLORS.textMuted, lineHeight: 23 },
+  disclaimer: { fontFamily: FONTS.regular, fontSize: 11.5, color: COLORS.textSoft, marginTop: 10, lineHeight: 16 },
   btnYellow: { backgroundColor: COLORS.yellow, borderRadius: 999, paddingVertical: 15, marginTop: 24, alignItems: 'center' },
   btnYellowText: { color: COLORS.onAccent, fontSize: 15, fontFamily: FONTS.extraBold, letterSpacing: 0.6 },
   error: { marginTop: 18, color: COLORS.red, fontFamily: FONTS.bold, fontSize: 15 },

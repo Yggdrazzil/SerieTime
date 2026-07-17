@@ -15,11 +15,14 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.serietime.app",
-      "icon": "./assets/branding/icon-universal-ios-1024.png"
+      "bundleIdentifier": "com.plottime.app",
+      "icon": "./assets/branding/icon-universal-ios-1024.png",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
-      "package": "com.serietime.app",
+      "package": "com.plottime.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/branding/android-adaptive-foreground-1024.png",
         "backgroundColor": "#0B075A",

@@ -569,14 +569,21 @@ function AppTab() {
       ))}
       {langMsg ? <Text style={styles.themeNote}>{langMsg}</Text> : null}
       <Divider />
-      <SectionTitle>Suggestions</SectionTitle>
-      <ToggleRow
-        label="Contenu 18+"
-        sub="Affiche le contenu réservé aux adultes dans les suggestions. Désactivé par défaut."
-        on={s.allowAdultContent ?? false}
-        onToggle={(v) => adultMut.mutate(v)}
-      />
-      <Divider />
+      {/* iOS : interrupteur 18+ MASQUÉ sur les builds App Store (guideline 1.1.4,
+          Apple refuse le contenu sexuellement explicite même opt-in — cf.
+          docs/STORES.md A7). Reste disponible sur web et Android. */}
+      {Platform.OS !== 'ios' ? (
+        <>
+          <SectionTitle>Suggestions</SectionTitle>
+          <ToggleRow
+            label="Contenu 18+"
+            sub="Affiche le contenu réservé aux adultes dans les suggestions. Désactivé par défaut."
+            on={s.allowAdultContent ?? false}
+            onToggle={(v) => adultMut.mutate(v)}
+          />
+          <Divider />
+        </>
+      ) : null}
       <SectionTitle>Cache</SectionTitle>
       <View style={{ padding: 16 }}>
         <Pressable style={styles.cacheBtn} onPress={() => api.post('/api/cache/clear').catch(() => {})}>
