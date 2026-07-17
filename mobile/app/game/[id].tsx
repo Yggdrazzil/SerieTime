@@ -104,6 +104,9 @@ export default function GameDetail() {
   const refresh = () => {
     qc.invalidateQueries({ queryKey: detailKey });
     qc.invalidateQueries({ queryKey: ['games', 'library'] });
+    // La recherche de jeux (Explorer > JEUX) affiche « ajouté » via inLibrary :
+    // l'invalider pour que le retour depuis la fiche soit déjà à jour.
+    qc.invalidateQueries({ queryKey: ['games', 'search'] });
     qc.invalidateQueries({ queryKey: ['gamification'] }); // XP/badges/streak (spec 2026-07-16 §10)
   };
 

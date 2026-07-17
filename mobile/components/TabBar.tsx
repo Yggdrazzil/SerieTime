@@ -66,7 +66,7 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
               focused={focused}
               showDot={route.name === 'explore' && !focused}
             />
-            <Text style={[styles.label, { color: focused ? COLORS.black : COLORS.textMuted }]}>
+            <Text style={[styles.label, { color: focused ? COLORS.navActive : COLORS.textMuted }]}>
               {LABELS[route.name] ?? route.name}
             </Text>
           </Pressable>
@@ -80,7 +80,8 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
 function TabIcon({ name, ionicon, focused, showDot }: { name?: keyof typeof Feather.glyphMap; ionicon?: keyof typeof Ionicons.glyphMap; focused: boolean; showDot: boolean }) {
   const reduce = useReduceMotion();
   const scale = useRef(new Animated.Value(focused ? 1 : 0.92)).current;
-  const color = focused ? COLORS.black : COLORS.textMuted;
+  // Jaune du logo en thème Nuit, texte fort ailleurs (rôle navActive).
+  const color = focused ? COLORS.navActive : COLORS.textMuted;
   useEffect(() => {
     if (reduce) { scale.setValue(focused ? 1 : 0.92); return; }
     Animated.spring(scale, { toValue: focused ? 1 : 0.92, useNativeDriver: NATIVE, friction: 5, tension: 200 }).start();

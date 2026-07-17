@@ -58,6 +58,11 @@ export default function ShowDetail() {
     qc.invalidateQueries({ queryKey: ['movies'] });
     qc.invalidateQueries({ queryKey: ['profile'] });
     qc.invalidateQueries({ queryKey: ['gamification'] }); // XP/badges/streak (spec 2026-07-16 §10)
+    // Les résultats de recherche (Explorer) affichent « ajouté » via inLibrary :
+    // les invalider pour qu'au retour depuis la fiche, l'état soit déjà à jour.
+    // (PAS ['explore'] : re-tirer le flux Découvrir pendant la navigation est
+    // interdit par la règle produit — il se renouvelle au changement d'onglet.)
+    qc.invalidateQueries({ queryKey: ['search'] });
   };
 
   // Progression globale de la série (même cache que l'onglet Épisodes) pour la

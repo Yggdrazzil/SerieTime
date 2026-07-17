@@ -55,6 +55,9 @@ const LIGHT = {
   pillFg: '#FFFFFF',
   notif: '#C7222A',
   plusCount: '#808080',
+  // Navigation ACTIVE (onglet du bas + soulignement des onglets hauts) :
+  // couleur du texte fort partout, JAUNE du logo en thème Nuit.
+  navActive: '#000000',
   // Vignettes/affiches en attente d'image.
   imagePlaceholder: '#E5E5E5',
 };
@@ -90,6 +93,7 @@ const DARK: Palette = {
   // (midnight) — demande produit 16/07.
   pillBg: '#6A6A76',
   pillFg: '#1B1B22',
+  navActive: '#F1F1F4',
   notif: '#E36067',
   plusCount: '#9C9CA8',
   imagePlaceholder: '#2A2A32',
@@ -122,6 +126,7 @@ const SUNSET: Palette = {
   onAccent: '#FFF9F2',
   pillBg: '#A5907D',
   pillFg: '#FDFAF4',
+  navActive: '#40332A',
   notif: '#B8433C',
   plusCount: '#8D7B6C',
   imagePlaceholder: '#E7DBCB',
@@ -160,6 +165,8 @@ const MIDNIGHT: Palette = {
   pillFg: '#FFFFFF',
   notif: '#FF4D9E',
   plusCount: '#FF4D9E',
+  // JAUNE du logo sur la navigation active (barre du bas + onglets hauts).
+  navActive: '#FBAE00',
   imagePlaceholder: '#221B8A',
 };
 

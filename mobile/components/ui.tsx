@@ -201,5 +201,6 @@ export const styles = StyleSheet.create({
   topTabText: { fontSize: 14, fontFamily: FONTS.bold, letterSpacing: 1, color: COLORS.textSoft },
   topTabActive: { color: COLORS.black },
   topTabUnder: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 3, backgroundColor: 'transparent' },
-  topTabUnderActive: { backgroundColor: COLORS.black },
+  // Soulignement actif : noir façon TV Time, JAUNE du logo en thème Nuit.
+  topTabUnderActive: { backgroundColor: COLORS.navActive },
 });

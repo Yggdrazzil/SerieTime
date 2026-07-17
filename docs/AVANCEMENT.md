@@ -80,6 +80,23 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
 
 ## Journal des modifications
 
+### 2026-07-17 — Claude : thème Nuit dynamisé (jaune nav) + recherche à jour en temps réel
+- **Thème Nuit moins monochrome (suite)** : en plus des pastilles/notifs/« +N »
+  roses déjà en place, la **navigation active passe au JAUNE du logo**
+  (`#FBAE00`) — icône + libellé de l'onglet actif dans la barre du bas, et
+  soulignement de l'onglet haut actif (À VOIR/À VENIR, fiche). Nouveau rôle
+  `navActive` dans les palettes (noir en Clair — fidélité TV Time intacte —,
+  texte fort en Sombre/Sunset, jaune en Nuit).
+- **Recherche à jour en temps réel** (bug UX signalé par Étienne) : ajouter ou
+  cocher « vu » un film/série/jeu depuis sa fiche ne se reflétait pas dans les
+  résultats de recherche au retour (le « + » restait). Le `refresh()` des
+  fiches invalide désormais `['search']` (séries/films) et
+  `['games','search']` (jeux) : l'écran Explorer étant encore monté derrière,
+  le refetch part immédiatement et le retour est déjà à jour, sans spinner.
+  Le flux Découvrir n'est PAS invalidé (règle produit : pas de re-mélange en
+  pleine navigation). Vérifié E2E au navigateur (refetch observé, coche visible
+  au retour).
+
 ### 2026-07-17 — Claude : renommage PlotTime + icône PWA « maskable »
 - **L'application s'appelle désormais PlotTime** (ex-SerieTime). Renommé
   partout où le nom est visible : titre et meta de la web app (`+html.tsx`),
