@@ -6,7 +6,7 @@ import { goBack } from '@/lib/nav';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { tmdbImage } from '@/lib/api';
 import type { MediaDto } from '@/lib/types';
-import { COLORS, FONTS, STATUS_BAR } from '@/lib/theme';
+import { COLORS, FONTS, STATUS_BAR, YELLOW_TRACK } from '@/lib/theme';
 import { AnimatedFill, PressableScale } from '@/components/anim';
 
 // Progression d'une série basée sur les épisodes DIFFUSÉS (fournie par l'API).
@@ -137,6 +137,6 @@ const styles = StyleSheet.create({
   posterBox: { width: '100%', aspectRatio: 2 / 3, borderRadius: 6, overflow: 'hidden', backgroundColor: COLORS.imagePlaceholder },
   posterEmpty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6, gap: 6 },
   posterTitle: { fontSize: 11, fontFamily: FONTS.bold, color: '#777', textAlign: 'center' },
-  barTrack: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 4, backgroundColor: 'rgba(255,212,0,0.30)' },
+  barTrack: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 4, backgroundColor: YELLOW_TRACK },
   barFill: { position: 'absolute', left: 0, bottom: 0, top: 0 },
 });

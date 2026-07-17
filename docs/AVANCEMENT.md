@@ -6,7 +6,7 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
-Dernière mise à jour : **2026-07-17** (Claude) — Renommage complet en **PlotTime** + icône PWA maskable (Étienne), fiche jeu : deux notes /100, interrupteur « Je possède »
+Dernière mise à jour : **2026-07-17** (Claude) — Icône maskable aérée (fond bleu visible comme au multitâche), fiches série/film fluides au défilement (en-tête en surimpression), correctif racine du flash de l'historique sur l'onglet Séries
 
 ---
 
@@ -96,6 +96,46 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
   Le flux Découvrir n'est PAS invalidé (règle produit : pas de re-mélange en
   pleine navigation). Vérifié E2E au navigateur (refetch observé, coche visible
   au retour).
+### 2026-07-17 — Claude : thème Sombre — TOUT le jaune unifié sur le jaune du logo
+- Suite de la demande pastilles : plusieurs jaunes cohabitaient en Sombre
+  (pastilles #FBAE00 vs FILTRES/œil/barres #FFD400). Le rôle `yellow` de la
+  palette SOMBRE passe au jaune du logo `#FBAE00` (FILTRES, œil, FAB, onglet
+  actif, coches, tirer-pour-actualiser… suivent automatiquement), ainsi que
+  la barre de progression « En cours » (`STATUS_BAR.watching` par thème) et
+  les pistes jaunes pâles codées en dur (nouvel export `YELLOW_TRACK`).
+  Clair/Sunset/Nuit inchangés — relevé au pixel (Sombre : œil, pastille et
+  barre à rgb(251,174,0) ; Clair : #FFD400 intact).
+
+### 2026-07-17 — Claude : thème Sombre — pastilles de section en jaune du logo
+- Dans le thème SOMBRE uniquement : les pastilles « En cours », « À voir »,
+  « Pas regardé depuis un moment », « Voulus »… passent au jaune du logo
+  `#FBAE00` (texte foncé). Nuit garde son rose, Clair/Sunset leurs gris —
+  vérifié au pixel dans les trois thèmes.
+
+### 2026-07-17 — Claude : icône maskable aérée, fiches fluides, flash Séries (correctif racine)
+- **Icône PWA (écran d'accueil)** : le motif était encore trop serré — les
+  maskable sont recomposées avec le motif à 53 % du canevas, soit ~66 %
+  AFFICHÉS après le rognage Android (zone sûre 80 %) : mêmes proportions que
+  l'icône du multitâche (motif 66 %), fond bleu nuit bien visible. Recréer le
+  raccourci après redéploiement.
+- **Fiches série/film : défilement fluide.** La bannière repliable était DANS
+  le flux : chaque frame de repli (hauteur animée, non nativisable) re-layoutait
+  TOUTE la fiche — saccades au scroll sur la web app. L'en-tête (bannière +
+  onglets) passe en SURIMPRESSION (hors flux : son animation ne re-layoute que
+  lui) et le contenu défile dessous avec un padding haut constant. Géométrie
+  identique au pixel : la plage de repli = HERO_MAX − HERO_MIN, le bord bas de
+  l'en-tête suit exactement le contenu (vérifié à mi-repli, aucun trou).
+- **Onglet Séries : flash de l'historique — correctif racine.** Le premier
+  correctif (masque + garde-fou 700 ms) fuyait en prod : l'historique peut
+  arriver du réseau APRÈS le démasquage → flash. Désormais, sur le web, le
+  calage du scroll est posé dans un `useLayoutEffect` (après l'insertion DOM,
+  AVANT la peinture du navigateur) : aucune frame ne peut montrer l'historique,
+  quel que soit le moment où il arrive ; pendant son chargement, la file
+  « À voir » reste visible (plus d'écran masqué). Natif : onLayout + masque
+  (garde-fou 2,5 s). Même correctif sur « À VENIR ».
+- Banc Playwright 7/7 : sonde d'échantillonnage sans flash au chargement
+  normal ET avec l'historique retardé de 1,5 s (le cas prod), fiche dépliée/
+  mi-repliée/repliée aux bonnes cotes, onglets et fiche film fonctionnels.
 
 ### 2026-07-17 — Claude : renommage PlotTime + icône PWA « maskable »
 - **L'application s'appelle désormais PlotTime** (ex-SerieTime). Renommé

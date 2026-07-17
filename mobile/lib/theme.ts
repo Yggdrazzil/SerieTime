@@ -75,8 +75,11 @@ const DARK: Palette = {
   textSoft: '#6E6E7A',
   border: '#3A3A45',
   borderLight: '#2A2A33',
-  yellow: '#FFD400',
-  yellowSoft: '#3E3714',
+  // JAUNE DU LOGO (#FBAE00) pour tout l'accent jaune du thème Sombre —
+  // uniformisé avec les pastilles de section (demande produit 17/07, Sombre
+  // uniquement : Clair/Sunset gardent le #FFD400 historique).
+  yellow: '#FBAE00',
+  yellowSoft: '#3E300F',
   black: '#F1F1F4',
   white: '#1B1B22',
   pillGrey: '#6A6A76',
@@ -89,10 +92,11 @@ const DARK: Palette = {
   overlay: 'rgba(0,0,0,0.72)',
   provider: '#00A8E1',
   onAccent: '#101014',
-  // « Sombre » reste sobre : le rose du logo est réservé au thème NUIT
-  // (midnight) — demande produit 16/07.
-  pillBg: '#6A6A76',
-  pillFg: '#1B1B22',
+  // Pastilles de section en JAUNE du logo (demande produit 17/07 — thème
+  // Sombre uniquement) ; le rose reste réservé au thème Nuit (midnight).
+  pillBg: '#FBAE00',
+  pillFg: '#101014',
+  // Navigation active (ajout main 34615e1) : texte fort pour le thème Sombre.
   navActive: '#F1F1F4',
   notif: '#E36067',
   plusCount: '#9C9CA8',
@@ -244,12 +248,19 @@ export function applyThemePreference(pref: ThemePreference): boolean {
 // accents (en Sunset, l'accent terracotta serait illisible face à l'orange
 // « Regarder plus tard »). `track` = même teinte à 30 % (portion restante).
 export const STATUS_BAR = {
-  watching: { fill: '#FFD400', track: 'rgba(255,212,0,0.30)' }, // En cours (jaune)
+  // En cours (jaune) — jaune du logo en Sombre, jaune historique ailleurs.
+  watching: THEME === 'dark'
+    ? { fill: '#FBAE00', track: 'rgba(251,174,0,0.30)' }
+    : { fill: '#FFD400', track: 'rgba(255,212,0,0.30)' },
   upToDate: { fill: '#62D600', track: 'rgba(98,214,0,0.30)' }, // À jour (vert)
   completed: { fill: '#2F80ED', track: 'rgba(47,128,237,0.30)' }, // Terminé (bleu)
   watchlist: { fill: '#F7941D', track: 'rgba(247,148,29,0.30)' }, // Regarder plus tard (orange)
   stopped: { fill: '#E53935', track: 'rgba(229,57,53,0.30)' }, // Arrêté (rouge)
 } as const;
+
+// Piste pâle des barres de progression dont le remplissage est COLORS.yellow :
+// suit le jaune du thème (Sombre = jaune logo, ailleurs jaune historique).
+export const YELLOW_TRACK = THEME === 'dark' ? 'rgba(251,174,0,0.30)' : 'rgba(255,212,0,0.30)';
 
 // Rayons calqués sur TV Time (cartes et affiches nettement arrondies).
 export const RADIUS = {
