@@ -6,7 +6,7 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
-Dernière mise à jour : **2026-07-17** (Codex) — lot 1 Prisme : tokens, primitives et accessibilité globale
+Dernière mise à jour : **2026-07-18** (Codex) — lot 2 Prisme : navigation cible, Agenda et hub Bibliothèque
 
 ---
 
@@ -28,7 +28,7 @@ la migration visuelle doit encore être exécutée sans modifier la logique mét
 
 | Domaine | État | Notes |
 |---|---|---|
-| Refonte front Prisme | 🛠 Lot 1 implémenté | Palette et tokens Prisme, primitives accessibles, zoom/text scaling/focus clavier et mouvement réduit ; navigation cible en préparation. Matrice : [`docs/feature-parity-matrix.md`](feature-parity-matrix.md) |
+| Refonte front Prisme | 🛠 Lots 1–2 implémentés | Socle accessible, navigation Accueil/Agenda/Explorer/Bibliothèque/Profil, anciennes routes Films/Jeux conservées. Matrice : [`docs/feature-parity-matrix.md`](feature-parity-matrix.md) |
 | Authentification multi-comptes (e-mail + mot de passe) | ✅ Fait | Inscription/connexion, sessions 30 j, données isolées par compte (testé) ; mot de passe oublié → réinitialisation par ré-auth SSO Google/Discord (testé) |
 | SSO Google / Facebook | ⏸ Préparé, désactivé | Prêt côté serveur (`/api/auth/oauth`) ; nécessite ids OAuth + dev build Expo |
 | Auth native stores (Apple / Google / Discord) | ⏸ Codé, en attente credentials | Serveur : vérif Sign in with Apple (JWT RS256, testée) + `/providers` enrichi. Mobile : `NativeSsoButtons` (bouton Apple officiel, Google expo-auth-session, Discord PKCE), config-gated — s'active dès que les vars env seront posées (voir STORES.md « A1 — état d'avancement ») |
@@ -90,6 +90,21 @@ la migration visuelle doit encore être exécutée sans modifier la logique mét
 6. Publication native optionnelle (EAS Build APK, puis stores).
 
 ## Journal des modifications
+
+### 2026-07-18 — Codex : navigation Prisme, Agenda et Bibliothèque
+- **Navigation cible** : la barre principale expose désormais Accueil, Agenda,
+  Explorer, Bibliothèque et Profil dans un shell flottant Prisme avec cibles
+  tactiles de 48 px et animation compatible avec la réduction des mouvements.
+- **Parité des routes** : les anciennes routes Films et Jeux restent enregistrées
+  et accessibles par lien profond ; elles sont seulement masquées de la barre.
+- **Accueil et Agenda** : la file À voir conserve historique, mutations
+  optimistes et fiche épisode ; l'ancien onglet À venir devient un écran Agenda
+  sans dupliquer son appel API ni ses comportements de défilement.
+- **Bibliothèque** : nouveau hub vers Séries, Films, Jeux et leurs Favoris. Les
+  seuls compteurs affichés sont les totaux fiables du profil ; les aperçus
+  limités à 12 ne sont pas présentés comme des totaux.
+- **Validation** : typecheck mobile et contrôle de diff validés ; aucun endpoint,
+  modèle Prisma ou contrat d'authentification modifié.
 
 ### 2026-07-17 — Codex : socle visuel et accessibilité Prisme
 - **Identité** : palette claire Prisme violet/rose/jaune, rôles sémantiques

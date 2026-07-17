@@ -13,10 +13,12 @@ export default function TabsLayout() {
   return (
     <>
       <Tabs tabBar={(props) => <TabBar {...props} />} screenOptions={{ headerShown: false }}>
-        <Tabs.Screen name="index" options={{ title: 'Séries' }} />
-        <Tabs.Screen name="movies" options={{ title: 'Films' }} />
-        <Tabs.Screen name="games" options={{ title: 'Jeux' }} />
+        <Tabs.Screen name="index" options={{ title: 'Accueil' }} />
+        <Tabs.Screen name="agenda" options={{ title: 'Agenda' }} />
+        <Tabs.Screen name="movies" options={{ title: 'Films', href: null }} />
+        <Tabs.Screen name="games" options={{ title: 'Jeux', href: null }} />
         <Tabs.Screen name="explore" options={{ title: 'Explorer' }} />
+        <Tabs.Screen name="library" options={{ title: 'Bibliothèque' }} />
         <Tabs.Screen name="profile" options={{ title: 'Profil' }} />
       </Tabs>
       {/* Migration douce vers SSO (spec 2026-07-16) : monté une fois ici pour

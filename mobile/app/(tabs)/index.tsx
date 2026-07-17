@@ -8,36 +8,28 @@ import { api, tmdbImage } from '@/lib/api';
 import type { EpisodeDto, MediaDto, QueueItemDto, UpcomingItemDto } from '@/lib/types';
 import { queueGroupLabel, episodeCode, airTimeLabel } from '@/lib/format';
 import { COLORS, SHADOW, FONTS } from '@/lib/theme';
-import { PillHeader, TopTabs, EmptyState, LoadError, ShowPill, Badge, CheckCircle } from '@/components/ui';
+import { PillHeader, EmptyState, LoadError, ShowPill, Badge, CheckCircle } from '@/components/ui';
 import { EpisodeQueueCard } from '@/components/EpisodeQueueCard';
 import { EpisodeSheet, type EpisodeSheetTarget } from '@/components/EpisodeSheet';
 import { useTabResetSeq } from '@/lib/tabReset';
-import { AppearItem, FadeSwitch } from '@/components/anim';
+import { AppearItem } from '@/components/anim';
 import { useFloatingSection, FloatingSectionPill } from '@/components/FloatingSection';
 import { QueueSkeleton } from '@/components/skeletons';
 import { usePullRefresh } from '@/lib/usePullRefresh';
 
 export default function ShowsScreen() {
   const insets = useSafeAreaInsets();
-  // Re-clic sur l'onglet « Séries » (barre du bas) : le remontage par `key`
-  // ramène l'onglet haut par défaut (À VOIR) et rejoue le scroll initial.
+  // Re-clic sur Accueil : le remontage rejoue le scroll initial de la file.
   const resetSeq = useTabResetSeq('index');
   return (
     <View key={resetSeq} style={{ flex: 1, backgroundColor: COLORS.pageMuted }}>
-      <ShowsScreenInner insets={insets} />
-    </View>
-  );
-}
-
-function ShowsScreenInner({ insets }: { insets: { top: number } }) {
-  const [tab, setTab] = useState('À VOIR');
-  return (
-    <>
-      <View style={{ paddingTop: insets.top, backgroundColor: COLORS.white }}>
-        <TopTabs tabs={['À VOIR', 'À VENIR']} active={tab} onChange={setTab} />
+      <View style={[styles.homeHeader, { paddingTop: insets.top + 12 }]}>
+        <Text style={styles.homeEyebrow}>AUJOURD'HUI</Text>
+        <Text accessibilityRole="header" style={styles.homeTitle}>À voir</Text>
+        <Text style={styles.homeSubtitle}>Reprenez exactement là où vous en étiez.</Text>
       </View>
-      <FadeSwitch trigger={tab}>{tab === 'À VOIR' ? <QueueView /> : <UpcomingView />}</FadeSwitch>
-    </>
+      <QueueView />
+    </View>
   );
 }
 
@@ -240,7 +232,7 @@ function QueueView() {
   );
 }
 
-function UpcomingView() {
+export function UpcomingView() {
   // Historique des sorties (HIER, AVANT-HIER…) masqué au-dessus de la liste,
   // comme l'historique de visionnage de « À voir » : le scroll initial se cale
   // sur AUJOURD'HUI, on remonte pour rattraper une sortie manquée.
@@ -372,8 +364,23 @@ function UpcomingCard({ item }: { item: UpcomingItemDto }) {
   );
 }
 
-// Cotes TV Time, identiques à EpisodeQueueCard (code 20, titre 13, rayon 10).
+// Carte chronologique compacte : hiérarchie Studio dans le shell Prisme.
 const styles = StyleSheet.create({
+  homeHeader: {
+    backgroundColor: COLORS.white,
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: COLORS.borderLight,
+  },
+  homeEyebrow: {
+    color: COLORS.primary,
+    fontFamily: FONTS.bold,
+    fontSize: 11,
+    letterSpacing: 1.2,
+  },
+  homeTitle: { color: COLORS.text, fontFamily: FONTS.extraBold, fontSize: 30, lineHeight: 36 },
+  homeSubtitle: { color: COLORS.textMuted, fontFamily: FONTS.regular, fontSize: 13, marginTop: 2 },
   upcard: {
     flexDirection: 'row', marginHorizontal: 12, marginBottom: 12, backgroundColor: COLORS.white,
     borderRadius: 10, minHeight: 96, overflow: 'hidden', ...SHADOW.card,
