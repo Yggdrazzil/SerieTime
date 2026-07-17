@@ -122,7 +122,13 @@ export function CheckCircle({
 
 export function Poster({ title, uri, onPress, width }: { title: string; uri: string | null; onPress?: () => void; width?: number }) {
   return (
-    <PressableScale style={[styles.poster, width ? { width } : { flex: 1 }]} onPress={onPress}>
+    <PressableScale
+      style={[styles.poster, width ? { width } : { flex: 1 }]}
+      onPress={onPress}
+      accessibilityRole={onPress ? 'button' : 'image'}
+      accessibilityLabel={title}
+      accessibilityHint={onPress ? `Ouvre ${title}` : undefined}
+    >
       {uri ? (
         // L'image couvre TOUT le cadre (pas de padding -> pas de bord gris, comme TV Time).
         <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />

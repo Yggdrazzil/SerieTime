@@ -1,15 +1,16 @@
-import React, { useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, Pressable, Image, Dimensions, Platform } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, ScrollView, StyleSheet, Pressable, Image, Platform, useWindowDimensions } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { useRouter, type Href } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery } from '@tanstack/react-query';
 import { api, tmdbImage } from '@/lib/api';
 import type { GamificationMeDto, MediaDto, ProfileStatsDto } from '@/lib/types';
 import { watchTime } from '@/lib/format';
-import { COLORS, FONTS, setThemeColorMeta, currentThemeColorMeta } from '@/lib/theme';
+import { COLORS, FONTS, RADIUS, SHADOW, SIZES, SPACE, setThemeColorMeta, currentThemeColorMeta } from '@/lib/theme';
 import { Loading, LoadError, Poster } from '@/components/ui';
 import { AppearItem, PopIn } from '@/components/anim';
 import { useTabResetSeq } from '@/lib/tabReset';
@@ -51,6 +52,9 @@ function ProfileScreenInner() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const focused = useIsFocused();
+  const { width } = useWindowDimensions();
+  const contentWidth = Math.max(220, Math.min(width, SIZES.contentMax) - SPACE.md * 2);
+  const [activeListIndex, setActiveListIndex] = useState(0);
 
   // La couverture passe DERRIÈRE la barre de statut, comme TV Time. En natif
   // (edge-to-edge), l'en-tête s'étend sous la barre et les icônes passent en
@@ -60,10 +64,10 @@ function ProfileScreenInner() {
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof document === 'undefined' || !focused) return;
     const prev = currentThemeColorMeta();
-    setThemeColorMeta('#20202a');
+    setThemeColorMeta('#241B3D');
     return () => setThemeColorMeta(prev);
   }, [focused]);
-  const { data, isLoading, isError, refetch, isRefetching } = useQuery({
+  const { data, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['profile'],
     queryFn: () => api.get<ProfileResponse>('/api/profile'),
   });
@@ -96,27 +100,34 @@ function ProfileScreenInner() {
     <PullToRefresh
       refreshing={refreshing}
       onRefresh={onRefresh}
-      style={{ flex: 1, backgroundColor: COLORS.white }}
-      contentContainerStyle={{ paddingBottom: 24 }}
+      style={styles.screen}
+      contentContainerStyle={styles.screenContent}
     >
+      <View style={styles.canvas}>
       {/* Icônes de la barre de statut en clair sur la couverture sombre (natif). */}
       {focused ? <StatusBar style="light" /> : null}
       {/* + insets.top : la zone visible de la couverture reste ~200dp une fois
           la barre de statut par-dessus. */}
-      <View style={[styles.head, { height: 200 + insets.top }]}>
+      <View style={[styles.head, { minHeight: 232 + insets.top, paddingTop: insets.top }]}>
         {user.coverUrl ? (
-          <>
-            <Image source={{ uri: tmdbImage(user.coverUrl, 'w780') ?? user.coverUrl }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-            <View style={styles.coverShade} />
-          </>
+          <Image source={{ uri: tmdbImage(user.coverUrl, 'w780') ?? user.coverUrl }} style={StyleSheet.absoluteFill} resizeMode="cover" />
         ) : null}
+        {!user.coverUrl ? (
+          <View style={StyleSheet.absoluteFill} pointerEvents="none">
+            <View style={[styles.prismShape, styles.prismShapePrimary]} />
+            <View style={[styles.prismShape, styles.prismShapeSecondary]} />
+            <View style={[styles.prismShape, styles.prismShapeTertiary]} />
+          </View>
+        ) : null}
+        <LinearGradient colors={['rgba(20, 13, 39, 0.12)', 'rgba(20, 13, 39, 0.94)']} style={StyleSheet.absoluteFill} />
         <Pressable
-          style={[styles.bell, { top: insets.top + 8 }]}
+          style={({ pressed }) => [styles.bell, { top: insets.top + SPACE.sm }, pressed && styles.headerActionPressed]}
           onPress={() => router.push('/notifications')}
           accessibilityRole="button"
-          accessibilityLabel="Notifications"
+          accessibilityLabel={unread > 0 ? `Notifications, ${unread} non lue${unread > 1 ? 's' : ''}` : 'Notifications'}
+          accessibilityHint="Ouvre le centre de notifications"
         >
-          <Feather name="bell" size={20} color={COLORS.onAccent} />
+          <Feather name="bell" size={20} color="#FFFFFF" />
           {unread > 0 ? (
             // La pastille de non-lus arrive avec un petit rebond.
             <PopIn style={styles.badge}>
@@ -125,15 +136,16 @@ function ProfileScreenInner() {
           ) : null}
         </Pressable>
         <Pressable
-          style={[styles.dots, { top: insets.top + 8 }]}
+          style={({ pressed }) => [styles.dots, { top: insets.top + SPACE.sm }, pressed && styles.headerActionPressed]}
           onPress={() => router.push('/settings')}
           accessibilityRole="button"
           accessibilityLabel="Paramètres"
+          accessibilityHint={'Ouvre les param\u00e8tres du compte et de l\u2019application'}
         >
-          <Feather name="more-horizontal" size={24} color="#fff" />
+          <Feather name="settings" size={20} color="#FFFFFF" />
         </Pressable>
         <View style={styles.headRow}>
-          <View>
+          <View style={styles.avatarWrap}>
             {user.avatarUrl ? (
               <Image source={{ uri: tmdbImage(user.avatarUrl, 'w185') ?? user.avatarUrl }} style={styles.avatar} resizeMode="cover" />
             ) : (
@@ -147,10 +159,17 @@ function ProfileScreenInner() {
               </View>
             ) : null}
           </View>
-          <View>
-            <Text style={styles.name}>{user.displayName}</Text>
-            <Pressable style={styles.modif} onPress={() => router.push('/profile/edit')}>
-              <Text style={styles.modifText}>MODIFIER</Text>
+          <View style={styles.identityCopy}>
+            <Text style={styles.profileEyebrow}>Mon espace</Text>
+            <Text accessibilityRole="header" style={styles.name}>{user.displayName}</Text>
+            <Pressable
+              style={({ pressed }) => [styles.modif, pressed && styles.modifPressed]}
+              onPress={() => router.push('/profile/edit')}
+              accessibilityRole="button"
+              accessibilityLabel="Modifier le profil"
+            >
+              <Feather name="edit-3" size={15} color="#FFFFFF" />
+              <Text style={styles.modifText}>Modifier</Text>
             </Pressable>
           </View>
         </View>
@@ -177,8 +196,9 @@ function ProfileScreenInner() {
         />
       </View>
 
+      <View style={styles.body}>
       <Section title="Statistiques" onPress={() => router.push('/stats')}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 12 }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statsContent}>
           <AppearItem index={0}><StatCard icon="tv" title="Temps passé devant des séries" values={[[st.months, 'MOIS'], [st.days, 'JOURS'], [st.hours, 'HEURES']]} /></AppearItem>
           <AppearItem index={1}><StatCard icon="tv" title="Épisodes vus" values={[[stats.episodesWatched, 'ÉPISODES']]} /></AppearItem>
           <AppearItem index={2}><StatCard icon="film" title="Temps passé devant des films" values={[[mt.months, 'MOIS'], [mt.days, 'JOURS'], [mt.hours, 'HEURES']]} /></AppearItem>
@@ -187,9 +207,14 @@ function ProfileScreenInner() {
         </ScrollView>
       </Section>
 
-      <Pressable style={styles.trophiesRow} onPress={() => router.push('/trophies' as Href)}>
+      <Pressable
+        style={({ pressed }) => [styles.trophiesRow, pressed && styles.cardPressed]}
+        onPress={() => router.push('/trophies' as Href)}
+        accessibilityRole="button"
+        accessibilityLabel={gamification ? `Troph\u00e9es, niveau ${gamification.level}, ${gamification.levelTitle}` : 'Troph\u00e9es'}
+      >
         <View style={styles.trophiesIconWrap}>
-          <Feather name="award" size={20} color={COLORS.black} />
+          <Feather name="award" size={21} color={COLORS.onAccent} />
         </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.trophiesTitle}>Trophées</Text>
@@ -199,20 +224,31 @@ function ProfileScreenInner() {
             </Text>
           ) : null}
         </View>
-        <Feather name="chevron-right" size={22} color={COLORS.black} />
+        <Feather name="chevron-right" size={22} color={COLORS.primary} />
       </Pressable>
 
       {data.lists.length > 0 ? (
         <Section title="Listes">
-          <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.listsContent}
+            snapToInterval={contentWidth + SPACE.sm}
+            snapToAlignment="start"
+            decelerationRate="fast"
+            onMomentumScrollEnd={(event) => {
+              const nextIndex = Math.round(event.nativeEvent.contentOffset.x / (contentWidth + SPACE.sm));
+              setActiveListIndex(Math.max(0, Math.min(data.lists.length - 1, nextIndex)));
+            }}
+          >
             {data.lists.map((l) => (
-              <ListCollageCard key={l.id} title={l.title} posterPaths={l.posterPaths} />
+              <ListCollageCard key={l.id} title={l.title} posterPaths={l.posterPaths} width={contentWidth} />
             ))}
           </ScrollView>
           {data.lists.length > 1 ? (
             <View style={styles.dotsRow}>
               {data.lists.map((l, i) => (
-                <View key={l.id} style={[styles.dot, i === 0 && styles.dotActive]} />
+                <View key={l.id} style={[styles.dot, i === activeListIndex && styles.dotActive]} />
               ))}
             </View>
           ) : null}
@@ -228,13 +264,21 @@ function ProfileScreenInner() {
       <PosterRow title="Films préférés" items={sortFavorites(data.favoriteMovies, favSort.movie)} isMovie heart emptyLabel="Aucun film en favori" href="/library/favorite-movies" />
       <PosterRow title="Jeux" items={data.games ?? []} isGame emptyLabel="Aucun jeu joué" href="/games" />
       <PosterRow title="Jeux préférés" items={sortFavorites(data.favoriteGames ?? [], favSort.game)} isGame heart emptyLabel="Aucun jeu en favori" href="/library/favorite-games" />
+      </View>
+      </View>
     </PullToRefresh>
   );
 }
 
 function Counter({ n, label, border, onPress }: { n: number; label: string; border?: boolean; onPress?: () => void }) {
   return (
-    <Pressable style={[styles.counter, border && styles.counterBorder]} onPress={onPress}>
+    <Pressable
+      style={({ pressed }) => [styles.counter, border && styles.counterBorder, pressed && styles.counterPressed]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${n} ${label}`}
+      accessibilityHint={'Ouvre le d\u00e9tail de cette activit\u00e9 sociale'}
+    >
       <Text style={styles.counterN}>{n}</Text>
       <Text style={styles.counterL}>{label}</Text>
     </Pressable>
@@ -242,21 +286,19 @@ function Counter({ n, label, border, onPress }: { n: number; label: string; bord
 }
 
 // Carte « Listes » façon TV Time : collage des affiches + titre en surimpression.
-function ListCollageCard({ title, posterPaths }: { title: string; posterPaths: string[] }) {
-  const { width } = Dimensions.get('window');
-  const cardWidth = width - 32;
+function ListCollageCard({ title, posterPaths, width }: { title: string; posterPaths: string[]; width: number }) {
   return (
-    <View style={[styles.listcard, { width: cardWidth, marginHorizontal: 16 }]}>
+    <View style={[styles.listcard, { width }]} accessible accessibilityLabel={`Liste ${title}`}>
       <View style={StyleSheet.absoluteFill}>
         <View style={{ flex: 1, flexDirection: 'row' }}>
           {(posterPaths.length ? posterPaths.slice(0, 4) : [null]).map((p, i) => (
-            <View key={i} style={{ flex: 1, backgroundColor: '#2e2e38' }}>
+            <View key={i} style={styles.listPosterSlot}>
               {p ? <Image source={{ uri: tmdbImage(p, 'w342') ?? p }} style={{ width: '100%', height: '100%' }} resizeMode="cover" /> : null}
             </View>
           ))}
         </View>
       </View>
-      <View style={styles.listShade} />
+      <LinearGradient colors={['transparent', 'rgba(13, 8, 28, 0.88)']} style={StyleSheet.absoluteFill} />
       <Text style={styles.listTitle}>{title}</Text>
     </View>
   );
@@ -267,13 +309,26 @@ function ListCollageCard({ title, posterPaths }: { title: string; posterPaths: s
 function Section({ title, children, onPress }: { title: string; children: React.ReactNode; onPress?: () => void }) {
   const head = (
     <View style={styles.sectHead}>
-      <Text style={styles.sectTitle}>{title}</Text>
-      {onPress ? <Feather name="chevron-right" size={22} color={COLORS.black} /> : null}
+      <Text accessibilityRole="header" style={styles.sectTitle}>{title}</Text>
+      {onPress ? (
+        <View style={styles.sectionActionIcon}>
+          <Feather name="chevron-right" size={19} color={COLORS.primary} />
+        </View>
+      ) : null}
     </View>
   );
   return (
-    <View style={{ paddingVertical: 20 }}>
-      {onPress ? <Pressable onPress={onPress}>{head}</Pressable> : head}
+    <View style={styles.section}>
+      {onPress ? (
+        <Pressable
+          onPress={onPress}
+          accessibilityRole="button"
+          accessibilityLabel={`Ouvrir ${title}`}
+          style={({ pressed }) => [styles.sectionHeaderButton, pressed && styles.sectionHeaderPressed]}
+        >
+          {head}
+        </Pressable>
+      ) : head}
       {children}
     </View>
   );
@@ -281,18 +336,20 @@ function Section({ title, children, onPress }: { title: string; children: React.
 
 function StatCard({ icon, ionicon, title, values }: { icon?: keyof typeof Feather.glyphMap; ionicon?: keyof typeof Ionicons.glyphMap; title: string; values: [number, string][] }) {
   return (
-    <View style={styles.statcard}>
+    <View style={styles.statcard} accessible accessibilityLabel={`${title}, ${values.map(([value, label]) => `${value} ${label.toLowerCase()}`).join(', ')}`}>
       <View style={styles.statTop}>
-        {ionicon ? (
-          <Ionicons name={ionicon} size={18} color={COLORS.black} />
-        ) : (
-          <Feather name={icon ?? 'activity'} size={18} color={COLORS.black} />
-        )}
+        <View style={styles.statIcon}>
+          {ionicon ? (
+            <Ionicons name={ionicon} size={18} color={COLORS.primary} />
+          ) : (
+            <Feather name={icon ?? 'activity'} size={18} color={COLORS.primary} />
+          )}
+        </View>
         <Text style={styles.statTitle}>{title}</Text>
       </View>
       <View style={styles.statVals}>
         {values.map(([v, l]) => (
-          <View key={l} style={{ alignItems: 'center' }}>
+          <View key={l} style={styles.statValue}>
             <Text style={styles.statV}>{v}</Text>
             <Text style={styles.statL}>{l}</Text>
           </View>
@@ -321,40 +378,46 @@ function PosterRow({
 }) {
   const router = useRouter();
   return (
-    <View style={{ paddingVertical: 16 }}>
+    <View style={styles.posterSection}>
       {/* Toute la ligne de titre ouvre la page dédiée (façon TV Time). */}
-      <Pressable style={styles.sectHead} onPress={() => router.push(href as Parameters<typeof router.push>[0])}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+      <Pressable
+        style={({ pressed }) => [styles.sectHead, styles.posterSectionHead, pressed && styles.sectionHeaderPressed]}
+        onPress={() => router.push(href as Parameters<typeof router.push>[0])}
+        accessibilityRole="button"
+        accessibilityLabel={`Ouvrir ${title}`}
+        accessibilityHint="Affiche toute la collection"
+      >
+        <View style={styles.posterTitleRow}>
           {heart ? (
             // Pastille rouge + cœur blanc AVANT le titre, comme TV Time.
             <View style={styles.heartBadge}>
-              <Feather name="heart" size={13} color="#fff" />
+              <Feather name="heart" size={14} color="#FFFFFF" />
             </View>
           ) : null}
           <Text style={styles.sectTitle}>{title}</Text>
         </View>
-        <Feather name="chevron-right" size={22} color={COLORS.black} />
+        <View style={styles.sectionActionIcon}><Feather name="chevron-right" size={19} color={COLORS.primary} /></View>
       </Pressable>
       {items.length === 0 ? (
         // Section toujours visible façon TV Time, avec un état vide.
         <View style={styles.emptyRow}>
           <View style={styles.emptyPoster}>
             {isGame ? (
-              <Ionicons name="game-controller-outline" size={26} color="#b4b4b4" />
+              <Ionicons name="game-controller-outline" size={26} color={COLORS.primary} />
             ) : (
-              <Feather name={isMovie ? 'film' : 'tv'} size={26} color="#b4b4b4" />
+              <Feather name={isMovie ? 'film' : 'tv'} size={26} color={COLORS.primary} />
             )}
           </View>
           <Text style={styles.emptyRowText}>{emptyLabel}</Text>
         </View>
       ) : (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 6 }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.mediaContent}>
           {items.map((m) => (
             <Poster
               key={m.id}
               title={m.title}
               uri={tmdbImage(m.posterPath)}
-              width={118}
+              width={112}
               onPress={() => router.push((isGame ? `/game/${m.id}` : `/show/${m.id}${isMovie ? '?type=movie' : ''}`) as Href)}
             />
           ))}
@@ -368,57 +431,182 @@ function PosterRow({
 // tout était ~15 % trop gros → moins d'infos visibles. Nom 20, compteurs 18/13,
 // titres de section 18, stats 19, en-tête 180, marges resserrées.
 const styles = StyleSheet.create({
-  head: { height: 180, backgroundColor: '#20202a', justifyContent: 'flex-end', overflow: 'hidden' },
-  coverShade: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.35)' },
-  bell: { position: 'absolute', left: 16, width: 40, height: 40, borderRadius: 20, backgroundColor: COLORS.yellow, alignItems: 'center', justifyContent: 'center' },
-  badge: { position: 'absolute', top: 0, right: 0, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: COLORS.notif, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
-  badgeText: { color: '#fff', fontSize: 10, fontFamily: FONTS.extraBold },
-  dots: { position: 'absolute', right: 12, width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  headRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
-  avatar: { width: 56, height: 56, borderRadius: 28, borderWidth: 2, borderColor: '#fff', backgroundColor: '#555' },
+  screen: { flex: 1, backgroundColor: COLORS.bg },
+  screenContent: { flexGrow: 1, paddingBottom: SPACE.xl },
+  canvas: { width: '100%', maxWidth: SIZES.contentMax, alignSelf: 'center' },
+  body: { paddingHorizontal: SPACE.md, paddingTop: SPACE.sm },
+  head: {
+    backgroundColor: '#241B3D',
+    justifyContent: 'flex-end',
+    overflow: 'hidden',
+    borderBottomLeftRadius: RADIUS.sheet,
+    borderBottomRightRadius: RADIUS.sheet,
+  },
+  prismShape: { position: 'absolute', opacity: 0.8 },
+  prismShapePrimary: { width: 190, height: 190, borderRadius: 95, backgroundColor: COLORS.primary, right: -50, top: -18 },
+  prismShapeSecondary: { width: 132, height: 132, borderRadius: 36, backgroundColor: COLORS.secondary, right: 104, top: 42 },
+  prismShapeTertiary: { width: 92, height: 92, borderRadius: 46, backgroundColor: COLORS.tertiary, left: -20, bottom: 12 },
+  bell: {
+    position: 'absolute',
+    right: SPACE.md + SIZES.touch + SPACE.xs,
+    width: SIZES.touch,
+    height: SIZES.touch,
+    zIndex: 2,
+    borderRadius: RADIUS.control,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.24)',
+    backgroundColor: 'rgba(17,11,35,0.42)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 19,
+    height: 19,
+    borderRadius: RADIUS.pill,
+    borderWidth: 2,
+    borderColor: '#241B3D',
+    backgroundColor: COLORS.notif,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  badgeText: { color: '#FFFFFF', fontSize: 10, fontFamily: FONTS.extraBold },
+  dots: {
+    position: 'absolute',
+    right: SPACE.md,
+    width: SIZES.touch,
+    height: SIZES.touch,
+    zIndex: 2,
+    borderRadius: RADIUS.control,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.24)',
+    backgroundColor: 'rgba(17,11,35,0.42)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerActionPressed: { opacity: 0.72, transform: [{ scale: 0.96 }] },
+  headRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.md, paddingHorizontal: SPACE.lg, paddingTop: 72, paddingBottom: SPACE.lg },
+  avatarWrap: { flexShrink: 0 },
+  avatar: {
+    width: 82,
+    height: 82,
+    borderRadius: 41,
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+    backgroundColor: COLORS.primary,
+  },
   avatarEmpty: { alignItems: 'center', justifyContent: 'center' },
-  avatarInit: { color: '#fff', fontSize: 23, fontFamily: FONTS.extraBold },
+  avatarInit: { color: '#FFFFFF', fontSize: 32, fontFamily: FONTS.extraBold },
+  identityCopy: { flex: 1, minWidth: 0, alignItems: 'flex-start' },
+  profileEyebrow: { color: 'rgba(255,255,255,0.72)', fontSize: 10, letterSpacing: 1.3, textTransform: 'uppercase', fontFamily: FONTS.bold },
+  name: { color: '#FFFFFF', fontSize: 26, lineHeight: 32, fontFamily: FONTS.extraBold },
+  modif: {
+    minHeight: SIZES.touch,
+    marginTop: SPACE.xxs,
+    paddingHorizontal: SPACE.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    borderRadius: RADIUS.pill,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.28)',
+  },
+  modifPressed: { backgroundColor: 'rgba(255,255,255,0.24)', transform: [{ scale: 0.98 }] },
+  modifText: { color: '#FFFFFF', fontSize: 13, fontFamily: FONTS.bold },
   // Pastille de niveau (gamification) : coin bas-droit de l'avatar, jaune, bord blanc.
   levelPill: {
-    position: 'absolute', bottom: -2, right: -2, minWidth: 22, height: 22, borderRadius: 11,
-    backgroundColor: COLORS.yellow, borderWidth: 2, borderColor: '#fff',
-    alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3,
+    position: 'absolute',
+    bottom: -3,
+    right: -3,
+    minWidth: 27,
+    height: 27,
+    borderRadius: RADIUS.pill,
+    backgroundColor: COLORS.yellow,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 5,
   },
-  levelPillText: { color: COLORS.black, fontSize: 11, fontFamily: FONTS.extraBold },
+  levelPillText: { color: COLORS.onAccent, fontSize: 11, fontFamily: FONTS.extraBold },
+  counters: {
+    flexDirection: 'row',
+    marginHorizontal: SPACE.md,
+    marginTop: -SPACE.md,
+    zIndex: 3,
+    overflow: 'hidden',
+    borderRadius: RADIUS.card,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    backgroundColor: COLORS.surface,
+    ...SHADOW.card,
+  },
+  counter: { flex: 1, minHeight: 76, alignItems: 'center', justifyContent: 'center', paddingHorizontal: SPACE.xxs },
+  counterPressed: { backgroundColor: COLORS.primarySoft },
+  counterBorder: { borderLeftWidth: 1, borderLeftColor: COLORS.borderLight },
+  counterN: { color: COLORS.text, fontSize: 21, lineHeight: 26, fontFamily: FONTS.extraBold },
+  counterL: { color: COLORS.textMuted, fontFamily: FONTS.medium, fontSize: 11, textAlign: 'center' },
   trophiesRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 12, marginHorizontal: 16, marginTop: 4,
-    padding: 14, borderRadius: 12, borderWidth: 1, borderColor: COLORS.borderLight,
+    minHeight: 72,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACE.sm,
+    padding: SPACE.md,
+    marginBottom: SPACE.sm,
+    borderRadius: RADIUS.card,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    backgroundColor: COLORS.surface,
+    ...SHADOW.card,
   },
   trophiesIconWrap: {
-    width: 38, height: 38, borderRadius: 19, backgroundColor: COLORS.yellow,
+    width: SIZES.touch, height: SIZES.touch, borderRadius: RADIUS.control, backgroundColor: COLORS.yellow,
     alignItems: 'center', justifyContent: 'center',
   },
-  trophiesTitle: { fontSize: 16, fontFamily: FONTS.extraBold, color: COLORS.text },
-  trophiesSub: { fontSize: 13, fontFamily: FONTS.regular, color: COLORS.textMuted, marginTop: 1 },
-  emptyRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16 },
-  emptyPoster: { width: 64, aspectRatio: 2 / 3, borderRadius: 4, backgroundColor: '#eee', alignItems: 'center', justifyContent: 'center' },
-  emptyRowText: { color: COLORS.textMuted, fontFamily: FONTS.regular, fontSize: 14 },
-  name: { color: '#fff', fontSize: 20, fontFamily: FONTS.extraBold },
-  modif: { marginTop: 5, borderWidth: 1.5, borderColor: '#fff', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 3, alignSelf: 'flex-start' },
-  modifText: { color: '#fff', fontSize: 11, fontFamily: FONTS.extraBold },
-  counters: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: COLORS.borderLight },
-  counter: { flex: 1, alignItems: 'center', paddingVertical: 11 },
-  counterBorder: { borderLeftWidth: 1, borderLeftColor: COLORS.borderLight },
-  counterN: { color: COLORS.text, fontSize: 18, fontFamily: FONTS.extraBold },
-  counterL: { color: COLORS.text, fontFamily: FONTS.regular, fontSize: 13 },
-  sectHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, marginBottom: 9 },
-  sectTitle: { color: COLORS.text, fontSize: 18, fontFamily: FONTS.extraBold },
-  statcard: { width: 268, borderWidth: 1, borderColor: COLORS.border, borderRadius: 10 },
-  statTop: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 9, borderBottomWidth: 1, borderBottomColor: COLORS.borderLight },
-  statTitle: { color: COLORS.text, fontSize: 14, fontFamily: FONTS.semiBold },
-  statVals: { flexDirection: 'row', justifyContent: 'space-around', padding: 10 },
-  statV: { color: COLORS.text, fontSize: 19, fontFamily: FONTS.extraBold },
-  statL: { color: COLORS.text, fontSize: 10.5, fontFamily: FONTS.bold, letterSpacing: 0.4 },
-  listcard: { height: 132, borderRadius: 8, backgroundColor: '#2e2e38', justifyContent: 'flex-end', padding: 12, overflow: 'hidden' },
-  listShade: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.25)' },
-  listTitle: { color: '#fff', fontSize: 17, fontFamily: FONTS.extraBold },
-  dotsRow: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 10 },
-  dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#cfcfcf' },
-  dotActive: { backgroundColor: COLORS.yellow },
-  heartBadge: { width: 24, height: 24, borderRadius: 12, backgroundColor: COLORS.red, alignItems: 'center', justifyContent: 'center' },
+  trophiesTitle: { fontSize: 17, lineHeight: 22, fontFamily: FONTS.extraBold, color: COLORS.text },
+  trophiesSub: { fontSize: 13, lineHeight: 18, fontFamily: FONTS.regular, color: COLORS.textMuted, marginTop: 2 },
+  cardPressed: { opacity: 0.86, transform: [{ scale: 0.99 }] },
+  section: { paddingVertical: SPACE.sm },
+  sectionHeaderButton: { borderRadius: RADIUS.control },
+  sectionHeaderPressed: { backgroundColor: COLORS.primarySoft },
+  sectHead: { minHeight: SIZES.touch, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: SPACE.sm, marginBottom: SPACE.xs },
+  sectTitle: { flexShrink: 1, color: COLORS.text, fontSize: 19, lineHeight: 25, fontFamily: FONTS.extraBold },
+  sectionActionIcon: { width: 36, height: 36, flexShrink: 0, borderRadius: RADIUS.control, backgroundColor: COLORS.primarySoft, alignItems: 'center', justifyContent: 'center' },
+  statsContent: { gap: SPACE.sm, paddingBottom: SPACE.xxs },
+  statcard: {
+    width: 276,
+    minHeight: 132,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    borderRadius: RADIUS.card,
+    backgroundColor: COLORS.surface,
+    ...SHADOW.card,
+  },
+  statTop: { flexDirection: 'row', alignItems: 'center', gap: SPACE.sm, padding: SPACE.sm, borderBottomWidth: 1, borderBottomColor: COLORS.borderLight },
+  statIcon: { width: 34, height: 34, flexShrink: 0, borderRadius: RADIUS.control, backgroundColor: COLORS.primarySoft, alignItems: 'center', justifyContent: 'center' },
+  statTitle: { flex: 1, color: COLORS.text, fontSize: 14, lineHeight: 19, fontFamily: FONTS.semiBold },
+  statVals: { flex: 1, minHeight: 66, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', padding: SPACE.sm },
+  statValue: { flex: 1, alignItems: 'center' },
+  statV: { color: COLORS.text, fontSize: 22, lineHeight: 27, fontFamily: FONTS.extraBold },
+  statL: { color: COLORS.textMuted, fontSize: 10, fontFamily: FONTS.bold, letterSpacing: 0.5 },
+  listsContent: { gap: SPACE.sm, paddingBottom: SPACE.xxs },
+  listcard: { height: 148, borderRadius: RADIUS.card, backgroundColor: '#241B3D', justifyContent: 'flex-end', padding: SPACE.md, overflow: 'hidden', ...SHADOW.card },
+  listPosterSlot: { flex: 1, backgroundColor: COLORS.imagePlaceholder },
+  listTitle: { color: '#FFFFFF', fontSize: 19, lineHeight: 25, fontFamily: FONTS.extraBold },
+  dotsRow: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: SPACE.sm },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: COLORS.border },
+  dotActive: { width: 18, backgroundColor: COLORS.primary },
+  posterSection: { paddingVertical: SPACE.sm },
+  posterSectionHead: { borderRadius: RADIUS.control },
+  posterTitleRow: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: SPACE.xs },
+  heartBadge: { width: 30, height: 30, borderRadius: RADIUS.pill, backgroundColor: COLORS.secondary, alignItems: 'center', justifyContent: 'center' },
+  mediaContent: { gap: 10, paddingBottom: SPACE.xxs },
+  emptyRow: { minHeight: 112, flexDirection: 'row', alignItems: 'center', gap: SPACE.md, padding: SPACE.md, borderRadius: RADIUS.card, borderWidth: 1, borderColor: COLORS.borderLight, backgroundColor: COLORS.surface },
+  emptyPoster: { width: 56, height: 78, flexShrink: 0, borderRadius: RADIUS.poster, backgroundColor: COLORS.primarySoft, alignItems: 'center', justifyContent: 'center' },
+  emptyRowText: { flex: 1, color: COLORS.textMuted, fontFamily: FONTS.regular, fontSize: 14, lineHeight: 20 },
 });

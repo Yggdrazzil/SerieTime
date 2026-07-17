@@ -105,12 +105,20 @@ export function PressableScale({
   style,
   scaleTo = 0.96,
   disabled,
+  accessibilityRole,
+  accessibilityLabel,
+  accessibilityHint,
+  accessibilityState,
 }: {
   children: React.ReactNode;
   onPress?: () => void;
   style?: StyleProp<ViewStyle>;
   scaleTo?: number;
   disabled?: boolean;
+  accessibilityRole?: React.ComponentProps<typeof Pressable>['accessibilityRole'];
+  accessibilityLabel?: string;
+  accessibilityHint?: string;
+  accessibilityState?: React.ComponentProps<typeof Pressable>['accessibilityState'];
 }) {
   const reduce = useReduceMotion();
   const scale = useRef(new Animated.Value(1)).current;
@@ -119,6 +127,10 @@ export function PressableScale({
   return (
     <AnimatedPressable
       onPress={onPress}
+      accessibilityRole={accessibilityRole}
+      accessibilityLabel={accessibilityLabel}
+      accessibilityHint={accessibilityHint}
+      accessibilityState={accessibilityState}
       disabled={disabled}
       onPressIn={() => !reduce && to(scaleTo, 7)}
       onPressOut={() => !reduce && to(1, 5)}
