@@ -6,7 +6,7 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
-Dernière mise à jour : **2026-07-18** (Codex) — correctif cache Profil après mutation d’un jeu
+Dernière mise à jour : **2026-07-18** (Codex) — lot 7 Prisme : socle partagé des fiches
 
 ---
 
@@ -28,7 +28,7 @@ la migration visuelle doit encore être exécutée sans modifier la logique mét
 
 | Domaine | État | Notes |
 |---|---|---|
-| Refonte front Prisme | 🛠 Lots 1–6 implémentés | Socle accessible, navigation cible, cartes d’épisodes, Agenda, aperçu Films, onboarding et profil personnel ; anciennes routes Films/Jeux conservées. Matrice : [`docs/feature-parity-matrix.md`](feature-parity-matrix.md) |
+| Refonte front Prisme | 🛠 Lots 1–7 implémentés | Socle accessible, navigation cible, cartes d’épisodes, Agenda, aperçu Films, onboarding, profil et primitives de fiches ; anciennes routes Films/Jeux conservées. Matrice : [`docs/feature-parity-matrix.md`](feature-parity-matrix.md) |
 | Authentification multi-comptes (e-mail + mot de passe) | ✅ Fait | Inscription/connexion, sessions 30 j, données isolées par compte (testé) ; mot de passe oublié → réinitialisation par ré-auth SSO Google/Discord (testé) |
 | SSO Google / Facebook | ⏸ Préparé, désactivé | Prêt côté serveur (`/api/auth/oauth`) ; nécessite ids OAuth + dev build Expo |
 | Auth native stores (Apple / Google / Discord) | ⏸ Codé, en attente credentials | Serveur : vérif Sign in with Apple (JWT RS256, testée) + `/providers` enrichi. Mobile : `NativeSsoButtons` (bouton Apple officiel, Google expo-auth-session, Discord PKCE), config-gated — s'active dès que les vars env seront posées (voir STORES.md « A1 — état d'avancement ») |
@@ -90,6 +90,17 @@ la migration visuelle doit encore être exécutée sans modifier la logique mét
 6. Publication native optionnelle (EAS Build APK, puis stores).
 
 ## Journal des modifications
+
+### 2026-07-18 — Codex : socle partagé des fiches Prisme
+- **Chargement** : le squelette séries/films/jeux devient responsive, annoncé aux
+  lecteurs d’écran et cohérent dans les thèmes clairs comme sombres.
+- **Confirmations** : signalement et marquage des épisodes précédents adoptent des
+  feuilles Prisme, des cibles de 44 px et respectent le mouvement réduit.
+- **Notes** : étoiles et demi-étoiles conservent leur calcul, avec libellé vocal
+  explicite « Note x sur 5 » et identité visuelle Prisme.
+- **Parité** : props, callbacks, fermeture extérieure et actions Oui/Non inchangés.
+- **Validation** : revue croisée sans bloquant, typecheck mobile, diff et export
+  Expo Web validés avec **41 routes statiques**.
 
 ### 2026-07-18 — Codex : synchronisation Profil après mutation jeu
 - **Cache cohérent** : statut, possession, favori ou retrait d’un jeu invalident

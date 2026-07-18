@@ -1,8 +1,10 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable, Modal } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import type { EpisodeDto } from '@/lib/types';
-import { COLORS, FONTS } from '@/lib/theme';
+import { COLORS, FONTS, RADIUS, SHADOW, SIZES, SPACE } from '@/lib/theme';
 import { PopIn } from '@/components/anim';
+import { useReduceMotion } from '@/lib/useReduceMotion';
 
 // Mini pop-up « Cocher aussi les épisodes précédents ? » (règle produit) :
 // quand l'utilisateur coche un épisode alors que des épisodes ANTÉRIEURS
@@ -42,38 +44,70 @@ export function MarkPreviousPopup({
   onYes: () => void;
   onNo: () => void;
 }) {
+  const reduce = useReduceMotion();
   if (!visible) return null;
   return (
-    <Modal transparent animationType="fade" onRequestClose={onNo}>
-      <Pressable style={styles.overlay} onPress={onNo}>
+    <Modal visible transparent animationType={reduce ? 'none' : 'fade'} onRequestClose={onNo}>
+      <Pressable
+        style={styles.overlay}
+        onPress={onNo}
+        accessibilityRole="button"
+        accessibilityLabel="Fermer la confirmation"
+      />
+      <View style={styles.wrap} pointerEvents="box-none">
         <PopIn style={styles.card}>
-          <Pressable onPress={(e) => e.stopPropagation()}>
+          <View accessibilityViewIsModal onAccessibilityEscape={onNo}>
+            <View style={styles.iconWrap}>
+              <Feather name="check-square" size={22} color={COLORS.primary} />
+            </View>
+            <Text accessibilityRole="header" style={styles.title}>{'Marquer les pr\u00e9c\u00e9dents ?'}</Text>
             <Text style={styles.message}>
               Souhaitez-vous aussi marquer tous les épisodes précédents comme vus ?
             </Text>
             <View style={styles.buttons}>
-              <Pressable style={styles.noBtn} onPress={onNo}>
+              <Pressable
+                style={({ pressed }) => [styles.button, styles.noBtn, pressed && styles.buttonPressed]}
+                onPress={onNo}
+                accessibilityRole="button"
+                accessibilityLabel={'Ne pas marquer les \u00e9pisodes pr\u00e9c\u00e9dents'}
+              >
                 <Text style={styles.noText}>NON</Text>
               </Pressable>
-              <Pressable style={styles.yesBtn} onPress={onYes}>
+              <Pressable
+                style={({ pressed }) => [styles.button, styles.yesBtn, pressed && styles.buttonPressed]}
+                onPress={onYes}
+                accessibilityRole="button"
+                accessibilityLabel={'Marquer les \u00e9pisodes pr\u00e9c\u00e9dents comme vus'}
+              >
                 <Text style={styles.yesText}>OUI</Text>
               </Pressable>
             </View>
-          </Pressable>
+          </View>
         </PopIn>
-      </Pressable>
+      </View>
     </Modal>
   );
 }
 
 // Cotes alignées sur nos feuilles (boutons pilule 13 extrabold, carte radius 14).
 const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center', padding: 28 },
-  card: { backgroundColor: COLORS.white, borderRadius: 14, padding: 20, width: '100%', maxWidth: 380 },
-  message: { color: COLORS.text, fontSize: 16, fontFamily: FONTS.semiBold, lineHeight: 23, textAlign: 'center' },
-  buttons: { flexDirection: 'row', gap: 12, marginTop: 18 },
-  noBtn: { flex: 1, borderWidth: 1.5, borderColor: COLORS.black, borderRadius: 999, paddingVertical: 11, alignItems: 'center' },
+  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: COLORS.overlay },
+  wrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: SPACE.lg },
+  card: {
+    backgroundColor: COLORS.surface, borderRadius: RADIUS.sheet, borderWidth: 1, borderColor: COLORS.borderLight,
+    padding: SPACE.lg, width: '100%', maxWidth: 420, ...SHADOW.card,
+  },
+  iconWrap: {
+    width: SIZES.touch, height: SIZES.touch, alignSelf: 'center', alignItems: 'center', justifyContent: 'center',
+    borderRadius: RADIUS.control, backgroundColor: COLORS.primarySoft, marginBottom: SPACE.sm,
+  },
+  title: { color: COLORS.text, fontSize: 20, lineHeight: 26, fontFamily: FONTS.extraBold, textAlign: 'center', marginBottom: SPACE.xs },
+  message: { color: COLORS.textMuted, fontSize: 15, fontFamily: FONTS.regular, lineHeight: 22, textAlign: 'center' },
+  buttons: { flexDirection: 'row', gap: SPACE.sm, marginTop: SPACE.lg },
+  button: { flex: 1, minHeight: SIZES.touch, borderRadius: RADIUS.pill, alignItems: 'center', justifyContent: 'center', paddingHorizontal: SPACE.sm },
+  buttonPressed: { opacity: 0.78, transform: [{ scale: 0.98 }] },
+  noBtn: { borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surfaceMuted },
   noText: { color: COLORS.text, fontSize: 13, fontFamily: FONTS.extraBold, letterSpacing: 0.5 },
-  yesBtn: { flex: 1, backgroundColor: COLORS.yellow, borderRadius: 999, paddingVertical: 11, alignItems: 'center' },
-  yesText: { color: COLORS.onAccent, fontSize: 13, fontFamily: FONTS.extraBold, letterSpacing: 0.5 },
+  yesBtn: { backgroundColor: COLORS.primary },
+  yesText: { color: COLORS.onPrimary, fontSize: 13, fontFamily: FONTS.extraBold, letterSpacing: 0.5 },
 });
