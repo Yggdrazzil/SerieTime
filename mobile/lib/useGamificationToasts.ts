@@ -1,10 +1,11 @@
 import { createElement, useEffect, useRef, useState } from 'react';
 import { Text, View, StyleSheet } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import type { GamificationMeDto } from '@/lib/types';
-import { COLORS, FONTS } from '@/lib/theme';
+import { COLORS, FONTS, RADIUS, SHADOW, SPACE } from '@/lib/theme';
 import { SlideUpBar } from '@/components/anim';
 
 // Gamification (spec 2026-07-16 §10) — toast de déblocage global : les
@@ -82,11 +83,21 @@ export function useGamificationToasts(): string | null {
 const styles = StyleSheet.create({
   bar: {
     position: 'absolute', left: 0, right: 0, bottom: 0,
-    backgroundColor: COLORS.yellow, paddingTop: 14, paddingHorizontal: 20,
-    alignItems: 'center', zIndex: 1000, elevation: 12,
+    alignItems: 'center', paddingHorizontal: SPACE.md, zIndex: 1000, elevation: 12,
   },
-  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
-  text: { fontSize: 15, fontFamily: FONTS.extraBold, letterSpacing: 0.3, textAlign: 'center' },
+  card: {
+    flexDirection: 'row', alignItems: 'center', gap: SPACE.sm,
+    width: '100%', maxWidth: 520,
+    backgroundColor: COLORS.surface, borderRadius: RADIUS.card,
+    borderWidth: 1, borderColor: COLORS.borderLight,
+    paddingVertical: SPACE.sm, paddingHorizontal: SPACE.md,
+    ...SHADOW.card,
+  },
+  iconWrap: {
+    width: 34, height: 34, borderRadius: 17, flexShrink: 0,
+    alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.primarySoft,
+  },
+  text: { flex: 1, fontSize: 14, fontFamily: FONTS.extraBold, color: COLORS.text, letterSpacing: 0.2 },
 });
 
 // Composant à monter UNE fois, en dehors de la navigation (root layout) pour
@@ -98,6 +109,15 @@ export function GamificationToastHost() {
   return createElement(SlideUpBar, {
     visible: !!message,
     style: [styles.bar, { paddingBottom: insets.bottom + 16 }],
-    children: createElement(View, { style: styles.row }, createElement(Text, { style: styles.text }, message)),
+    children: createElement(
+      View,
+      { style: styles.card },
+      createElement(
+        View,
+        { style: styles.iconWrap },
+        createElement(Feather, { name: 'award', size: 17, color: COLORS.primary }),
+      ),
+      createElement(Text, { style: styles.text }, message),
+    ),
   });
 }

@@ -155,14 +155,15 @@ function QueueView() {
       // Masqué SEULEMENT quand un historique est rendu sans être encore calé :
       // pendant son chargement, la file « À voir » s'affiche normalement.
       style={{ opacity: settled || historyItems.length === 0 ? 1 : 0 }}
-      contentContainerStyle={{ paddingBottom: 16 }}
+      contentContainerStyle={styles.queueContent}
       onScroll={onListScroll}
       scrollEventThrottle={16}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.yellow} colors={[COLORS.yellow]} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} colors={[COLORS.primary]} />}
     >
       {historyItems.length > 0 ? (
         <View
           ref={historyWrapRef}
+          style={styles.queueColumn}
           onLayout={(e) => {
             registerSection('Historique de visionnage')(e);
             // Une fois l'historique mesuré, on cale le scroll juste en dessous
@@ -194,7 +195,7 @@ function QueueView() {
         // Index continu à travers les groupes pour une entrée en cascade.
         let n = -1;
         return [...groups.entries()].map(([group, items]) => (
-          <View key={group} onLayout={registerSection(queueGroupLabel(group))}>
+          <View key={group} style={styles.queueColumn} onLayout={registerSection(queueGroupLabel(group))}>
             <PillHeader label={queueGroupLabel(group)} />
             {items.map((item) => {
               n += 1;
@@ -280,7 +281,7 @@ export function UpcomingView() {
       ref={scrollRef}
       style={{ opacity: settled || pastGroups.length === 0 ? 1 : 0 }}
       contentContainerStyle={styles.agendaContent}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.yellow} colors={[COLORS.yellow]} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} colors={[COLORS.primary]} />}
     >
       {pastGroups.length > 0 ? (
         <View
@@ -396,6 +397,10 @@ const styles = StyleSheet.create({
   },
   homeTitle: { color: COLORS.text, fontFamily: FONTS.extraBold, fontSize: 30, lineHeight: 36 },
   homeSubtitle: { color: COLORS.textMuted, fontFamily: FONTS.regular, fontSize: 13, marginTop: 2 },
+  // File « À voir » : contenu centré et borné à contentMax comme l'agenda et la
+  // bibliothèque (les cartes ne s'étirent plus bord à bord sur web/tablette).
+  queueContent: { alignItems: 'center', paddingBottom: 16 },
+  queueColumn: { width: '100%', maxWidth: SIZES.contentMax },
   agendaContent: {
     alignItems: 'center',
     paddingTop: SPACE.xxs,

@@ -170,7 +170,7 @@ function BadgesCard({ data, onOpenBadge }: { data: GamificationMeDto; onOpenBadg
               accessibilityLabel={`Badge ${b.label}, ${b.tier > 0 ? TIER_LABELS[b.tier] : 'non débloqué'}`}
             >
               <View style={[styles.badgeCircle, { backgroundColor: TIER_COLORS[b.tier] }]}>
-                <Feather name={safeFeatherIcon(b.icon)} size={24} color={b.tier > 0 ? '#fff' : '#9a9a9a'} />
+                <Feather name={safeFeatherIcon(b.icon)} size={24} color={b.tier > 0 ? '#fff' : COLORS.textSoft} />
               </View>
               <Text style={styles.badgeLabel} numberOfLines={2}>
                 {b.label}
@@ -196,7 +196,7 @@ function BadgeModal({ badge, onClose }: { badge: BadgeDto | null; onClose: () =>
           {badge ? (
             <>
               <View style={[styles.badgeCircle, styles.modalCircle, { backgroundColor: TIER_COLORS[badge.tier] }]}>
-                <Feather name={safeFeatherIcon(badge.icon)} size={30} color={badge.tier > 0 ? '#fff' : '#9a9a9a'} />
+                <Feather name={safeFeatherIcon(badge.icon)} size={30} color={badge.tier > 0 ? '#fff' : COLORS.textSoft} />
               </View>
               <Text style={styles.modalTitle}>{badge.label}</Text>
               <Text style={styles.modalTier}>

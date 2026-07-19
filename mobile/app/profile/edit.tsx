@@ -236,13 +236,15 @@ export default function EditProfile() {
 
       {/* Menu déroulant Sexe */}
       <Modal visible={genderOpen} transparent animationType="fade" onRequestClose={() => setGenderOpen(false)}>
-        <Pressable style={styles.overlay} onPress={() => setGenderOpen(false)} />
+        <Pressable style={styles.overlay} onPress={() => setGenderOpen(false)} accessibilityRole="button" accessibilityLabel="Fermer" />
         <View style={styles.sheet}>
           {GENDERS.map((g, i) => (
             <Pressable
               key={g.value}
               style={[styles.sheetItem, i === GENDERS.length - 1 && { borderBottomWidth: 0 }]}
               onPress={() => { setGender(g.value); setGenderOpen(false); }}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: gender === g.value }}
             >
               <Text style={styles.sheetLabel}>{g.label}</Text>
               {gender === g.value ? <Feather name="check" size={22} color={COLORS.primary} /> : null}
@@ -270,6 +272,8 @@ export default function EditProfile() {
                   key={c.code}
                   style={styles.countryRow}
                   onPress={() => { setCountry(c.code); setCountryOpen(false); }}
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: country === c.code }}
                 >
                   <Text style={[styles.countryName, country === c.code && styles.countrySelected]}>{c.name}</Text>
                   {country === c.code ? <Feather name="check" size={22} color={COLORS.primary} /> : null}
