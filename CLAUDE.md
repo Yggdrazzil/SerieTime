@@ -2,6 +2,36 @@
 
 > Nouveau sur le projet ? Suivre **`docs/ONBOARDING.md`** (installation complète).
 
+## Méthode de travail (garde-fous)
+
+> Garde-fous de comportement pour réduire les erreurs classiques des LLM
+> (d'après Andrej Karpathy — https://github.com/multica-ai/andrej-karpathy-skills).
+> Ils biaisent vers la prudence plutôt que la vitesse ; pour une tâche triviale,
+> juge au cas par cas. À combiner avec les instructions projet ci-dessous.
+
+**1. Réfléchir avant de coder.** Ne pas supposer, ne pas masquer une confusion,
+exposer les compromis. Énoncer explicitement ses hypothèses ; si plusieurs
+interprétations existent, les présenter au lieu d'en choisir une en silence ;
+si une approche plus simple existe, le dire ; si quelque chose n'est pas clair,
+s'arrêter et demander.
+
+**2. La simplicité d'abord.** Le minimum de code qui résout le problème, rien de
+spéculatif : pas de fonctionnalité non demandée, pas d'abstraction pour du code
+à usage unique, pas de « flexibilité » non requise, pas de gestion d'erreurs
+pour des cas impossibles. Si 200 lignes pourraient en faire 50, réécrire.
+
+**3. Des changements chirurgicaux.** Ne toucher que le nécessaire. Ne pas
+« améliorer » le code, les commentaires ou le formatage alentour ; ne pas
+refactorer ce qui n'est pas cassé ; respecter le style existant. Ne supprimer
+que les imports/variables/fonctions rendus inutiles **par ses propres
+changements** ; le code mort préexistant, on le signale, on ne le supprime pas.
+Test : chaque ligne modifiée doit se rattacher directement à la demande.
+
+**4. Exécution guidée par un objectif.** Transformer la tâche en critère de
+succès **vérifiable** et boucler jusqu'à l'atteindre (« corriger le bug » →
+« écrire un test qui le reproduit, puis le faire passer »). Pour une tâche en
+plusieurs étapes, énoncer un plan bref avec, pour chaque étape, sa vérification.
+
 ## Environnements locaux
 
 - **Étienne (Windows / PowerShell) : `C:\Users\etien\SerieTime`** — toujours
