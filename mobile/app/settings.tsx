@@ -1,13 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, Pressable, Modal, TextInput, ActivityIndicator, Animated, Easing, Platform, Linking, Alert, Share } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Modal, TextInput, ActivityIndicator, Animated, Easing, Platform, Linking, Alert, Share } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '@/lib/api';
 import { useAppStore } from '@/lib/store';
 import { COLORS, FONTS, RADIUS, SHADOW, SIZES, SPACE, applyThemePreference, getThemePreference, type ThemePreference } from '@/lib/theme';
-import { PageHeader } from '@/components/PageHeader';
-import { TopTabs } from '@/components/ui';
+import { ScreenShell, ScreenHeader, SectionHeader, SegmentedFilter, PrismeCard, IconAction } from '@/components/prisme';
+import { goBack } from '@/lib/nav';
 import { FadeSwitch, PopIn } from '@/components/anim';
 import { useReduceMotion } from '@/lib/useReduceMotion';
 import { ssoWebAvailable, initGoogleButton, discordLogin } from '@/lib/sso';
@@ -24,25 +24,28 @@ function openExternal(url: string) {
   else Linking.openURL(url).catch(() => undefined);
 }
 
-const TABS = ['COMPTE', 'APPLICATION'];
+type Tab = 'compte' | 'application';
+const TAB_OPTIONS: { value: Tab; label: string; accessibilityLabel: string }[] = [
+  { value: 'compte', label: 'Compte', accessibilityLabel: 'Onglet Compte' },
+  { value: 'application', label: 'Application', accessibilityLabel: 'Onglet Application' },
+];
 
 export default function Settings() {
-  const [tab, setTab] = useState('COMPTE');
+  const [tab, setTab] = useState<Tab>('compte');
   return (
-    <View style={styles.screen}>
-      <PageHeader title="Paramètres" />
-      <View style={styles.tabsBar}>
-        <View style={styles.canvas}>
-          <TopTabs tabs={TABS} active={tab} onChange={setTab} />
-        </View>
-      </View>
+    <ScreenShell scroll contentContainerStyle={styles.content}>
+      <ScreenHeader
+        eyebrow="Réglages"
+        title="Paramètres"
+        subtitle="Compte, affichage et données personnelles."
+        leading={<IconAction icon="chevron-left" label="Retour" onPress={() => goBack('/profile')} />}
+      />
+      <SegmentedFilter options={TAB_OPTIONS} value={tab} onChange={setTab} accessibilityLabel="Filtrer les paramètres" />
       {/* Bascule d'onglet en fondu, comme les onglets hauts des autres écrans. */}
       <FadeSwitch trigger={tab}>
-        <ScrollView contentContainerStyle={styles.scroll}>
-          <View style={styles.canvas}>{tab === 'COMPTE' ? <AccountTab /> : <AppTab />}</View>
-        </ScrollView>
+        <View style={styles.list}>{tab === 'compte' ? <AccountTab /> : <AppTab />}</View>
       </FadeSwitch>
-    </View>
+    </ScreenShell>
   );
 }
 
@@ -93,8 +96,8 @@ function AccountTab() {
   };
 
   return (
-    <View style={styles.list}>
-      <Section title="Identification" icon="user">
+    <>
+      <Section title="Identification" eyebrow="Profil">
         <Field label="Nom d'utilisateur" value={displayName} accent />
         <Field label="Adresse e-mail" value={user?.email || '—'} accent />
         <Field label="Identifiant utilisateur" value={user?.id ?? ''} />
@@ -102,26 +105,26 @@ function AccountTab() {
       </Section>
 
       {/* La liaison des comptes vit derrière une rangée dédiée. */}
-      <Section title="Réseaux sociaux" icon="link-2">
+      <Section title="Réseaux sociaux" eyebrow="Compte">
         <Row label="Modifier les comptes liés" onPress={() => router.push('/linked-accounts')} />
       </Section>
 
-      <Section title="Import & sauvegarde" icon="download-cloud">
+      <Section title="Import & sauvegarde" eyebrow="Données">
         <Row label="Importer mes données TV Time" onPress={() => router.push('/import')} />
         <Row label={exporting ? 'Préparation de la sauvegarde…' : 'Exporter mes données PlotTime'} onPress={exporting ? undefined : exportData} />
         <ResyncLibraryRow />
       </Section>
 
-      <Section title="Jeux — Steam" icon="monitor">
+      <Section title="Steam" eyebrow="Jeux">
         <SteamImportBlock />
       </Section>
 
-      <Section title="Vie privée" icon="lock">
+      <Section title="Vie privée" eyebrow="Confidentialité">
         <PrivateProfileToggle />
       </Section>
 
       {/* Zone sensible isolée (recommandation Prisme : danger à part). */}
-      <View style={styles.dangerCard}>
+      <PrismeCard elevated style={styles.dangerCard}>
         <Pressable style={({ pressed }) => [styles.logoutBtn, pressed && styles.btnPressed]} onPress={logout} accessibilityRole="button" accessibilityLabel="Se déconnecter">
           <Feather name="log-out" size={17} color={COLORS.onAccent} />
           <Text style={styles.logoutText}>SE DÉCONNECTER</Text>
@@ -129,11 +132,11 @@ function AccountTab() {
         <Pressable style={({ pressed }) => [styles.deleteBtn, pressed && styles.deletePressed]} onPress={() => setDelOpen(true)} accessibilityRole="button" accessibilityLabel="Supprimer le compte">
           <Text style={styles.deleteText}>SUPPRIMER LE COMPTE</Text>
         </Pressable>
-      </View>
+      </PrismeCard>
 
       {pwOpen ? <PasswordModal onClose={() => setPwOpen(false)} /> : null}
       {delOpen ? <DeleteAccountModal onClose={() => setDelOpen(false)} onDeleted={logout} /> : null}
-    </View>
+    </>
   );
 }
 
@@ -568,12 +571,12 @@ function AppTab() {
     applyThemePreference(v);
   };
   return (
-    <View style={styles.list}>
-      <Section title="Titres" icon="type">
+    <>
+      <Section title="Titres" eyebrow="Affichage">
         <ToggleRow label="Afficher dans votre langue" sub="Les titres s'affichent par défaut en anglais" on={s.titlesInUserLanguage ?? true} onToggle={(v) => update.mutate({ titlesInUserLanguage: v })} />
       </Section>
 
-      <Section title="Thème" icon="droplet">
+      <Section title="Thème" eyebrow="Affichage">
         {(
           [
             ['system', "Suivre le thème défini sur l'appareil"],
@@ -592,7 +595,7 @@ function AppTab() {
         ) : null}
       </Section>
 
-      <Section title="Langue" icon="globe">
+      <Section title="Langue" eyebrow="Affichage">
         {CONTENT_LANGS.map(([v, l]) => (
           <RadioRow key={v} label={l} on={lang === v} onPress={() => pickLang(v)} />
         ))}
@@ -603,7 +606,7 @@ function AppTab() {
           Apple refuse le contenu sexuellement explicite même opt-in — cf.
           docs/STORES.md A7). Reste disponible sur web et Android. */}
       {Platform.OS !== 'ios' ? (
-        <Section title="Suggestions" icon="sliders">
+        <Section title="Suggestions" eyebrow="Contenu">
           <ToggleRow
             label="Contenu 18+"
             sub="Affiche le contenu réservé aux adultes dans les suggestions. Désactivé par défaut."
@@ -613,7 +616,7 @@ function AppTab() {
         </Section>
       ) : null}
 
-      <Section title="Cache" icon="refresh-ccw">
+      <Section title="Cache" eyebrow="Maintenance">
         <View style={styles.block}>
           <Pressable style={({ pressed }) => [styles.actionBtn, pressed && styles.btnPressed]} onPress={() => api.post('/api/cache/clear').catch(() => {})}>
             <Text style={styles.actionBtnText}>VIDER LE CACHE</Text>
@@ -624,7 +627,7 @@ function AppTab() {
       {/* À propos : liens légaux (exigés par Apple/Google) + attributions des
           sources de données (mentions obligatoires TMDb/TheTVDB/IGDB — cf.
           docs/STORES.md A2/A3). */}
-      <Section title="À propos" icon="info">
+      <Section title="À propos" eyebrow="Infos">
         <Row label="Politique de confidentialité" onPress={() => openExternal(`${LEGAL_BASE}/privacy`)} external />
         <Row label="Conditions d'utilisation" onPress={() => openExternal(`${LEGAL_BASE}/terms`)} external />
         <View style={styles.block}>
@@ -636,21 +639,18 @@ function AppTab() {
       </Section>
 
       <Text style={styles.version}>VERSION 1.0.0</Text>
-    </View>
+    </>
   );
 }
 
-// Carte de section : titre + pastille d'icône, contenu en lignes séparées.
-function Section({ title, icon, children }: { title: string; icon: keyof typeof Feather.glyphMap; children: React.ReactNode }) {
+// Section : titre Prisme (eyebrow + titre) au-dessus d'une carte regroupant
+// les rangées liées, comme les blocs « Trophées » / « Activité suivie » de
+// user/[id].tsx.
+function Section({ title, eyebrow, children }: { title: string; eyebrow?: string; children: React.ReactNode }) {
   return (
-    <View style={styles.card}>
-      <View style={styles.cardHead}>
-        <View style={styles.cardIcon}>
-          <Feather name={icon} size={15} color={COLORS.primary} />
-        </View>
-        <Text style={styles.cardTitle}>{title}</Text>
-      </View>
-      {children}
+    <View style={styles.section}>
+      <SectionHeader title={title} eyebrow={eyebrow} />
+      <PrismeCard elevated style={styles.sectionCard}>{children}</PrismeCard>
     </View>
   );
 }
@@ -722,26 +722,10 @@ function RadioRow({ label, on, onPress }: { label: string; on: boolean; onPress:
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: COLORS.bg },
-  tabsBar: { backgroundColor: COLORS.surface, borderBottomWidth: 1, borderBottomColor: COLORS.borderLight },
-  canvas: { width: '100%', maxWidth: SIZES.contentMax, alignSelf: 'center' },
-  scroll: { flexGrow: 1, paddingBottom: SPACE.xl },
-  list: { padding: SPACE.md, gap: SPACE.sm },
-  card: {
-    backgroundColor: COLORS.surface,
-    borderRadius: RADIUS.card,
-    paddingHorizontal: SPACE.md,
-    paddingVertical: SPACE.xs,
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
-    ...SHADOW.card,
-  },
-  cardHead: { flexDirection: 'row', alignItems: 'center', gap: SPACE.xs, paddingVertical: SPACE.xs },
-  cardIcon: {
-    width: 30, height: 30, flexShrink: 0, borderRadius: RADIUS.control,
-    backgroundColor: COLORS.primarySoft, alignItems: 'center', justifyContent: 'center',
-  },
-  cardTitle: { flex: 1, color: COLORS.text, fontSize: 15, fontFamily: FONTS.extraBold, letterSpacing: 0.2 },
+  content: { paddingBottom: 0 },
+  list: { paddingTop: SPACE.xs, gap: SPACE.sm },
+  section: { gap: 0 },
+  sectionCard: { padding: SPACE.md, gap: 0 },
   field: { paddingVertical: SPACE.sm, borderTopWidth: 1, borderTopColor: COLORS.borderLight },
   fieldLabel: { color: COLORS.textMuted, fontFamily: FONTS.medium, fontSize: 13 },
   fieldValue: { fontFamily: FONTS.regular, fontSize: 15, color: COLORS.text, marginTop: 2 },
@@ -758,16 +742,7 @@ const styles = StyleSheet.create({
   radioDot: { width: 11, height: 11, borderRadius: 6, backgroundColor: COLORS.primary },
   block: { paddingVertical: SPACE.sm, borderTopWidth: 1, borderTopColor: COLORS.borderLight },
   // Zone sensible isolée.
-  dangerCard: {
-    gap: SPACE.sm,
-    marginTop: SPACE.xs,
-    padding: SPACE.md,
-    borderRadius: RADIUS.card,
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
-    backgroundColor: COLORS.surface,
-    ...SHADOW.card,
-  },
+  dangerCard: { gap: SPACE.sm },
   logoutBtn: { minHeight: SIZES.touchComfortable, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACE.xs, backgroundColor: COLORS.yellow, borderRadius: RADIUS.pill, paddingVertical: SPACE.sm },
   logoutText: { color: COLORS.onAccent, fontSize: 15, fontFamily: FONTS.extraBold, letterSpacing: 0.6 },
   deleteBtn: { minHeight: SIZES.touch, alignItems: 'center', justifyContent: 'center', borderRadius: RADIUS.pill, borderWidth: 1.5, borderColor: COLORS.danger },

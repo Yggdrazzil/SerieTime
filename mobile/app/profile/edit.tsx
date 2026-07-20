@@ -1,15 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, Pressable, Image, TextInput, ActivityIndicator, Alert, Modal } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Image, TextInput, ActivityIndicator, Alert, Modal } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { goBack } from '@/lib/nav';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, tmdbImage } from '@/lib/api';
 import { COUNTRIES, countryName } from '@/lib/countries';
 import { useAppStore } from '@/lib/store';
-import { COLORS, FONTS, RADIUS, SHADOW, SIZES, SPACE } from '@/lib/theme';
+import { COLORS, FONTS, RADIUS, SIZES, SPACE } from '@/lib/theme';
 import { Loading } from '@/components/ui';
+import { ScreenShell, ScreenHeader, SectionHeader, PrismeCard, IconAction } from '@/components/prisme';
 import type { ProfileUser } from '@/app/(tabs)/profile';
 
 const GENDERS = [
@@ -19,7 +19,6 @@ const GENDERS = [
 ];
 
 export default function EditProfile() {
-  const insets = useSafeAreaInsets();
   const router = useRouter();
   const qc = useQueryClient();
   const { coverPick, setCoverPick } = useAppStore();
@@ -129,115 +128,113 @@ export default function EditProfile() {
   if (profile.isLoading || !profile.data) return <Loading />;
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        <View style={[styles.canvas, styles.headerRow]}>
-          <Pressable style={styles.headerBtn} onPress={() => goBack('/profile')} hitSlop={12} accessibilityRole="button" accessibilityLabel="Fermer">
-            <Feather name="x" size={24} color={COLORS.text} />
-          </Pressable>
-          <Text style={styles.title}>Modifier le profil</Text>
-          <Pressable style={({ pressed }) => [styles.saveBtn, pressed && styles.btnPressed, saving && { opacity: 0.6 }]} onPress={save} disabled={saving} hitSlop={8} accessibilityRole="button" accessibilityLabel="Sauvegarder">
-            {saving ? <ActivityIndicator color={COLORS.onPrimary} /> : <Text style={styles.save}>SAUVEGARDER</Text>}
-          </Pressable>
-        </View>
-      </View>
+    <>
+      <ScreenShell scroll>
+        <ScreenHeader
+          title="Modifier le profil"
+          leading={<IconAction icon="chevron-left" label="Retour" onPress={() => goBack('/profile')} />}
+          trailing={
+            <Pressable
+              style={({ pressed }) => [styles.saveBtn, pressed && styles.btnPressed, saving && styles.saveBtnBusy]}
+              onPress={save}
+              disabled={saving}
+              accessibilityRole="button"
+              accessibilityLabel="Sauvegarder"
+            >
+              {saving ? <ActivityIndicator color={COLORS.onPrimary} /> : <Text style={styles.saveText}>SAUVEGARDER</Text>}
+            </Pressable>
+          }
+        />
 
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <View style={styles.canvas}>
-          <View style={styles.list}>
-            {/* Photos */}
-            <View style={styles.card}>
-              <View style={styles.mediaRow}>
-                {avatarUrl ? (
-                  <Image source={{ uri: tmdbImage(avatarUrl, 'w185') ?? avatarUrl }} style={styles.avatar} />
-                ) : (
-                  <View style={[styles.avatar, styles.mediaEmpty]}>
-                    <Feather name="user" size={26} color={COLORS.textSoft} />
-                  </View>
-                )}
-                <Pressable style={{ flex: 1 }} onPress={pickAvatar} accessibilityRole="button" accessibilityLabel="Choisir une photo de profil">
-                  <Text style={styles.link}>Choisir une photo de profil</Text>
-                </Pressable>
-                {avatarUrl ? (
-                  <Pressable onPress={() => setAvatarUrl(null)} hitSlop={8} accessibilityRole="button" accessibilityLabel="Supprimer la photo de profil">
-                    <Feather name="x-circle" size={24} color={COLORS.textMuted} />
-                  </Pressable>
-                ) : null}
-              </View>
-              <View style={[styles.mediaRow, styles.mediaRowBorder]}>
-                {coverUrl ? (
-                  <Image source={{ uri: tmdbImage(coverUrl, 'w185') ?? coverUrl }} style={styles.cover} resizeMode="cover" />
-                ) : (
-                  <View style={[styles.cover, styles.mediaEmpty]}>
-                    <Feather name="image" size={24} color={COLORS.textSoft} />
-                  </View>
-                )}
-                <Pressable style={{ flex: 1 }} onPress={() => router.push('/profile/cover')} accessibilityRole="button" accessibilityLabel="Choisir une photo de couverture">
-                  <Text style={styles.link}>Choisir une photo de couverture</Text>
-                </Pressable>
-                {coverUrl ? (
-                  <Pressable onPress={() => setCoverUrl(null)} hitSlop={8} accessibilityRole="button" accessibilityLabel="Supprimer la photo de couverture">
-                    <Feather name="x-circle" size={24} color={COLORS.textMuted} />
-                  </Pressable>
-                ) : null}
-              </View>
-            </View>
-
-            {/* Nom d'affichage */}
-            <View style={styles.card}>
-              <Text style={styles.label}>Nom d'affichage</Text>
-              <TextInput style={styles.input} value={displayName} onChangeText={setDisplayName} placeholder="Votre nom" placeholderTextColor={COLORS.textSoft} />
-            </View>
-
-            {/* Informations personnelles */}
-            <View style={styles.card}>
-              <View style={styles.cardHead}>
-                <View style={styles.cardIcon}>
-                  <Feather name="user" size={15} color={COLORS.primary} />
+        <View style={styles.list}>
+          {/* Photos */}
+          <PrismeCard elevated>
+            <View style={styles.mediaRow}>
+              {avatarUrl ? (
+                <Image source={{ uri: tmdbImage(avatarUrl, 'w185') ?? avatarUrl }} style={styles.avatar} />
+              ) : (
+                <View style={[styles.avatar, styles.mediaEmpty]}>
+                  <Feather name="user" size={26} color={COLORS.textSoft} />
                 </View>
-                <Text style={styles.cardTitle}>Informations personnelles</Text>
-              </View>
-
-              <View style={styles.field}>
-                <Text style={styles.label}>Année de naissance</Text>
-                <TextInput
-                  style={styles.input}
-                  value={birthYear}
-                  onChangeText={(t) => setBirthYear(t.replace(/[^0-9]/g, '').slice(0, 4))}
-                  keyboardType="number-pad"
-                  placeholder="Ex. 1993"
-                  placeholderTextColor={COLORS.textSoft}
-                />
-              </View>
-
-              {/* Sexe — menu déroulant */}
-              <Pressable style={styles.selectRow} onPress={() => setGenderOpen(true)} accessibilityRole="button" accessibilityLabel="Sexe">
-                <Text style={styles.label}>Sexe</Text>
-                <View style={styles.selectValue}>
-                  <Text style={[styles.value, !gender && styles.valueEmpty]}>
-                    {GENDERS.find((g) => g.value === gender)?.label ?? 'Choisir'}
-                  </Text>
-                  <Feather name="chevron-down" size={18} color={COLORS.textMuted} />
-                </View>
+              )}
+              <Pressable style={{ flex: 1 }} onPress={pickAvatar} accessibilityRole="button" accessibilityLabel="Choisir une photo de profil">
+                <Text style={styles.link}>Choisir une photo de profil</Text>
               </Pressable>
-
-              {/* Pays — menu déroulant avec noms complets */}
-              <Pressable style={styles.selectRow} onPress={() => setCountryOpen(true)} accessibilityRole="button" accessibilityLabel="Pays">
-                <Text style={styles.label}>Pays</Text>
-                <View style={styles.selectValue}>
-                  <Text style={styles.value}>{countryName(country) ?? 'Choisir'}</Text>
-                  <Feather name="chevron-down" size={18} color={COLORS.textMuted} />
-                </View>
-              </Pressable>
+              {avatarUrl ? (
+                <Pressable onPress={() => setAvatarUrl(null)} hitSlop={8} accessibilityRole="button" accessibilityLabel="Supprimer la photo de profil">
+                  <Feather name="x-circle" size={24} color={COLORS.textMuted} />
+                </Pressable>
+              ) : null}
             </View>
-          </View>
+            <View style={[styles.mediaRow, styles.mediaRowBorder]}>
+              {coverUrl ? (
+                <Image source={{ uri: tmdbImage(coverUrl, 'w185') ?? coverUrl }} style={styles.cover} resizeMode="cover" />
+              ) : (
+                <View style={[styles.cover, styles.mediaEmpty]}>
+                  <Feather name="image" size={24} color={COLORS.textSoft} />
+                </View>
+              )}
+              <Pressable style={{ flex: 1 }} onPress={() => router.push('/profile/cover')} accessibilityRole="button" accessibilityLabel="Choisir une photo de couverture">
+                <Text style={styles.link}>Choisir une photo de couverture</Text>
+              </Pressable>
+              {coverUrl ? (
+                <Pressable onPress={() => setCoverUrl(null)} hitSlop={8} accessibilityRole="button" accessibilityLabel="Supprimer la photo de couverture">
+                  <Feather name="x-circle" size={24} color={COLORS.textMuted} />
+                </Pressable>
+              ) : null}
+            </View>
+          </PrismeCard>
+
+          {/* Nom d'affichage */}
+          <PrismeCard elevated>
+            <Text style={styles.label}>Nom d'affichage</Text>
+            <TextInput style={styles.input} value={displayName} onChangeText={setDisplayName} placeholder="Votre nom" placeholderTextColor={COLORS.textSoft} />
+          </PrismeCard>
+
+          {/* Informations personnelles */}
+          <PrismeCard elevated>
+            <SectionHeader title="Informations personnelles" style={styles.cardSectionHeader} />
+
+            <View style={styles.field}>
+              <Text style={styles.label}>Année de naissance</Text>
+              <TextInput
+                style={styles.input}
+                value={birthYear}
+                onChangeText={(t) => setBirthYear(t.replace(/[^0-9]/g, '').slice(0, 4))}
+                keyboardType="number-pad"
+                placeholder="Ex. 1993"
+                placeholderTextColor={COLORS.textSoft}
+              />
+            </View>
+
+            {/* Sexe — menu déroulant */}
+            <Pressable style={styles.selectRow} onPress={() => setGenderOpen(true)} accessibilityRole="button" accessibilityLabel="Sexe">
+              <Text style={styles.label}>Sexe</Text>
+              <View style={styles.selectValue}>
+                <Text style={[styles.value, !gender && styles.valueEmpty]}>
+                  {GENDERS.find((g) => g.value === gender)?.label ?? 'Choisir'}
+                </Text>
+                <Feather name="chevron-down" size={18} color={COLORS.textMuted} />
+              </View>
+            </Pressable>
+
+            {/* Pays — menu déroulant avec noms complets */}
+            <Pressable style={styles.selectRow} onPress={() => setCountryOpen(true)} accessibilityRole="button" accessibilityLabel="Pays">
+              <Text style={styles.label}>Pays</Text>
+              <View style={styles.selectValue}>
+                <Text style={styles.value}>{countryName(country) ?? 'Choisir'}</Text>
+                <Feather name="chevron-down" size={18} color={COLORS.textMuted} />
+              </View>
+            </Pressable>
+          </PrismeCard>
         </View>
-      </ScrollView>
+      </ScreenShell>
 
       {/* Menu déroulant Sexe */}
       <Modal visible={genderOpen} transparent animationType="fade" onRequestClose={() => setGenderOpen(false)}>
         <Pressable style={styles.overlay} onPress={() => setGenderOpen(false)} accessibilityRole="button" accessibilityLabel="Fermer" />
         <View style={styles.sheet}>
+          <View style={styles.sheetHandle} />
           {GENDERS.map((g, i) => (
             <Pressable
               key={g.value}
@@ -255,64 +252,36 @@ export default function EditProfile() {
 
       {/* Menu déroulant Pays (liste complète, noms en toutes lettres) */}
       <Modal visible={countryOpen} animationType="slide" onRequestClose={() => setCountryOpen(false)}>
-        <View style={[styles.screen, { paddingTop: insets.top }]}>
-          <View style={styles.header}>
-            <View style={[styles.canvas, styles.headerRow]}>
-              <Pressable style={styles.headerBtn} onPress={() => setCountryOpen(false)} hitSlop={12} accessibilityRole="button" accessibilityLabel="Fermer">
-                <Feather name="chevron-left" size={26} color={COLORS.text} />
-              </Pressable>
-              <Text style={styles.title}>Pays</Text>
-              <View style={{ width: SIZES.touch }} />
-            </View>
-          </View>
-          <ScrollView>
-            <View style={styles.canvas}>
-              {COUNTRIES.map((c) => (
-                <Pressable
-                  key={c.code}
-                  style={styles.countryRow}
-                  onPress={() => { setCountry(c.code); setCountryOpen(false); }}
-                  accessibilityRole="radio"
-                  accessibilityState={{ checked: country === c.code }}
-                >
-                  <Text style={[styles.countryName, country === c.code && styles.countrySelected]}>{c.name}</Text>
-                  {country === c.code ? <Feather name="check" size={22} color={COLORS.primary} /> : null}
-                </Pressable>
-              ))}
-            </View>
-          </ScrollView>
-        </View>
+        <ScreenShell scroll>
+          <ScreenHeader
+            title="Pays"
+            leading={<IconAction icon="chevron-left" label="Fermer" onPress={() => setCountryOpen(false)} />}
+          />
+          {COUNTRIES.map((c) => (
+            <Pressable
+              key={c.code}
+              style={styles.countryRow}
+              onPress={() => { setCountry(c.code); setCountryOpen(false); }}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: country === c.code }}
+            >
+              <Text style={[styles.countryName, country === c.code && styles.countrySelected]}>{c.name}</Text>
+              {country === c.code ? <Feather name="check" size={22} color={COLORS.primary} /> : null}
+            </Pressable>
+          ))}
+        </ScreenShell>
       </Modal>
-    </View>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: COLORS.bg },
-  canvas: { width: '100%', maxWidth: SIZES.contentMax, alignSelf: 'center' },
-  header: { backgroundColor: COLORS.surface, borderBottomWidth: 1, borderBottomColor: COLORS.borderLight },
-  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACE.md, minHeight: SIZES.header },
-  headerBtn: { width: SIZES.touch, height: SIZES.touch, alignItems: 'flex-start', justifyContent: 'center' },
-  title: { flex: 1, textAlign: 'center', color: COLORS.text, fontSize: 17, fontFamily: FONTS.extraBold },
+  list: { gap: SPACE.sm, paddingBottom: SPACE.xl },
+  cardSectionHeader: { marginTop: 0, marginBottom: SPACE.xs },
   saveBtn: { minHeight: 36, justifyContent: 'center', paddingHorizontal: SPACE.sm, backgroundColor: COLORS.primary, borderRadius: RADIUS.pill },
-  save: { color: COLORS.onPrimary, fontSize: 13, fontFamily: FONTS.extraBold, letterSpacing: 0.4 },
+  saveText: { color: COLORS.onPrimary, fontSize: 13, fontFamily: FONTS.extraBold, letterSpacing: 0.4 },
+  saveBtnBusy: { opacity: 0.6 },
   btnPressed: { opacity: 0.86, transform: [{ scale: 0.98 }] },
-  scroll: { flexGrow: 1, paddingBottom: SPACE.xl },
-  list: { padding: SPACE.md, gap: SPACE.sm },
-  card: {
-    backgroundColor: COLORS.surface,
-    borderRadius: RADIUS.card,
-    padding: SPACE.md,
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
-    ...SHADOW.card,
-  },
-  cardHead: { flexDirection: 'row', alignItems: 'center', gap: SPACE.xs, marginBottom: SPACE.xs },
-  cardIcon: {
-    width: 30, height: 30, flexShrink: 0, borderRadius: RADIUS.control,
-    backgroundColor: COLORS.primarySoft, alignItems: 'center', justifyContent: 'center',
-  },
-  cardTitle: { flex: 1, color: COLORS.text, fontSize: 15, fontFamily: FONTS.extraBold },
   mediaRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.md, paddingVertical: SPACE.xs },
   mediaRowBorder: { borderTopWidth: 1, borderTopColor: COLORS.borderLight, marginTop: SPACE.xs, paddingTop: SPACE.sm },
   avatar: { width: 60, height: 60, borderRadius: 30, backgroundColor: COLORS.imagePlaceholder },
@@ -327,10 +296,11 @@ const styles = StyleSheet.create({
   value: { fontFamily: FONTS.regular, fontSize: 16, color: COLORS.text },
   valueEmpty: { color: COLORS.textSoft },
   overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: COLORS.overlay },
-  sheet: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: COLORS.surface, borderTopLeftRadius: RADIUS.sheet, borderTopRightRadius: RADIUS.sheet, paddingBottom: SPACE.lg, width: '100%', maxWidth: SIZES.contentMax, alignSelf: 'center' },
+  sheet: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: COLORS.surface, borderTopLeftRadius: RADIUS.sheet, borderTopRightRadius: RADIUS.sheet, paddingTop: SPACE.xs, paddingBottom: SPACE.lg, width: '100%', maxWidth: SIZES.contentMax, alignSelf: 'center' },
+  sheetHandle: { width: 42, height: 4, alignSelf: 'center', marginBottom: SPACE.sm, borderRadius: RADIUS.pill, backgroundColor: COLORS.border },
   sheetItem: { minHeight: 58, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACE.lg, borderBottomWidth: 1, borderBottomColor: COLORS.borderLight },
   sheetLabel: { color: COLORS.text, fontFamily: FONTS.regular, fontSize: 16 },
-  countryRow: { minHeight: SIZES.touch, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACE.lg, paddingVertical: SPACE.sm, borderBottomWidth: 1, borderBottomColor: COLORS.borderLight },
+  countryRow: { minHeight: SIZES.touch, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACE.xs, paddingVertical: SPACE.sm, borderBottomWidth: 1, borderBottomColor: COLORS.borderLight },
   countryName: { color: COLORS.text, fontFamily: FONTS.regular, fontSize: 16 },
   countrySelected: { color: COLORS.primary, fontFamily: FONTS.bold },
 });

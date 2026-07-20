@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, Pressable, Image, TextInput, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Pressable, Image, TextInput } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import { goBack } from '@/lib/nav';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { api, tmdbImage } from '@/lib/api';
 import { useDebounced } from '@/lib/useDebounced';
@@ -11,6 +9,7 @@ import { useAppStore } from '@/lib/store';
 import { COLORS, FONTS, RADIUS, SIZES, SPACE } from '@/lib/theme';
 import { EmptyState, Loading } from '@/components/ui';
 import { AppearItem } from '@/components/anim';
+import { ScreenShell, ScreenHeader, IconAction } from '@/components/prisme';
 
 type Result = {
   id: string | null;
@@ -24,8 +23,6 @@ type Result = {
 type Picked = { title: string; type: 'show' | 'movie' };
 
 export default function CoverPicker() {
-  const insets = useSafeAreaInsets();
-  const router = useRouter();
   const setCoverPick = useAppStore((s) => s.setCoverPick);
 
   const [query, setQuery] = useState('');
@@ -72,25 +69,14 @@ export default function CoverPicker() {
     goBack('/profile/edit');
   };
 
+  const onHeaderBack = () => (picked ? (setPicked(null), setMediaId(null)) : goBack('/profile/edit'));
+
   return (
-    <View style={[styles.screen, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        <View style={[styles.canvas, styles.headerRow]}>
-          <Pressable
-            style={styles.headerBtn}
-            onPress={() => (picked ? (setPicked(null), setMediaId(null)) : goBack('/profile/edit'))}
-            hitSlop={12}
-            accessibilityRole="button"
-            accessibilityLabel="Retour"
-          >
-            <Feather name="chevron-left" size={26} color={COLORS.text} />
-          </Pressable>
-          <Text style={styles.title} numberOfLines={1}>
-            {picked ? picked.title : 'Choisir une couverture'}
-          </Text>
-          <View style={{ width: SIZES.touch }} />
-        </View>
-      </View>
+    <ScreenShell contentContainerStyle={styles.content}>
+      <ScreenHeader
+        title={picked ? picked.title : 'Choisir une couverture'}
+        leading={<IconAction icon="chevron-left" label="Retour" onPress={onHeaderBack} />}
+      />
 
       {picked ? (
         banners.isLoading || resolving ? (
@@ -98,8 +84,8 @@ export default function CoverPicker() {
         ) : (banners.data?.backdrops.length ?? 0) === 0 ? (
           <EmptyState title="Aucune bannière" message={`« ${picked.title} » n’a pas de bannière disponible.`} />
         ) : (
-          <ScrollView contentContainerStyle={styles.scroll}>
-            <View style={[styles.canvas, styles.bannerList]}>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+            <View style={styles.bannerList}>
               {banners.data!.backdrops.map((uri, i) => (
                 <AppearItem key={uri} index={i}>
                   <Pressable style={styles.bannerWrap} onPress={() => choose(uri)} accessibilityRole="button" accessibilityLabel="Choisir cette bannière">
@@ -112,19 +98,17 @@ export default function CoverPicker() {
         )
       ) : (
         <>
-          <View style={styles.canvas}>
-            <View style={styles.searchbar}>
-              <Feather name="search" size={20} color={COLORS.textMuted} />
-              <TextInput
-                style={styles.input}
-                placeholder="Rechercher des séries et films"
-                placeholderTextColor={COLORS.textMuted}
-                value={query}
-                onChangeText={setQuery}
-                autoCapitalize="none"
-                autoFocus
-              />
-            </View>
+          <View style={styles.searchbar}>
+            <Feather name="search" size={20} color={COLORS.textMuted} />
+            <TextInput
+              style={styles.input}
+              placeholder="Rechercher des séries et films"
+              placeholderTextColor={COLORS.textMuted}
+              value={query}
+              onChangeText={setQuery}
+              autoCapitalize="none"
+              autoFocus
+            />
           </View>
           {resolving ? <Loading /> : null}
           {dq.length <= 1 ? (
@@ -134,57 +118,49 @@ export default function CoverPicker() {
           ) : (search.data?.results.length ?? 0) === 0 ? (
             <EmptyState title="Aucun résultat" message={`Rien trouvé pour « ${query.trim()} ».`} />
           ) : (
-            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll}>
-              <View style={styles.canvas}>
-                {search.data!.results.map((r) => {
-                  const poster = tmdbImage(r.posterPath, 'w185');
-                  return (
-                    <Pressable key={`${r.type}-${r.id ?? r.tvdbId ?? r.tmdbId}`} style={({ pressed }) => [styles.row, pressed && styles.rowPressed]} onPress={() => openBanners(r)}>
-                      {poster ? (
-                        <Image source={{ uri: poster }} style={styles.poster} resizeMode="cover" />
-                      ) : (
-                        <View style={[styles.poster, styles.posterEmpty]}>
-                          <Feather name="image" size={18} color={COLORS.textSoft} />
-                        </View>
-                      )}
-                      <Text style={styles.rowTitle} numberOfLines={1}>
-                        {r.title}
-                      </Text>
-                      <Feather name="chevron-right" size={22} color={COLORS.textMuted} />
-                    </Pressable>
-                  );
-                })}
-              </View>
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+              {search.data!.results.map((r) => {
+                const poster = tmdbImage(r.posterPath, 'w185');
+                return (
+                  <Pressable key={`${r.type}-${r.id ?? r.tvdbId ?? r.tmdbId}`} style={({ pressed }) => [styles.row, pressed && styles.rowPressed]} onPress={() => openBanners(r)}>
+                    {poster ? (
+                      <Image source={{ uri: poster }} style={styles.poster} resizeMode="cover" />
+                    ) : (
+                      <View style={[styles.poster, styles.posterEmpty]}>
+                        <Feather name="image" size={18} color={COLORS.textSoft} />
+                      </View>
+                    )}
+                    <Text style={styles.rowTitle} numberOfLines={1}>
+                      {r.title}
+                    </Text>
+                    <Feather name="chevron-right" size={22} color={COLORS.textMuted} />
+                  </Pressable>
+                );
+              })}
             </ScrollView>
           )}
         </>
       )}
-    </View>
+    </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: COLORS.bg },
-  canvas: { width: '100%', maxWidth: SIZES.contentMax, alignSelf: 'center' },
-  header: { backgroundColor: COLORS.surface, borderBottomWidth: 1, borderBottomColor: COLORS.borderLight },
-  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACE.md, minHeight: SIZES.header },
-  headerBtn: { width: SIZES.touch, height: SIZES.touch, alignItems: 'flex-start', justifyContent: 'center' },
-  title: { color: COLORS.text, fontSize: 17, fontFamily: FONTS.extraBold, flex: 1, textAlign: 'center' },
-  scroll: { flexGrow: 1, paddingBottom: SPACE.xl },
+  content: { paddingBottom: 0 },
+  scrollContent: { paddingBottom: SPACE.xl },
   searchbar: {
     flexDirection: 'row', alignItems: 'center', gap: SPACE.sm,
-    marginHorizontal: SPACE.md, marginTop: SPACE.sm,
     paddingHorizontal: SPACE.md, minHeight: SIZES.touchComfortable,
     backgroundColor: COLORS.surfaceMuted, borderRadius: RADIUS.pill,
-    borderWidth: 1, borderColor: COLORS.borderLight,
+    borderWidth: 1, borderColor: COLORS.borderLight, marginBottom: SPACE.sm,
   },
   input: { color: COLORS.text, flex: 1, fontFamily: FONTS.regular, fontSize: 16, paddingVertical: 8 },
-  row: { minHeight: SIZES.touch, flexDirection: 'row', alignItems: 'center', gap: SPACE.md, paddingHorizontal: SPACE.md, paddingVertical: SPACE.xs },
+  row: { minHeight: SIZES.touch, flexDirection: 'row', alignItems: 'center', gap: SPACE.md, paddingVertical: SPACE.xs, borderRadius: RADIUS.control },
   rowPressed: { backgroundColor: COLORS.primarySoft },
   poster: { width: 46, aspectRatio: 2 / 3, borderRadius: RADIUS.small, backgroundColor: COLORS.imagePlaceholder },
   posterEmpty: { alignItems: 'center', justifyContent: 'center' },
   rowTitle: { color: COLORS.text, flex: 1, fontSize: 16, fontFamily: FONTS.bold },
-  bannerList: { padding: SPACE.md, gap: SPACE.sm },
+  bannerList: { gap: SPACE.sm },
   bannerWrap: { width: '100%', aspectRatio: 16 / 9, borderRadius: RADIUS.card, overflow: 'hidden', backgroundColor: COLORS.imagePlaceholder },
   banner: { width: '100%', height: '100%' },
 });

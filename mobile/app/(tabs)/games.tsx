@@ -2,14 +2,15 @@ import React, { useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, ActivityIndicator, useWindowDimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import type { Href } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { api, tmdbImage } from '@/lib/api';
 import { COLORS, FONTS, RADIUS, SPACE, SIZES } from '@/lib/theme';
-import { PillHeader, EmptyState, Loading, LoadError, Poster } from '@/components/ui';
+import { EmptyState, LoadError, Poster } from '@/components/ui';
+import { ScreenHeader, ScreenShell, SectionHeader, PrismeCard } from '@/components/prisme';
 import { AppearItem } from '@/components/anim';
 import { PullToRefresh } from '@/components/PullToRefresh';
 import { useFloatingSection, FloatingSectionPill } from '@/components/FloatingSection';
+import { GridSkeleton } from '@/components/skeletons';
 import { useTabResetSeq } from '@/lib/tabReset';
 import { usePullRefresh } from '@/lib/usePullRefresh';
 
@@ -46,11 +47,11 @@ type GamesUpcomingResponse = { groups: { label: string; items: GameUpcomingItemD
 // lignes isOwned côté serveur) — un jeu peut apparaître dans POSSÉDÉS ET dans
 // son groupe de statut (ex. EN COURS), c'est voulu.
 const SECTIONS: { key: keyof GamesLibraryResponse; label: string }[] = [
-  { key: 'wishlist', label: 'VOULUS' },
-  { key: 'owned', label: 'POSSÉDÉS' },
-  { key: 'playing', label: 'EN COURS' },
-  { key: 'completed', label: 'TERMINÉS' },
-  { key: 'abandoned', label: 'ABANDONNÉS' },
+  { key: 'wishlist', label: 'Voulus' },
+  { key: 'owned', label: 'Possédés' },
+  { key: 'playing', label: 'En cours' },
+  { key: 'completed', label: 'Terminés' },
+  { key: 'abandoned', label: 'Abandonnés' },
 ];
 
 export default function GamesScreen() {
@@ -60,9 +61,7 @@ export default function GamesScreen() {
 }
 
 function GamesScreenInner() {
-  const insets = useSafeAreaInsets();
   const router = useRouter();
-  const qc = useQueryClient();
   const { width } = useWindowDimensions();
   const library = useQuery({
     queryKey: ['games', 'library'],
@@ -154,120 +153,120 @@ function GamesScreenInner() {
   );
 
   return (
-    <View style={styles.screen}>
-      {/* En-tête d'écran (même identité que l'onglet Séries). */}
-      <View style={[styles.header, { paddingTop: insets.top + SPACE.sm }]}>
-        <View style={styles.canvas}>
-          <Text style={styles.eyebrow}>BIBLIOTHÈQUE</Text>
-          <Text accessibilityRole="header" style={styles.title}>Jeux</Text>
-          <Text style={styles.subtitle}>Ta collection, les sorties à venir et la découverte.</Text>
-        </View>
-      </View>
+    <ScreenShell contentContainerStyle={styles.content}>
+      {/* En-tête d'écran (même identité que l'onglet Films). */}
+      <ScreenHeader
+        eyebrow="Bibliothèque"
+        title="Jeux"
+        subtitle="Ta collection, les sorties à venir et la découverte."
+      />
 
       {library.isLoading ? (
-        <Loading />
+        <GridSkeleton />
       ) : library.isError && !library.data ? (
         <LoadError onRetry={library.refetch} busy={library.isRefetching} />
       ) : (
         // Vue intermédiaire flex:1 : la pastille flottante se positionne par
         // rapport à elle (sous l'en-tête, pas dessus).
-        <View style={{ flex: 1 }}>
-        {/* Tirer-pour-actualiser façon Instagram (le même que le Profil) —
-            fonctionne web + natif, contrairement au RefreshControl RN. */}
-        <PullToRefresh
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          contentContainerStyle={styles.scrollContent}
-          onScroll={onListScroll}
-        >
-          {library.data ? (
-            <View style={styles.canvas}>
-              {!isEmpty ? (
-                (() => {
-                  const data = library.data;
-                  let n = -1;
-                  return SECTIONS.map(({ key, label }) => {
-                    const items = data[key];
-                    if (items.length === 0) return null;
-                    const start = n + 1;
-                    n += items.length;
-                    return (
-                      <View key={key} onLayout={registerSection(label)}>
-                        <PillHeader label={label} />
-                        {grid(items, start)}
+        <View style={styles.body}>
+          {/* Tirer-pour-actualiser façon Instagram (le même que le Profil) —
+              fonctionne web + natif, contrairement au RefreshControl RN. */}
+          <PullToRefresh
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            contentContainerStyle={styles.scrollContent}
+            onScroll={onListScroll}
+          >
+            {library.data ? (
+              <>
+                {!isEmpty ? (
+                  (() => {
+                    const data = library.data;
+                    let n = -1;
+                    return SECTIONS.map(({ key, label }) => {
+                      const items = data[key];
+                      if (items.length === 0) return null;
+                      const start = n + 1;
+                      n += items.length;
+                      return (
+                        <View key={key} onLayout={registerSection(label)}>
+                          <SectionHeader title={label} />
+                          {grid(items, start)}
+                        </View>
+                      );
+                    });
+                  })()
+                ) : (
+                  <EmptyState title="Aucun jeu suivi" message="Ajoutez des jeux depuis la découverte ci-dessous." />
+                )}
+
+                {/* Sorties à venir : jeux suivis dont la sortie n'est pas encore
+                    passée, groupés par mois (n'apparaît que si non vide, donc
+                    jamais affiché quand la bibliothèque est vide). */}
+                {upcoming.data && upcoming.data.groups.length > 0 ? (
+                  <View onLayout={registerSection('Sorties à venir')}>
+                    <PrismeCard elevated style={styles.sectionCard}>
+                      <SectionHeader title="Sorties à venir" />
+                      {upcoming.data.groups.map((g) => (
+                        <View key={g.label} style={styles.upcomingGroup}>
+                          <Text style={styles.groupLabel}>{g.label.toUpperCase()}</Text>
+                          {upcomingRow(g.items)}
+                        </View>
+                      ))}
+                    </PrismeCard>
+                  </View>
+                ) : null}
+
+                {/* Découverte IGDB : toujours sous la bibliothèque, seul contenu
+                    visible (avec l'EmptyState ci-dessus) quand elle est vide —
+                    jamais affichée deux fois. */}
+                {discover.isLoading && !discover.data ? (
+                  <PrismeCard elevated style={styles.sectionCard}>
+                    <SectionHeader eyebrow="Découverte" title="Populaires et à venir" />
+                    <ActivityIndicator color={COLORS.primary} />
+                  </PrismeCard>
+                ) : discover.data ? (
+                  <>
+                    {discover.data.popular.length > 0 ? (
+                      <View onLayout={registerSection('Populaires')}>
+                        <PrismeCard elevated style={styles.sectionCard}>
+                          <SectionHeader eyebrow="Découverte" title="Populaires" />
+                          {discoverRow(discover.data.popular)}
+                        </PrismeCard>
                       </View>
-                    );
-                  });
-                })()
-              ) : (
-                <EmptyState title="Aucun jeu suivi" message="Ajoutez des jeux depuis la découverte ci-dessous." />
-              )}
-
-              {/* Sorties à venir : jeux suivis dont la sortie n'est pas encore
-                  passée, groupés par mois (n'apparaît que si non vide, donc
-                  jamais affiché quand la bibliothèque est vide). */}
-              {upcoming.data && upcoming.data.groups.length > 0 ? (
-                <View onLayout={registerSection('Sorties à venir')}>
-                  <PillHeader label="SORTIES À VENIR" />
-                  {upcoming.data.groups.map((g) => (
-                    <View key={g.label} style={{ paddingBottom: SPACE.xs }}>
-                      <Text style={styles.groupLabel}>{g.label.toUpperCase()}</Text>
-                      {upcomingRow(g.items)}
-                    </View>
-                  ))}
-                </View>
-              ) : null}
-
-              {/* Découverte IGDB : toujours sous la bibliothèque, seul contenu
-                  visible (avec l'EmptyState ci-dessus) quand elle est vide —
-                  jamais affichée deux fois. */}
-              {discover.isLoading && !discover.data ? (
-                <Loading />
-              ) : discover.data ? (
-                <>
-                  {discover.data.popular.length > 0 ? (
-                    <View onLayout={registerSection('Populaires')}>
-                      <PillHeader label="POPULAIRES" />
-                      {discoverRow(discover.data.popular)}
-                    </View>
-                  ) : null}
-                  {discover.data.upcoming.length > 0 ? (
-                    <View onLayout={registerSection('À venir')}>
-                      <PillHeader label="À VENIR" />
-                      {discoverRow(discover.data.upcoming)}
-                    </View>
-                  ) : null}
-                </>
-              ) : null}
-            </View>
-          ) : null}
-        </PullToRefresh>
-        {/* Pastille de statut flottante (suit le scroll, comme l'onglet Séries). */}
-        <FloatingSectionPill label={floatLabel} />
+                    ) : null}
+                    {discover.data.upcoming.length > 0 ? (
+                      <View onLayout={registerSection('À venir')}>
+                        <PrismeCard elevated style={styles.sectionCard}>
+                          <SectionHeader eyebrow="Découverte" title="À venir" />
+                          {discoverRow(discover.data.upcoming)}
+                        </PrismeCard>
+                      </View>
+                    ) : null}
+                  </>
+                ) : null}
+              </>
+            ) : null}
+          </PullToRefresh>
+          {/* Pastille de statut flottante (suit le scroll, comme l'onglet Séries). */}
+          <FloatingSectionPill label={floatLabel} />
         </View>
       )}
-    </View>
+    </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: COLORS.pageMuted },
-  canvas: { width: '100%', maxWidth: SIZES.contentMax, alignSelf: 'center' },
-  header: {
-    backgroundColor: COLORS.surface,
-    paddingHorizontal: SPACE.lg,
-    paddingBottom: SPACE.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: COLORS.borderLight,
-  },
-  eyebrow: { color: COLORS.primary, fontFamily: FONTS.bold, fontSize: 11, letterSpacing: 1.2 },
-  title: { color: COLORS.text, fontFamily: FONTS.extraBold, fontSize: 30, lineHeight: 36 },
-  subtitle: { color: COLORS.textMuted, fontFamily: FONTS.regular, fontSize: 13, marginTop: 2 },
-  scrollContent: { paddingTop: SPACE.sm, paddingBottom: SIZES.tabBar + SPACE.lg },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: SPACE.md, gap: SPACE.sm },
-  carousel: { paddingHorizontal: SPACE.md, gap: SPACE.xs },
+  content: { paddingBottom: 0 },
+  body: { flex: 1 },
+  scrollContent: { paddingTop: SPACE.xs, paddingBottom: SIZES.tabBar + SPACE.lg },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACE.sm },
+  carousel: { gap: SPACE.xs },
+  // Carte Prisme regroupant la découverte / les sorties à venir.
+  sectionCard: { marginTop: SPACE.sm },
+  upcomingGroup: { paddingBottom: SPACE.xs },
   // Sous-titre de groupe (mois) au-dessus d'un carrousel « Sorties à venir ».
-  groupLabel: { fontFamily: FONTS.bold, fontSize: 13, color: COLORS.textMuted, marginHorizontal: SPACE.md, marginBottom: 6, letterSpacing: 0.4 },
+  groupLabel: { fontFamily: FONTS.bold, fontSize: 13, color: COLORS.textMuted, marginBottom: 6, letterSpacing: 0.4 },
   // Overlay « en cours d'ajout » posé sur une jaquette de découverte.
   posterBusy: {
     position: 'absolute', top: 0, left: 0, right: 0, aspectRatio: 2 / 3,

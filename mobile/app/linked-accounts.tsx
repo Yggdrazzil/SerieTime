@@ -1,12 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { api, ApiError } from '@/lib/api';
 import { useAppStore } from '@/lib/store';
-import { COLORS, FONTS, RADIUS, SHADOW, SIZES, SPACE } from '@/lib/theme';
-import { PageHeader } from '@/components/PageHeader';
+import { COLORS, FONTS, RADIUS, SIZES, SPACE } from '@/lib/theme';
+import { goBack } from '@/lib/nav';
+import { ScreenShell, ScreenHeader, PrismeCard, IconAction } from '@/components/prisme';
 import { EmptyState } from '@/components/ui';
-import { Pop } from '@/components/anim';
 import { ssoWebAvailable, initGoogleButton, facebookLogin, discordLogin } from '@/lib/sso';
 
 type Providers = {
@@ -74,61 +74,62 @@ export default function LinkedAccountsScreen() {
   const none = !ssoWebAvailable() || !cfg || (!cfg.google && !cfg.facebook && !cfg.discord);
 
   return (
-    <Pop style={styles.screen}>
-      <PageHeader title="Comptes liés" />
+    <ScreenShell scroll={!none}>
+      <ScreenHeader
+        title="Comptes liés"
+        leading={<IconAction icon="chevron-left" label="Retour" onPress={() => goBack('/profile')} />}
+      />
       {none ? (
         <EmptyState
           title="Aucun compte à lier"
           message="La connexion Google / Discord / Facebook n'est pas configurée sur ce serveur."
         />
       ) : (
-        <ScrollView contentContainerStyle={styles.scroll}>
-          <View style={styles.canvas}>
-            <Text style={styles.lead}>
-              Lie un réseau pour te connecter à PlotTime en un clic.
-            </Text>
-            <View style={styles.card}>
-              {cfg.google ? (
-                linked.google ? (
-                  <LinkedRow label="Google" icon="chrome" busy={busy === 'google'} onUnlink={() => unlink('google')} />
-                ) : (
-                  <View ref={gRef} style={{ alignItems: 'flex-start', paddingVertical: SPACE.xs }} />
-                )
-              ) : null}
-              {cfg.discord ? (
-                linked.discord ? (
-                  <LinkedRow label="Discord" icon="message-circle" busy={busy === 'discord'} onUnlink={() => unlink('discord')} />
-                ) : (
-                  <Pressable
-                    style={({ pressed }) => [styles.ssoBtn, { backgroundColor: '#5865F2' }, pressed && styles.btnPressed]}
-                    disabled={busy === 'discord'}
-                    onPress={() => discordLogin(cfg.discordClientId).then((t) => link('discord', t)).catch(() => undefined)}
-                  >
-                    <Feather name="message-circle" size={16} color="#fff" />
-                    <Text style={styles.ssoText}>Lier Discord</Text>
-                  </Pressable>
-                )
-              ) : null}
-              {cfg.facebook ? (
-                linked.facebook ? (
-                  <LinkedRow label="Facebook" icon="facebook" busy={busy === 'facebook'} onUnlink={() => unlink('facebook')} />
-                ) : (
-                  <Pressable
-                    style={({ pressed }) => [styles.ssoBtn, { backgroundColor: '#1877F2' }, pressed && styles.btnPressed]}
-                    disabled={busy === 'facebook'}
-                    onPress={() => facebookLogin(cfg.facebookAppId).then((t) => link('facebook', t)).catch(() => undefined)}
-                  >
-                    <Feather name="facebook" size={16} color="#fff" />
-                    <Text style={styles.ssoText}>Lier Facebook</Text>
-                  </Pressable>
-                )
-              ) : null}
-            </View>
-            {err ? <Text style={styles.err}>{err}</Text> : null}
-          </View>
-        </ScrollView>
+        <>
+          <Text style={styles.lead}>
+            Lie un réseau pour te connecter à PlotTime en un clic.
+          </Text>
+          <PrismeCard elevated style={styles.providersCard}>
+            {cfg.google ? (
+              linked.google ? (
+                <LinkedRow label="Google" icon="chrome" busy={busy === 'google'} onUnlink={() => unlink('google')} />
+              ) : (
+                <View ref={gRef} style={{ alignItems: 'flex-start', paddingVertical: SPACE.xs }} />
+              )
+            ) : null}
+            {cfg.discord ? (
+              linked.discord ? (
+                <LinkedRow label="Discord" icon="message-circle" busy={busy === 'discord'} onUnlink={() => unlink('discord')} />
+              ) : (
+                <Pressable
+                  style={({ pressed }) => [styles.ssoBtn, { backgroundColor: '#5865F2' }, pressed && styles.btnPressed]}
+                  disabled={busy === 'discord'}
+                  onPress={() => discordLogin(cfg.discordClientId).then((t) => link('discord', t)).catch(() => undefined)}
+                >
+                  <Feather name="message-circle" size={16} color="#fff" />
+                  <Text style={styles.ssoText}>Lier Discord</Text>
+                </Pressable>
+              )
+            ) : null}
+            {cfg.facebook ? (
+              linked.facebook ? (
+                <LinkedRow label="Facebook" icon="facebook" busy={busy === 'facebook'} onUnlink={() => unlink('facebook')} />
+              ) : (
+                <Pressable
+                  style={({ pressed }) => [styles.ssoBtn, { backgroundColor: '#1877F2' }, pressed && styles.btnPressed]}
+                  disabled={busy === 'facebook'}
+                  onPress={() => facebookLogin(cfg.facebookAppId).then((t) => link('facebook', t)).catch(() => undefined)}
+                >
+                  <Feather name="facebook" size={16} color="#fff" />
+                  <Text style={styles.ssoText}>Lier Facebook</Text>
+                </Pressable>
+              )
+            ) : null}
+          </PrismeCard>
+          {err ? <Text style={styles.err}>{err}</Text> : null}
+        </>
       )}
-    </Pop>
+    </ScreenShell>
   );
 }
 
@@ -153,19 +154,8 @@ function LinkedRow({ label, icon, busy, onUnlink }: { label: string; icon: keyof
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: COLORS.bg },
-  canvas: { width: '100%', maxWidth: SIZES.contentMax, alignSelf: 'center' },
-  scroll: { flexGrow: 1, padding: SPACE.md, paddingBottom: SPACE.xl },
   lead: { fontFamily: FONTS.regular, fontSize: 15, color: COLORS.textMuted, marginBottom: SPACE.sm, lineHeight: 21 },
-  card: {
-    gap: SPACE.sm,
-    backgroundColor: COLORS.surface,
-    borderRadius: RADIUS.card,
-    padding: SPACE.md,
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
-    ...SHADOW.card,
-  },
+  providersCard: { gap: SPACE.sm },
   linkedRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.sm, minHeight: SIZES.touch },
   linkedIcon: { width: 38, height: 38, borderRadius: RADIUS.control, backgroundColor: COLORS.primarySoft, alignItems: 'center', justifyContent: 'center' },
   linkedLabel: { color: COLORS.text, fontFamily: FONTS.bold, fontSize: 16 },

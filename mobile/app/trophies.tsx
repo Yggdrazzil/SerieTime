@@ -5,13 +5,14 @@ import { useQuery } from '@tanstack/react-query';
 import { api, tmdbImage } from '@/lib/api';
 import { useAppStore } from '@/lib/store';
 import { COLORS, FONTS, RADIUS, SHADOW, SIZES, SPACE } from '@/lib/theme';
-import { PageHeader } from '@/components/PageHeader';
+import { ScreenShell, ScreenHeader, SectionHeader, PrismeCard, ProgressBar, IconAction } from '@/components/prisme';
+import { goBack } from '@/lib/nav';
 import { LoadError, EmptyState } from '@/components/ui';
 import { Skeleton, AnimatedFill, AppearItem } from '@/components/anim';
 import type { BadgeDto, GamificationMeDto, LeaderboardRowDto } from '@/lib/types';
 
 // Paliers bronze → argent → or → platine (spec 2026-07-16 §3/§10).
-const TIER_COLORS: Record<number, string> = { 0: '#E3E3E3', 1: '#CD7F32', 2: '#9AA2AA', 3: '#D4A017', 4: '#7FDBFF' };
+const TIER_COLORS: Record<number, string> = { 0: COLORS.surfaceMuted, 1: '#CD7F32', 2: '#9AA2AA', 3: '#D4A017', 4: '#7FDBFF' };
 const TIER_LABELS: Record<number, string> = { 0: 'Non débloqué', 1: 'Bronze', 2: 'Argent', 3: 'Or', 4: 'Platine' };
 
 // Le catalogue serveur mélange des noms Feather et Ionicons (« game-controller »,
@@ -35,34 +36,33 @@ export default function TrophiesScreen() {
   const [openBadge, setOpenBadge] = useState<BadgeDto | null>(null);
 
   return (
-    <View style={styles.screen}>
-      <PageHeader title="Trophées" />
+    <ScreenShell scroll>
+      <ScreenHeader
+        title="Trophées"
+        leading={<IconAction icon="chevron-left" label="Retour" onPress={() => goBack('/profile')} />}
+      />
       {me.isLoading ? (
         <TrophiesSkeleton />
       ) : me.isError || !me.data ? (
         <LoadError onRetry={me.refetch} busy={me.isRefetching} />
       ) : (
-        <ScrollView contentContainerStyle={styles.scroll}>
-          <View style={styles.canvas}>
-            <View style={styles.list}>
-              <AppearItem index={0}><LevelCard data={me.data} /></AppearItem>
-              <AppearItem index={1}><StreakCard data={me.data} /></AppearItem>
-              <AppearItem index={2}><ChallengesCard data={me.data} /></AppearItem>
-              <AppearItem index={3}><BadgesCard data={me.data} onOpenBadge={setOpenBadge} /></AppearItem>
-              <AppearItem index={4}>
-                <LeaderboardCard
-                  rows={leaderboard.data?.leaderboard}
-                  isLoading={leaderboard.isLoading}
-                  isError={leaderboard.isError}
-                  myId={myId}
-                />
-              </AppearItem>
-            </View>
-          </View>
-        </ScrollView>
+        <View style={styles.list}>
+          <AppearItem index={0}><LevelCard data={me.data} /></AppearItem>
+          <AppearItem index={1}><StreakCard data={me.data} /></AppearItem>
+          <AppearItem index={2}><ChallengesCard data={me.data} /></AppearItem>
+          <AppearItem index={3}><BadgesCard data={me.data} onOpenBadge={setOpenBadge} /></AppearItem>
+          <AppearItem index={4}>
+            <LeaderboardCard
+              rows={leaderboard.data?.leaderboard}
+              isLoading={leaderboard.isLoading}
+              isError={leaderboard.isError}
+              myId={myId}
+            />
+          </AppearItem>
+        </View>
       )}
       <BadgeModal badge={openBadge} onClose={() => setOpenBadge(null)} />
-    </View>
+    </ScreenShell>
   );
 }
 
@@ -71,9 +71,8 @@ export default function TrophiesScreen() {
 function LevelCard({ data }: { data: GamificationMeDto }) {
   // Palier XP de départ du niveau courant : cohérent avec `level = floor(sqrt(xp/50))`
   // et `nextLevelXp = 50*(level+1)^2` (packages/core/src/gamification/xp.ts).
-  const pct = data.nextLevelXp > 0 ? Math.min(100, (data.xp / data.nextLevelXp) * 100) : 0;
   return (
-    <View style={[styles.card, styles.levelCard]}>
+    <PrismeCard style={styles.levelCard} elevated>
       <View style={styles.levelWrap}>
         <View style={styles.levelCircle}>
           <Text style={styles.levelNumber}>{data.level}</Text>
@@ -81,13 +80,11 @@ function LevelCard({ data }: { data: GamificationMeDto }) {
         <Text style={styles.levelEyebrow}>Niveau {data.level}</Text>
         <Text style={styles.levelTitle}>{data.levelTitle}</Text>
       </View>
-      <View style={styles.xpTrack}>
-        <AnimatedFill pct={pct} color={COLORS.yellow} style={styles.xpFill} />
-      </View>
+      <ProgressBar value={data.xp} max={data.nextLevelXp} label="Progression du niveau" style={styles.xpBar} height={10} />
       <Text style={styles.xpLabel}>
         {data.xp.toLocaleString('fr-FR')} / {data.nextLevelXp.toLocaleString('fr-FR')} XP
       </Text>
-    </View>
+    </PrismeCard>
   );
 }
 
@@ -96,7 +93,7 @@ function LevelCard({ data }: { data: GamificationMeDto }) {
 function StreakCard({ data }: { data: GamificationMeDto }) {
   const active = data.currentStreak > 0;
   return (
-    <View style={[styles.card, styles.streakCard]}>
+    <PrismeCard style={styles.streakCard} elevated>
       <View style={[styles.streakIcon, active && styles.streakIconActive]}>
         <Ionicons name="flame" size={26} color={active ? '#FF7A1A' : COLORS.textSoft} />
       </View>
@@ -110,7 +107,7 @@ function StreakCard({ data }: { data: GamificationMeDto }) {
           Record : {data.bestStreak} jour{data.bestStreak > 1 ? 's' : ''}
         </Text>
       </View>
-    </View>
+    </PrismeCard>
   );
 }
 
@@ -118,9 +115,9 @@ function StreakCard({ data }: { data: GamificationMeDto }) {
 
 function ChallengesCard({ data }: { data: GamificationMeDto }) {
   return (
-    <View style={styles.card}>
-      <Text style={styles.cardTitle}>Défis du mois</Text>
-      <View style={{ gap: SPACE.md, marginTop: SPACE.sm }}>
+    <PrismeCard elevated>
+      <SectionHeader title="Défis du mois" style={styles.cardSectionHeader} />
+      <View style={{ gap: SPACE.md }}>
         {data.challenges.map((c) => {
           const pct = c.target > 0 ? Math.min(100, (c.progress / c.target) * 100) : 0;
           return (
@@ -150,7 +147,7 @@ function ChallengesCard({ data }: { data: GamificationMeDto }) {
           );
         })}
       </View>
-    </View>
+    </PrismeCard>
   );
 }
 
@@ -158,8 +155,8 @@ function ChallengesCard({ data }: { data: GamificationMeDto }) {
 
 function BadgesCard({ data, onOpenBadge }: { data: GamificationMeDto; onOpenBadge: (b: BadgeDto) => void }) {
   return (
-    <View style={styles.card}>
-      <Text style={styles.cardTitle}>Badges</Text>
+    <PrismeCard elevated>
+      <SectionHeader title="Badges" style={styles.cardSectionHeader} />
       <View style={styles.badgeGrid}>
         {data.badges.map((b, i) => (
           <AppearItem key={b.id} index={i} style={styles.badgeCell}>
@@ -184,7 +181,7 @@ function BadgesCard({ data, onOpenBadge }: { data: GamificationMeDto; onOpenBadg
           </AppearItem>
         ))}
       </View>
-    </View>
+    </PrismeCard>
   );
 }
 
@@ -238,10 +235,10 @@ function LeaderboardCard({
   myId?: string;
 }) {
   return (
-    <View style={styles.card}>
-      <Text style={styles.cardTitle}>Classement de la semaine</Text>
+    <PrismeCard elevated>
+      <SectionHeader title="Classement de la semaine" style={styles.cardSectionHeader} />
       {isLoading ? (
-        <View style={{ gap: SPACE.xs, marginTop: SPACE.sm }}>
+        <View style={{ gap: SPACE.xs }}>
           {[0, 1, 2].map((i) => (
             <Skeleton key={i} style={{ height: 44, borderRadius: RADIUS.control }} />
           ))}
@@ -251,7 +248,7 @@ function LeaderboardCard({
       ) : rows.length <= 1 ? (
         <EmptyState title="Suis des amis pour te comparer !" />
       ) : (
-        <View style={{ marginTop: SPACE.xs }}>
+        <View>
           {rows.map((row) => {
             const isMe = row.user.id === myId;
             const avatar = tmdbImage(row.user.avatarUrl, 'w185');
@@ -274,7 +271,7 @@ function LeaderboardCard({
           })}
         </View>
       )}
-    </View>
+    </PrismeCard>
   );
 }
 
@@ -282,54 +279,41 @@ function LeaderboardCard({
 
 function TrophiesSkeleton() {
   return (
-    <View style={styles.canvas}>
-      <View style={styles.list}>
-        <View style={styles.card}>
-          <View style={{ alignItems: 'center', gap: SPACE.xs }}>
-            <Skeleton style={{ width: 96, height: 96, borderRadius: 48 }} />
-            <Skeleton style={{ width: 140, height: 16, borderRadius: RADIUS.pill }} />
-          </View>
-          <Skeleton style={{ height: 10, borderRadius: RADIUS.pill, marginTop: SPACE.md }} />
+    <View style={styles.list}>
+      <PrismeCard elevated>
+        <View style={{ alignItems: 'center', gap: SPACE.xs }}>
+          <Skeleton style={{ width: 96, height: 96, borderRadius: 48 }} />
+          <Skeleton style={{ width: 140, height: 16, borderRadius: RADIUS.pill }} />
         </View>
-        <View style={[styles.card, { flexDirection: 'row', gap: SPACE.md, alignItems: 'center' }]}>
-          <Skeleton style={{ width: 44, height: 44, borderRadius: 22 }} />
-          <Skeleton style={{ flex: 1, height: 16, borderRadius: RADIUS.pill }} />
-        </View>
-        <View style={styles.card}>
-          <Skeleton style={{ width: 120, height: 18, borderRadius: RADIUS.pill, marginBottom: SPACE.sm }} />
-          {[0, 1, 2].map((i) => (
-            <Skeleton key={i} style={{ height: 30, borderRadius: RADIUS.control, marginBottom: SPACE.xs }} />
+        <Skeleton style={{ height: 10, borderRadius: RADIUS.pill, marginTop: SPACE.md }} />
+      </PrismeCard>
+      <PrismeCard elevated style={{ flexDirection: 'row', gap: SPACE.md, alignItems: 'center' }}>
+        <Skeleton style={{ width: 44, height: 44, borderRadius: 22 }} />
+        <Skeleton style={{ flex: 1, height: 16, borderRadius: RADIUS.pill }} />
+      </PrismeCard>
+      <PrismeCard elevated>
+        <Skeleton style={{ width: 120, height: 18, borderRadius: RADIUS.pill, marginBottom: SPACE.sm }} />
+        {[0, 1, 2].map((i) => (
+          <Skeleton key={i} style={{ height: 30, borderRadius: RADIUS.control, marginBottom: SPACE.xs }} />
+        ))}
+      </PrismeCard>
+      <PrismeCard elevated>
+        <Skeleton style={{ width: 90, height: 18, borderRadius: RADIUS.pill, marginBottom: SPACE.sm }} />
+        <View style={styles.badgeGrid}>
+          {Array.from({ length: 6 }).map((_, i) => (
+            <View key={i} style={styles.badgeCell}>
+              <Skeleton style={{ width: 58, height: 58, borderRadius: 29, alignSelf: 'center' }} />
+            </View>
           ))}
         </View>
-        <View style={styles.card}>
-          <Skeleton style={{ width: 90, height: 18, borderRadius: RADIUS.pill, marginBottom: SPACE.sm }} />
-          <View style={styles.badgeGrid}>
-            {Array.from({ length: 6 }).map((_, i) => (
-              <View key={i} style={styles.badgeCell}>
-                <Skeleton style={{ width: 58, height: 58, borderRadius: 29, alignSelf: 'center' }} />
-              </View>
-            ))}
-          </View>
-        </View>
-      </View>
+      </PrismeCard>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: COLORS.bg },
-  canvas: { width: '100%', maxWidth: SIZES.contentMax, alignSelf: 'center' },
-  scroll: { flexGrow: 1, paddingBottom: SPACE.xl },
-  list: { padding: SPACE.md, gap: SPACE.sm },
-  card: {
-    backgroundColor: COLORS.surface,
-    borderRadius: RADIUS.card,
-    padding: SPACE.md,
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
-    ...SHADOW.card,
-  },
-  cardTitle: { fontSize: 18, lineHeight: 24, fontFamily: FONTS.extraBold, color: COLORS.text },
+  list: { gap: SPACE.sm, paddingBottom: SPACE.xl },
+  cardSectionHeader: { marginTop: 0, marginBottom: SPACE.sm },
 
   levelCard: { alignItems: 'stretch' },
   levelWrap: { alignItems: 'center', gap: SPACE.xxs },
@@ -341,8 +325,7 @@ const styles = StyleSheet.create({
   levelNumber: { fontSize: 36, fontFamily: FONTS.extraBold, color: COLORS.onAccent },
   levelEyebrow: { fontSize: 11, fontFamily: FONTS.bold, letterSpacing: 1, textTransform: 'uppercase', color: COLORS.primary },
   levelTitle: { fontSize: 17, fontFamily: FONTS.extraBold, color: COLORS.text },
-  xpTrack: { height: 10, borderRadius: RADIUS.pill, backgroundColor: COLORS.surfaceMuted, marginTop: SPACE.md, overflow: 'hidden' },
-  xpFill: { height: 10, borderRadius: RADIUS.pill },
+  xpBar: { marginTop: SPACE.md },
   xpLabel: { fontSize: 13, fontFamily: FONTS.bold, color: COLORS.textMuted, marginTop: SPACE.xs, textAlign: 'center' },
 
   streakCard: { flexDirection: 'row', alignItems: 'center', gap: SPACE.md },
@@ -361,7 +344,7 @@ const styles = StyleSheet.create({
   challengeTrack: { height: 8, borderRadius: RADIUS.pill, backgroundColor: COLORS.surfaceMuted, marginTop: SPACE.xs, overflow: 'hidden' },
   challengeFill: { height: 8, borderRadius: RADIUS.pill },
 
-  badgeGrid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: SPACE.sm },
+  badgeGrid: { flexDirection: 'row', flexWrap: 'wrap' },
   badgeCell: { width: '33.333%', paddingVertical: SPACE.xs, paddingHorizontal: 4 },
   badgePressable: { alignItems: 'center', borderRadius: RADIUS.control, paddingVertical: SPACE.xxs },
   badgePressed: { opacity: 0.7, transform: [{ scale: 0.96 }] },
@@ -380,7 +363,7 @@ const styles = StyleSheet.create({
   modalClosePressed: { opacity: 0.86 },
   modalCloseText: { fontSize: 13, fontFamily: FONTS.extraBold, letterSpacing: 0.5, color: COLORS.onPrimary },
 
-  leaderboardError: { fontSize: 14, fontFamily: FONTS.regular, color: COLORS.textMuted, marginTop: SPACE.xs },
+  leaderboardError: { fontSize: 14, fontFamily: FONTS.regular, color: COLORS.textMuted },
   leaderRow: {
     flexDirection: 'row', alignItems: 'center', gap: SPACE.sm, paddingVertical: SPACE.xs, paddingHorizontal: SPACE.xs,
     borderRadius: RADIUS.control, borderTopWidth: 1, borderTopColor: COLORS.borderLight,
