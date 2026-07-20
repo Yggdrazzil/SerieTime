@@ -4,7 +4,7 @@ import { Feather } from '@expo/vector-icons';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQueryClient } from '@tanstack/react-query';
-import { COLORS, FONTS, RADIUS, SHADOW } from '@/lib/theme';
+import { COLORS, FONTS, GLASS_BLUR, RADIUS, SHADOW } from '@/lib/theme';
 import { useTabResetStore } from '@/lib/tabReset';
 import { useReduceMotion } from '@/lib/useReduceMotion';
 
@@ -114,6 +114,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     paddingVertical: 5,
     ...SHADOW.card,
+    ...GLASS_BLUR,
   },
   item: {
     flex: 1,

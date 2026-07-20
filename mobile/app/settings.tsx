@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '@/lib/api';
 import { useAppStore } from '@/lib/store';
-import { COLORS, FONTS, RADIUS, SHADOW, SIZES, SPACE, applyThemePreference, getThemePreference, type ThemePreference } from '@/lib/theme';
+import { COLORS, FONTS, GLASS_BLUR, RADIUS, SHADOW, SIZES, SPACE, applyThemePreference, getThemePreference, type ThemePreference } from '@/lib/theme';
 import { ScreenShell, ScreenHeader, SectionHeader, SegmentedFilter, PrismeCard, IconAction } from '@/components/prisme';
 import { goBack } from '@/lib/nav';
 import { FadeSwitch, PopIn } from '@/components/anim';
@@ -584,6 +584,7 @@ function AppTab() {
             ['dark', 'Thème sombre'],
             ['sunset', 'Thème Sunset'],
             ['midnight', 'Thème Nuit — les couleurs PlotTime'],
+            ['glass', 'Thème Glass — verre liquide translucide'],
           ] as [ThemePreference, string][]
         ).map(([v, l]) => (
           <RadioRow key={v} label={l} on={themePref === v} onPress={() => pickTheme(v)} />
@@ -750,7 +751,7 @@ const styles = StyleSheet.create({
   deleteText: { fontSize: 13, fontFamily: FONTS.extraBold, letterSpacing: 0.6, color: COLORS.danger, textAlign: 'center' },
   btnPressed: { opacity: 0.86, transform: [{ scale: 0.99 }] },
   overlay: { flex: 1, backgroundColor: COLORS.overlay, justifyContent: 'center', alignItems: 'center', paddingHorizontal: SPACE.lg },
-  sheet: { backgroundColor: COLORS.surface, borderRadius: RADIUS.sheet, padding: SPACE.lg, ...SHADOW.card },
+  sheet: { backgroundColor: COLORS.surface, borderRadius: RADIUS.sheet, padding: SPACE.lg, ...SHADOW.card, ...GLASS_BLUR },
   sheetHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: SPACE.sm },
   sheetTitle: { color: COLORS.text, fontSize: 17, fontFamily: FONTS.extraBold },
   hint: { fontSize: 14, fontFamily: FONTS.regular, color: COLORS.textMuted, lineHeight: 19, marginBottom: SPACE.sm },

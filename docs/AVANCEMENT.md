@@ -6,7 +6,7 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
-Dernière mise à jour : **2026-07-20** (Claude) — lots 12-14 basculés sur la version full-Prisme (arbitrage inversé à la demande d'Étienne) + préversion `/prisme/` redéployée
+Dernière mise à jour : **2026-07-20** (Claude) — nouveau thème « Glass » (verre liquide, inspiré du Liquid Glass d'Apple) sur la web app + correction de l'enum thème côté serveur (`midnight` manquait)
 
 ---
 
@@ -90,6 +90,25 @@ la migration visuelle doit encore être exécutée sans modifier la logique mét
 6. Publication native optionnelle (EAS Build APK, puis stores).
 
 ## Journal des modifications
+
+### 2026-07-20 — Claude : nouveau thème « Glass » (verre liquide)
+- **Cinquième thème « Glass »** inspiré du langage Liquid Glass d'Apple
+  (WWDC 2025), transposé à l'identité PlotTime (accents violet/jaune conservés,
+  aucune réplique d'écran Apple) : surfaces en blancs translucides (rgba) avec
+  arête spéculaire blanche, posées sur un dégradé pastel bleu/lavande/rose
+  peint avant le premier rendu par `app/+html.tsx`.
+- **Flou d'arrière-plan réel** via `GLASS_BLUR` (`lib/theme.ts`) :
+  `backdrop-filter: blur + saturate` (web uniquement, react-native-web ≥ 0.21,
+  objet vide dans les autres thèmes et sur natif) étalé sur `PrismeCard`,
+  `SegmentedFilter`, la barre d'onglets flottante et les feuilles des réglages.
+- Metas `theme-color` : nouvelle constante `THEME_COLOR_META` (couleur solide —
+  les barres système n'acceptent pas d'alpha, or `bg` Glass est un voile rgba).
+- `ui.tsx` : texte des badges « black » et coche de `CheckCircle` passés de
+  `COLORS.white` à `COLORS.onPrimary` (valeurs quasi identiques dans les 4
+  thèmes existants ; en Glass, `white` translucide est inutilisable en texte).
+- Serveur : enum `theme` de `/api/settings` étendu à `midnight` (correction —
+  la copie serveur du thème Nuit échouait silencieusement depuis son ajout) et
+  `glass`. Comme Sunset/Nuit, Glass ne s'applique que sur la web app.
 
 ### 2026-07-20 (soir) — Claude : lots 12-14 → version full-Prisme (arbitrage inversé)
 - À la demande d'Étienne, la **base des lots 12-14 est désormais la version

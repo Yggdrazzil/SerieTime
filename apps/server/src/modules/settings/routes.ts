@@ -14,7 +14,7 @@ const DEFAULT_SETTINGS = {
   titlesInUserLanguage: true,
   commentLanguages: ['fr', 'en'],
   notifications: { newEpisode: true, newMovie: true, importDone: true },
-  theme: 'light' as 'system' | 'light' | 'dark' | 'sunset',
+  theme: 'light' as 'system' | 'light' | 'dark' | 'sunset' | 'midnight' | 'glass',
   autoplayTrailers: false,
   upcoming: { hideWatched: false, channels: [] as string[] },
   subscriptions: [] as string[],
@@ -36,7 +36,9 @@ const SETTINGS_SCHEMA = z
     notifications: z
       .object({ newEpisode: z.boolean(), newMovie: z.boolean(), importDone: z.boolean() })
       .partial(),
-    theme: z.enum(['system', 'light', 'dark', 'sunset']),
+    // `midnight` manquait depuis l'ajout du thème Nuit : la copie serveur du
+    // thème échouait silencieusement (validation) pour ce choix.
+    theme: z.enum(['system', 'light', 'dark', 'sunset', 'midnight', 'glass']),
     autoplayTrailers: z.boolean(),
     upcoming: z.object({ hideWatched: z.boolean(), channels: z.array(z.string()) }).partial(),
     subscriptions: z.array(z.string()),

@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { COLORS, FONTS, RADIUS, SHADOW, SIZES, SPACE } from '@/lib/theme';
+import { COLORS, FONTS, GLASS_BLUR, RADIUS, SHADOW, SIZES, SPACE } from '@/lib/theme';
 
 type FeatherName = React.ComponentProps<typeof Feather>['name'];
 
@@ -391,6 +391,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surfaceMuted,
     borderWidth: 1,
     borderColor: COLORS.borderLight,
+    ...GLASS_BLUR,
   },
   segment: {
     flex: 1,
@@ -410,6 +411,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.borderLight,
     padding: SPACE.md,
+    ...GLASS_BLUR,
   },
   cardPressed: { opacity: 0.9, transform: [{ scale: 0.99 }] },
   progressHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: SPACE.sm, marginBottom: SPACE.xs },

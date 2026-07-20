@@ -40,7 +40,9 @@ export function ShowPill({ label, onPress }: { label: string; onPress?: () => vo
 export function Badge({ label, variant }: { label: string; variant: 'black' | 'yellow' }) {
   return (
     <View style={[styles.badge, { backgroundColor: variant === 'yellow' ? COLORS.yellow : COLORS.black }]}>
-      <Text style={[styles.badgeText, { color: variant === 'yellow' ? COLORS.onAccent : COLORS.white }]}>{label}</Text>
+      {/* onPrimary (≈ white, mais toujours opaque) : en Glass, `white` est un
+          voile translucide inutilisable comme couleur de texte. */}
+      <Text style={[styles.badgeText, { color: variant === 'yellow' ? COLORS.onAccent : COLORS.onPrimary }]}>{label}</Text>
     </View>
   );
 }
@@ -50,7 +52,8 @@ export function CheckCircle({
   onPress,
   size = 52,
   checkedBg = COLORS.green,
-  checkedFg = COLORS.white,
+  // onPrimary et non `white` : en Glass, `white` est translucide (voile).
+  checkedFg = COLORS.onPrimary,
 }: {
   checked?: boolean;
   onPress?: () => void;
