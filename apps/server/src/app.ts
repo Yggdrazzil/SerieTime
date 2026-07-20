@@ -45,11 +45,12 @@ export async function buildApp(): Promise<FastifyInstance> {
     limits: { fileSize: env.MAX_IMPORT_ZIP_SIZE_MB * 1024 * 1024, files: 1 },
   });
 
-  // Anti brute-force / spam : plafond global généreux (usage normal jamais gêné),
-  // et plafond serré appliqué manuellement sur login/register (voir auth/routes).
-  // Désactivé en test pour ne pas fausser la suite.
+  // Anti brute-force / spam : plafond GLOBAL généreux appliqué à toutes les
+  // routes (300 req/min par IP — l'usage normal n'est jamais gêné), et plafonds
+  // serrés par route sur l'auth (config.rateLimit dans auth/routes, prioritaire
+  // sur le global). Désactivé en test pour ne pas fausser la suite.
   if (env.NODE_ENV !== 'test') {
-    await app.register(rateLimit, { global: false, max: 300, timeWindow: '1 minute' });
+    await app.register(rateLimit, { global: true, max: 300, timeWindow: '1 minute' });
   }
 
   app.setErrorHandler((error, _request, reply) => {

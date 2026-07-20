@@ -394,6 +394,8 @@ model Rating {
 
   @@index([userId])
   @@index([mediaId])
+  // Lookup « ma note sur cet épisode » (fiches épisode, imports) sans scan.
+  @@index([userId, episodeId])
 }
 
 model MediaList {
@@ -708,6 +710,8 @@ model ActivityReaction {
   // Toggle par emoji : un utilisateur ne pose chaque emoji qu'une fois par cible.
   @@unique([kind, refId, userId, emoji])
   @@index([kind, refId])
+  // Purge « toutes les réactions d'un utilisateur » (suppression de compte).
+  @@index([userId])
 }
 
 // --- Clubs par série (v1) -----------------------------------------------------

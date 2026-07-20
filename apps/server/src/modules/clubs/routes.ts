@@ -127,17 +127,17 @@ export async function clubsRoutes(app: FastifyInstance): Promise<void> {
     });
     const myClubIds = myMemberships.map((m) => m.clubId);
 
-    const [library, friendMemberships] = await Promise.all([
-      prisma.userMediaStatus.findMany({ where: { userId: me }, select: { mediaId: true } }),
-      friendIds.length
-        ? prisma.clubMember.findMany({ where: { userId: { in: friendIds } }, select: { clubId: true } })
-        : Promise.resolve([] as { clubId: string }[]),
-    ]);
+    const friendMemberships = friendIds.length
+      ? await prisma.clubMember.findMany({ where: { userId: { in: friendIds } }, select: { clubId: true } })
+      : ([] as { clubId: string }[]);
+    // « Média dans ma bibliothèque » en filtre RELATIONNEL (EXISTS côté SQL) :
+    // l'ancien `mediaId IN (...)` matérialisait TOUTE la bibliothèque (20k ids)
+    // dans la requête à chaque GET /api/clubs.
     const suggested = await prisma.club.findMany({
       where: {
         id: { notIn: myClubIds },
         OR: [
-          { mediaId: { in: library.map((l) => l.mediaId) } },
+          { media: { statuses: { some: { userId: me } } } },
           { id: { in: [...new Set(friendMemberships.map((m) => m.clubId))] } },
         ],
       },

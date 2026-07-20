@@ -88,16 +88,30 @@ type OAuthProfile = {
   avatarUrl: string | null;
 };
 
+// Provider SSO non configuré côté serveur (identifiants d'app absents) : on
+// REFUSE le jeton (fail closed) au lieu de sauter le contrôle d'audience —
+// sinon un jeton émis pour l'app d'un attaquant permettrait de prendre le
+// contrôle d'un compte. Erreur dédiée → réponse 400 provider_not_configured
+// (distincte du 401 invalid_oauth_token d'un jeton réellement invalide).
+class NotConfiguredError extends Error {
+  constructor(provider: Provider) {
+    super(`${provider}_not_configured`);
+  }
+}
+
 // Vérifie un ID token Google via l'endpoint tokeninfo et contrôle l'audience.
+// FAIL CLOSED : sans GOOGLE_CLIENT_IDS on ne peut pas contrôler l'audience →
+// provider refusé (un jeton émis pour n'importe quelle app serait accepté).
 async function verifyGoogleToken(idToken: string): Promise<OAuthProfile> {
+  const allowed = env.GOOGLE_CLIENT_IDS.split(',').map((s) => s.trim()).filter(Boolean);
+  if (allowed.length === 0) throw new NotConfiguredError('google');
   const res = await fetch(
     `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`,
   );
   if (!res.ok) throw new Error('google_verify_failed');
   const data = (await res.json()) as Record<string, string | undefined>;
   if (!data.sub) throw new Error('google_no_sub');
-  const allowed = env.GOOGLE_CLIENT_IDS.split(',').map((s) => s.trim()).filter(Boolean);
-  if (allowed.length > 0 && (!data.aud || !allowed.includes(data.aud))) {
+  if (!data.aud || !allowed.includes(data.aud)) {
     throw new Error('google_bad_audience');
   }
   return {
@@ -116,17 +130,17 @@ async function verifyFacebookToken(accessToken: string): Promise<OAuthProfile> {
   // (même id utilisateur) serait accepté → prise de contrôle de compte. On
   // interroge donc debug_token avec le App Access Token (APP_ID|APP_SECRET) et
   // on exige que le jeton appartienne bien à NOTRE app et soit valide.
+  // FAIL CLOSED : identifiants absents → provider refusé (jamais de vérification sautée).
   const appId = env.FACEBOOK_APP_ID.trim();
   const appSecret = env.FACEBOOK_APP_SECRET.trim();
-  if (appId && appSecret) {
-    const dbg = await fetch(
-      `https://graph.facebook.com/debug_token?input_token=${encodeURIComponent(accessToken)}&access_token=${encodeURIComponent(`${appId}|${appSecret}`)}`,
-    );
-    if (!dbg.ok) throw new Error('facebook_verify_failed');
-    const dbgData = (await dbg.json()) as { data?: { app_id?: string; is_valid?: boolean } };
-    if (dbgData.data?.app_id !== appId || dbgData.data?.is_valid !== true) {
-      throw new Error('facebook_bad_audience');
-    }
+  if (!appId || !appSecret) throw new NotConfiguredError('facebook');
+  const dbg = await fetch(
+    `https://graph.facebook.com/debug_token?input_token=${encodeURIComponent(accessToken)}&access_token=${encodeURIComponent(`${appId}|${appSecret}`)}`,
+  );
+  if (!dbg.ok) throw new Error('facebook_verify_failed');
+  const dbgData = (await dbg.json()) as { data?: { app_id?: string; is_valid?: boolean } };
+  if (dbgData.data?.app_id !== appId || dbgData.data?.is_valid !== true) {
+    throw new Error('facebook_bad_audience');
   }
   const res = await fetch(
     `https://graph.facebook.com/me?fields=id,name,email,picture.type(large)&access_token=${encodeURIComponent(accessToken)}`,
@@ -153,15 +167,15 @@ async function verifyDiscordToken(accessToken: string): Promise<OAuthProfile> {
   // Contrôle d'audience : /users/@me accepte un token émis pour N'IMPORTE quelle
   // app Discord (prise de contrôle de compte). oauth2/@me, lui, renvoie l'app à
   // laquelle le token est rattaché — on exige que ce soit NOTRE application.
+  // FAIL CLOSED : identifiant absent → provider refusé (jamais de vérification sautée).
   const clientId = env.DISCORD_CLIENT_ID.trim();
-  if (clientId) {
-    const authRes = await fetch('https://discord.com/api/oauth2/@me', {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-    if (!authRes.ok) throw new Error('discord_verify_failed');
-    const authData = (await authRes.json()) as { application?: { id?: string } };
-    if (authData.application?.id !== clientId) throw new Error('discord_bad_audience');
-  }
+  if (!clientId) throw new NotConfiguredError('discord');
+  const authRes = await fetch('https://discord.com/api/oauth2/@me', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!authRes.ok) throw new Error('discord_verify_failed');
+  const authData = (await authRes.json()) as { application?: { id?: string } };
+  if (authData.application?.id !== clientId) throw new Error('discord_bad_audience');
   const res = await fetch('https://discord.com/api/users/@me', {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
@@ -217,7 +231,7 @@ function decodeJwtPart<T>(part: string): T {
 
 async function verifyAppleToken(identityToken: string): Promise<OAuthProfile> {
   const audience = env.APPLE_BUNDLE_ID.trim();
-  if (!audience) throw new Error('apple_not_configured');
+  if (!audience) throw new NotConfiguredError('apple');
 
   const [headerPart, payloadPart, signaturePart, extra] = identityToken.split('.');
   if (!headerPart || !payloadPart || !signaturePart || extra !== undefined) {
@@ -318,16 +332,15 @@ async function loginOrLinkOAuth(provider: Provider, profile: OAuthProfile) {
 
 export async function authRoutes(app: FastifyInstance): Promise<void> {
   // Contrôle d'audience OAuth : sans les identifiants d'app, on ne peut pas
-  // vérifier que le jeton a été émis pour NOTRE app. On garde alors le
-  // comportement actuel (pas de blocage en dev/prod tant que les vars ne sont
-  // pas posées) mais on l'annonce clairement au démarrage.
+  // vérifier que le jeton a été émis pour NOTRE app → le provider est REFUSÉ
+  // (fail closed, 400 provider_not_configured). On l'annonce au démarrage.
   if (!env.FACEBOOK_APP_ID.trim() || !env.FACEBOOK_APP_SECRET.trim()) {
     app.log.warn(
-      'Vérification d’audience OAuth facebook désactivée : variable manquante (FACEBOOK_APP_ID/FACEBOOK_APP_SECRET).',
+      'SSO facebook DÉSACTIVÉ (fail closed) : variable manquante (FACEBOOK_APP_ID/FACEBOOK_APP_SECRET).',
     );
   }
   if (!env.DISCORD_CLIENT_ID.trim()) {
-    app.log.warn('Vérification d’audience OAuth discord désactivée : variable manquante (DISCORD_CLIENT_ID).');
+    app.log.warn('SSO discord DÉSACTIVÉ (fail closed) : variable manquante (DISCORD_CLIENT_ID).');
   }
 
   // Quels providers SSO sont configurés côté serveur (le mobile adapte son écran).
@@ -371,7 +384,10 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     let profile: OAuthProfile;
     try {
       profile = await verifyOAuth(body.provider, body.token);
-    } catch {
+    } catch (err) {
+      if (err instanceof NotConfiguredError) {
+        return reply.code(400).send({ error: 'provider_not_configured' });
+      }
       return reply.code(401).send({ error: 'invalid_oauth_token' });
     }
     if (body.displayName?.trim()) profile.displayName = body.displayName.trim();
@@ -388,7 +404,10 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     let profile: OAuthProfile;
     try {
       profile = await verifyOAuth(body.provider, body.token);
-    } catch {
+    } catch (err) {
+      if (err instanceof NotConfiguredError) {
+        return reply.code(400).send({ error: 'provider_not_configured' });
+      }
       return reply.code(401).send({ error: 'invalid_oauth_token' });
     }
     const field = ID_FIELD[body.provider];
@@ -491,7 +510,10 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     let profile: OAuthProfile;
     try {
       profile = await verifyOAuth(body.provider, body.token);
-    } catch {
+    } catch (err) {
+      if (err instanceof NotConfiguredError) {
+        return reply.code(400).send({ error: 'provider_not_configured' });
+      }
       return reply.code(401).send({ error: 'invalid_oauth_token' });
     }
     const field = ID_FIELD[body.provider];

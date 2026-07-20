@@ -1,18 +1,17 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, Pressable, Image, Platform, useWindowDimensions } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, ScrollView, StyleSheet, Pressable, Image, useWindowDimensions } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { useRouter, type Href } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery } from '@tanstack/react-query';
 import { api, tmdbImage } from '@/lib/api';
 import type { GamificationMeDto, MediaDto, ProfileStatsDto } from '@/lib/types';
 import { watchTime } from '@/lib/format';
-import { COLORS, FONTS, RADIUS, SHADOW, SIZES, SPACE, setThemeColorMeta, currentThemeColorMeta } from '@/lib/theme';
+import { COLORS, FONTS, RADIUS, SHADOW, SIZES, SPACE } from '@/lib/theme';
 import { Loading, LoadError, Poster } from '@/components/ui';
 import { AppearItem, PopIn } from '@/components/anim';
+import { TabHeader } from '@/components/prisme';
 import { useTabResetSeq } from '@/lib/tabReset';
 import { usePullRefresh } from '@/lib/usePullRefresh';
 import { PullToRefresh } from '@/components/PullToRefresh';
@@ -51,33 +50,15 @@ export default function ProfileScreen() {
 function ProfileScreenInner() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const focused = useIsFocused();
   const { width } = useWindowDimensions();
   const contentWidth = Math.max(220, Math.min(width, SIZES.contentMax) - SPACE.md * 2);
   const [activeListIndex, setActiveListIndex] = useState(0);
 
-  // La couverture passe DERRIÈRE la barre de statut, comme TV Time. En natif
-  // (edge-to-edge), l'en-tête s'étend sous la barre et les icônes passent en
-  // clair tant que l'onglet est affiché. Sur la web app, l'OS réserve la zone
-  // de statut : on la teinte de la couleur de l'en-tête (meta theme-color,
-  // suivi dynamiquement par Android) pour la fondre avec la couverture.
-  useEffect(() => {
-    if (Platform.OS !== 'web' || typeof document === 'undefined' || !focused) return;
-    const prev = currentThemeColorMeta();
-    setThemeColorMeta('#241B3D');
-    return () => setThemeColorMeta(prev);
-  }, [focused]);
   const { data, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['profile'],
     queryFn: () => api.get<ProfileResponse>('/api/profile'),
   });
-  const { data: unreadData } = useQuery({
-    queryKey: ['notifications', 'unread'],
-    queryFn: () => api.get<{ unreadCount: number }>('/api/notifications/unread-count'),
-    refetchInterval: 30_000,
-  });
-  const unread = unreadData?.unreadCount ?? 0;
-  // Gamification (spec 2026-07-16 §10) : pastille de niveau sur l'avatar + rangée Trophées.
+  // Gamification (spec 2026-07-16 §10) : niveau + titre sur la bannière, streak.
   const { data: gamification } = useQuery({
     queryKey: ['gamification', 'me'],
     queryFn: () => api.get<GamificationMeDto>('/api/gamification/me'),
@@ -88,185 +69,282 @@ function ProfileScreenInner() {
   // Tri choisi sur les pages « préférés » (persisté) : appliqué aussi ici.
   const favSort = useAppStore((s) => s.favSort);
 
-  if (isLoading) return <Loading />;
-  if (!data) return <LoadError onRetry={refetch} busy={isRefetching} />;
+  if (isLoading)
+    return (
+      <View style={styles.screen}>
+        <View style={[styles.header, { paddingTop: insets.top }]}>
+          <TabHeader title="Profil" trailing={<HeaderActions />} />
+        </View>
+        <Loading />
+      </View>
+    );
+  if (!data)
+    return (
+      <View style={styles.screen}>
+        <View style={[styles.header, { paddingTop: insets.top }]}>
+          <TabHeader title="Profil" trailing={<HeaderActions />} />
+        </View>
+        <LoadError onRetry={refetch} busy={isRefetching} />
+      </View>
+    );
   const { user, stats } = data;
-  const st = watchTime(stats.showMinutes);
-  const mt = watchTime(stats.movieMinutes);
 
   return (
-    // Tirer-pour-actualiser façon Instagram (ressort) — le RefreshControl RN
-    // ne fonctionne pas sur la web app, notre PullToRefresh oui (web + natif).
-    <PullToRefresh
-      refreshing={refreshing}
-      onRefresh={onRefresh}
-      style={styles.screen}
-      contentContainerStyle={styles.screenContent}
-    >
-      <View style={styles.canvas}>
-      {/* Icônes de la barre de statut en clair sur la couverture sombre (natif). */}
-      {focused ? <StatusBar style="light" /> : null}
-      {/* + insets.top : la zone visible de la couverture reste ~200dp une fois
-          la barre de statut par-dessus. */}
-      <View style={[styles.head, { minHeight: 232 + insets.top, paddingTop: insets.top }]}>
-        {user.coverUrl ? (
-          <Image source={{ uri: tmdbImage(user.coverUrl, 'w780') ?? user.coverUrl }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-        ) : null}
-        {!user.coverUrl ? (
-          <View style={StyleSheet.absoluteFill} pointerEvents="none">
-            <View style={[styles.prismShape, styles.prismShapePrimary]} />
-            <View style={[styles.prismShape, styles.prismShapeSecondary]} />
-            <View style={[styles.prismShape, styles.prismShapeTertiary]} />
-          </View>
-        ) : null}
-        <LinearGradient colors={['rgba(20, 13, 39, 0.12)', 'rgba(20, 13, 39, 0.94)']} style={StyleSheet.absoluteFill} />
-        <Pressable
-          style={({ pressed }) => [styles.bell, { top: insets.top + SPACE.sm }, pressed && styles.headerActionPressed]}
-          onPress={() => router.push('/notifications')}
-          accessibilityRole="button"
-          accessibilityLabel={unread > 0 ? `Notifications, ${unread} non lue${unread > 1 ? 's' : ''}` : 'Notifications'}
-          accessibilityHint="Ouvre le centre de notifications"
-        >
-          <Feather name="bell" size={20} color="#FFFFFF" />
-          {unread > 0 ? (
-            // La pastille de non-lus arrive avec un petit rebond.
-            <PopIn style={styles.badge}>
-              <Text style={styles.badgeText}>{unread > 9 ? '9+' : unread}</Text>
-            </PopIn>
-          ) : null}
-        </Pressable>
-        <Pressable
-          style={({ pressed }) => [styles.dots, { top: insets.top + SPACE.sm }, pressed && styles.headerActionPressed]}
-          onPress={() => router.push('/settings')}
-          accessibilityRole="button"
-          accessibilityLabel="Paramètres"
-          accessibilityHint={'Ouvre les param\u00e8tres du compte et de l\u2019application'}
-        >
-          <Feather name="settings" size={20} color="#FFFFFF" />
-        </Pressable>
-        <View style={styles.headRow}>
-          <View style={styles.avatarWrap}>
-            {user.avatarUrl ? (
-              <Image source={{ uri: tmdbImage(user.avatarUrl, 'w185') ?? user.avatarUrl }} style={styles.avatar} resizeMode="cover" />
+    <View style={styles.screen}>
+      <View style={[styles.header, { paddingTop: insets.top }]}>
+        <TabHeader title="Profil" trailing={<HeaderActions />} />
+      </View>
+      {/* Tirer-pour-actualiser façon Instagram (ressort) — le RefreshControl RN
+          ne fonctionne pas sur la web app, notre PullToRefresh oui (web + natif). */}
+      <PullToRefresh
+        refreshing={refreshing}
+        onRefresh={onRefresh}
+        style={{ flex: 1 }}
+        contentContainerStyle={styles.screenContent}
+      >
+        <View style={styles.canvas}>
+          {/* Bannière en carte arrondie (maquette) : couverture, avatar incrusté,
+              nom + niveau · titre de gamification, accès à l'édition. */}
+          <View style={styles.banner}>
+            {user.coverUrl ? (
+              <Image
+                source={{ uri: tmdbImage(user.coverUrl, 'w780') ?? user.coverUrl }}
+                style={StyleSheet.absoluteFill}
+                resizeMode="cover"
+              />
             ) : (
-              <View style={[styles.avatar, styles.avatarEmpty]}>
-                <Text style={styles.avatarInit}>{user.displayName.slice(0, 1).toUpperCase()}</Text>
+              <View style={StyleSheet.absoluteFill} pointerEvents="none">
+                <View style={[styles.prismShape, styles.prismShapePrimary]} />
+                <View style={[styles.prismShape, styles.prismShapeSecondary]} />
+                <View style={[styles.prismShape, styles.prismShapeTertiary]} />
               </View>
             )}
-            {gamification ? (
-              <View style={styles.levelPill}>
-                <Text style={styles.levelPillText}>{gamification.level}</Text>
-              </View>
-            ) : null}
-          </View>
-          <View style={styles.identityCopy}>
-            <Text style={styles.profileEyebrow}>Mon espace</Text>
-            <Text accessibilityRole="header" style={styles.name}>{user.displayName}</Text>
+            <LinearGradient colors={['rgba(20, 13, 39, 0.10)', 'rgba(20, 13, 39, 0.86)']} style={StyleSheet.absoluteFill} />
             <Pressable
-              style={({ pressed }) => [styles.modif, pressed && styles.modifPressed]}
+              style={({ pressed }) => [styles.editBtn, pressed && styles.editBtnPressed]}
               onPress={() => router.push('/profile/edit')}
               accessibilityRole="button"
               accessibilityLabel="Modifier le profil"
             >
               <Feather name="edit-3" size={15} color="#FFFFFF" />
-              <Text style={styles.modifText}>Modifier</Text>
+              <Text style={styles.editBtnText}>Modifier</Text>
             </Pressable>
+            <View style={styles.bannerRow}>
+              <View style={styles.avatarWrap}>
+                {user.avatarUrl ? (
+                  <Image
+                    source={{ uri: tmdbImage(user.avatarUrl, 'w185') ?? user.avatarUrl }}
+                    style={styles.avatar}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <View style={[styles.avatar, styles.avatarEmpty]}>
+                    <Text style={styles.avatarInit}>{user.displayName.slice(0, 1).toUpperCase()}</Text>
+                  </View>
+                )}
+              </View>
+              <View style={styles.identityCopy}>
+                <Text accessibilityRole="header" style={styles.name} numberOfLines={1}>
+                  {user.displayName}
+                </Text>
+                {gamification ? (
+                  <Text style={styles.levelLine} numberOfLines={1}>
+                    Niveau {gamification.level} · {gamification.levelTitle}
+                  </Text>
+                ) : null}
+              </View>
+            </View>
+          </View>
+
+          {/* Compteurs sociaux — un tap ouvre l'écran social. */}
+          <View style={styles.counters}>
+            <Counter
+              n={data.social?.followingCount ?? 0}
+              label={(data.social?.followingCount ?? 0) > 1 ? 'abonnements' : 'abonnement'}
+              onPress={() => router.push('/social/connections?type=following')}
+            />
+            <Counter
+              n={data.social?.followersCount ?? 0}
+              label={(data.social?.followersCount ?? 0) > 1 ? 'abonnés' : 'abonné'}
+              border
+              onPress={() => router.push('/social/connections?type=followers')}
+            />
+            <Counter
+              n={data.social?.commentsCount ?? 0}
+              label={(data.social?.commentsCount ?? 0) > 1 ? 'commentaires' : 'commentaire'}
+              border
+              onPress={() => router.push('/social/my-comments')}
+            />
+          </View>
+
+          <View style={styles.body}>
+            {/* Statistiques all-time en tuiles (maquette) — la page détaillée
+                reste accessible via « Tout afficher ». */}
+            <View style={styles.sectHead}>
+              <Text accessibilityRole="header" style={styles.sectTitle}>Statistiques</Text>
+              <Pressable
+                onPress={() => router.push('/stats')}
+                accessibilityRole="button"
+                accessibilityLabel="Ouvrir les statistiques détaillées"
+                hitSlop={4}
+                style={({ pressed }) => [styles.sectAction, pressed && styles.sectActionPressed]}
+              >
+                <Text style={styles.sectActionText}>Tout afficher</Text>
+                <Feather name="chevron-right" size={16} color={COLORS.primary} />
+              </Pressable>
+            </View>
+            <StatTiles stats={stats} />
+
+            {/* Streak (gamification) : accès aux Trophées, façon maquette. */}
+            <Pressable
+              style={({ pressed }) => [styles.streakCard, pressed && styles.cardPressed]}
+              onPress={() => router.push('/trophies' as Href)}
+              accessibilityRole="button"
+              accessibilityLabel={
+                gamification
+                  ? gamification.currentStreak > 0
+                    ? `Trophées — série de ${gamification.currentStreak} jour${gamification.currentStreak > 1 ? 's' : ''}, record ${gamification.bestStreak}`
+                    : `Trophées — record ${gamification.bestStreak} jour${gamification.bestStreak > 1 ? 's' : ''}`
+                  : 'Trophées'
+              }
+            >
+              <View style={styles.streakIcon}>
+                <Feather name="award" size={20} color={COLORS.onAccent} />
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.streakTitle}>
+                  {gamification && gamification.currentStreak > 0
+                    ? `Série de ${gamification.currentStreak} jour${gamification.currentStreak > 1 ? 's' : ''}`
+                    : 'Trophées & défis'}
+                </Text>
+                <Text style={styles.streakSub} numberOfLines={1}>
+                  {gamification
+                    ? gamification.currentStreak > 0
+                      ? `Record : ${gamification.bestStreak} jour${gamification.bestStreak > 1 ? 's' : ''}`
+                      : `Niveau ${gamification.level} · ${gamification.levelTitle}`
+                    : 'Badges, défis du mois et classement'}
+                </Text>
+              </View>
+              <Feather name="chevron-right" size={22} color={COLORS.primary} />
+            </Pressable>
+
+            {/* Favoris d'abord (disposition maquette), puis listes et bibliothèques. */}
+            <PosterRow title="Séries préférées" items={sortFavorites(data.favoriteShows, favSort.show)} heart emptyLabel="Aucune série en favori" href="/library/favorite-shows" />
+            <PosterRow title="Films préférés" items={sortFavorites(data.favoriteMovies, favSort.movie)} isMovie heart emptyLabel="Aucun film en favori" href="/library/favorite-movies" />
+            <PosterRow title="Jeux préférés" items={sortFavorites(data.favoriteGames ?? [], favSort.game)} isGame heart emptyLabel="Aucun jeu en favori" href="/library/favorite-games" />
+
+            {data.lists.length > 0 ? (
+              <View style={styles.section}>
+                <View style={styles.sectHead}>
+                  <Text accessibilityRole="header" style={styles.sectTitle}>Listes</Text>
+                </View>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.listsContent}
+                  snapToInterval={contentWidth + SPACE.sm}
+                  snapToAlignment="start"
+                  decelerationRate="fast"
+                  onMomentumScrollEnd={(event) => {
+                    const nextIndex = Math.round(event.nativeEvent.contentOffset.x / (contentWidth + SPACE.sm));
+                    setActiveListIndex(Math.max(0, Math.min(data.lists.length - 1, nextIndex)));
+                  }}
+                >
+                  {data.lists.map((l) => (
+                    <ListCollageCard key={l.id} title={l.title} posterPaths={l.posterPaths} width={contentWidth} />
+                  ))}
+                </ScrollView>
+                {data.lists.length > 1 ? (
+                  <View style={styles.dotsRow}>
+                    {data.lists.map((l, i) => (
+                      <View key={l.id} style={[styles.dot, i === activeListIndex && styles.dotActive]} />
+                    ))}
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
+
+            <PosterRow title="Séries" items={data.shows} emptyLabel="Aucune série suivie" href="/library/shows" />
+            <PosterRow title="Films" items={data.movies} isMovie emptyLabel="Aucun film ajouté" href="/library/movies" />
+            <PosterRow title="Jeux" items={data.games ?? []} isGame emptyLabel="Aucun jeu joué" href="/games" />
           </View>
         </View>
-      </View>
+      </PullToRefresh>
+    </View>
+  );
+}
 
-      {/* Compteurs sociaux (façon TV Time) — un tap ouvre l'écran social. */}
-      <View style={styles.counters}>
-        <Counter
-          n={data.social?.followingCount ?? 0}
-          label={(data.social?.followingCount ?? 0) > 1 ? 'abonnements' : 'abonnement'}
-          onPress={() => router.push('/social/connections?type=following')}
-        />
-        <Counter
-          n={data.social?.followersCount ?? 0}
-          label={(data.social?.followersCount ?? 0) > 1 ? 'abonnés' : 'abonné'}
-          border
-          onPress={() => router.push('/social/connections?type=followers')}
-        />
-        <Counter
-          n={data.social?.commentsCount ?? 0}
-          label={(data.social?.commentsCount ?? 0) > 1 ? 'commentaires' : 'commentaire'}
-          border
-          onPress={() => router.push('/social/my-comments')}
-        />
-      </View>
-
-      <View style={styles.body}>
-      <Section title="Statistiques" onPress={() => router.push('/stats')}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statsContent}>
-          <AppearItem index={0}><StatCard icon="tv" title="Temps passé devant des séries" values={[[st.months, 'MOIS'], [st.days, 'JOURS'], [st.hours, 'HEURES']]} /></AppearItem>
-          <AppearItem index={1}><StatCard icon="tv" title="Épisodes vus" values={[[stats.episodesWatched, 'ÉPISODES']]} /></AppearItem>
-          <AppearItem index={2}><StatCard icon="film" title="Temps passé devant des films" values={[[mt.months, 'MOIS'], [mt.days, 'JOURS'], [mt.hours, 'HEURES']]} /></AppearItem>
-          <AppearItem index={3}><StatCard icon="film" title="Films regardés" values={[[stats.moviesWatched, 'FILMS']]} /></AppearItem>
-          <AppearItem index={4}><StatCard ionicon="game-controller-outline" title="Jeux joués" values={[[stats.gamesPlayed ?? 0, 'JEUX']]} /></AppearItem>
-        </ScrollView>
-      </Section>
-
+// Raccourcis d'en-tête : notifications + réglages.
+function HeaderActions() {
+  const router = useRouter();
+  const { data: unreadData } = useQuery({
+    queryKey: ['notifications', 'unread'],
+    queryFn: () => api.get<{ unreadCount: number }>('/api/notifications/unread-count'),
+    refetchInterval: 30_000,
+  });
+  const unread = unreadData?.unreadCount ?? 0;
+  return (
+    <View style={styles.headerActions}>
       <Pressable
-        style={({ pressed }) => [styles.trophiesRow, pressed && styles.cardPressed]}
-        onPress={() => router.push('/trophies' as Href)}
+        style={({ pressed }) => [styles.headerBtn, pressed && styles.headerBtnPressed]}
+        onPress={() => router.push('/notifications')}
         accessibilityRole="button"
-        accessibilityLabel={gamification ? `Troph\u00e9es, niveau ${gamification.level}, ${gamification.levelTitle}` : 'Troph\u00e9es'}
+        accessibilityLabel={unread > 0 ? `Notifications, ${unread} non lue${unread > 1 ? 's' : ''}` : 'Notifications'}
+        accessibilityHint="Ouvre le centre de notifications"
       >
-        <View style={styles.trophiesIconWrap}>
-          <Feather name="award" size={21} color={COLORS.onAccent} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.trophiesTitle}>Trophées</Text>
-          {gamification ? (
-            <Text style={styles.trophiesSub}>
-              Niveau {gamification.level} · {gamification.levelTitle}
-            </Text>
-          ) : null}
-        </View>
-        <Feather name="chevron-right" size={22} color={COLORS.primary} />
+        <Feather name="bell" size={19} color={COLORS.text} />
+        {unread > 0 ? (
+          <PopIn style={styles.headerBadge}>
+            <Text style={styles.headerBadgeText}>{unread > 9 ? '9+' : unread}</Text>
+          </PopIn>
+        ) : null}
       </Pressable>
+      <Pressable
+        style={({ pressed }) => [styles.headerBtn, pressed && styles.headerBtnPressed]}
+        onPress={() => router.push('/settings')}
+        accessibilityRole="button"
+        accessibilityLabel="Paramètres"
+        accessibilityHint={'Ouvre les paramètres du compte et de l’application'}
+      >
+        <Feather name="settings" size={19} color={COLORS.text} />
+      </Pressable>
+    </View>
+  );
+}
 
-      {data.lists.length > 0 ? (
-        <Section title="Listes">
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.listsContent}
-            snapToInterval={contentWidth + SPACE.sm}
-            snapToAlignment="start"
-            decelerationRate="fast"
-            onMomentumScrollEnd={(event) => {
-              const nextIndex = Math.round(event.nativeEvent.contentOffset.x / (contentWidth + SPACE.sm));
-              setActiveListIndex(Math.max(0, Math.min(data.lists.length - 1, nextIndex)));
-            }}
-          >
-            {data.lists.map((l) => (
-              <ListCollageCard key={l.id} title={l.title} posterPaths={l.posterPaths} width={contentWidth} />
-            ))}
-          </ScrollView>
-          {data.lists.length > 1 ? (
-            <View style={styles.dotsRow}>
-              {data.lists.map((l, i) => (
-                <View key={l.id} style={[styles.dot, i === activeListIndex && styles.dotActive]} />
-              ))}
-            </View>
-          ) : null}
-        </Section>
-      ) : null}
-
-      <PosterRow title="Séries" items={data.shows} emptyLabel="Aucune série suivie" href="/library/shows" />
-      {/* Les sections « préférés » respectent le TRI choisi sur leurs pages
-          (Trier par : ordre utilisateur, derniers ajouts, A-Z…) — avant, le
-          profil restait figé sur l'ordre utilisateur. */}
-      <PosterRow title="Séries préférées" items={sortFavorites(data.favoriteShows, favSort.show)} heart emptyLabel="Aucune série en favori" href="/library/favorite-shows" />
-      <PosterRow title="Films" items={data.movies} isMovie emptyLabel="Aucun film ajouté" href="/library/movies" />
-      <PosterRow title="Films préférés" items={sortFavorites(data.favoriteMovies, favSort.movie)} isMovie heart emptyLabel="Aucun film en favori" href="/library/favorite-movies" />
-      <PosterRow title="Jeux" items={data.games ?? []} isGame emptyLabel="Aucun jeu joué" href="/games" />
-      <PosterRow title="Jeux préférés" items={sortFavorites(data.favoriteGames ?? [], favSort.game)} isGame heart emptyLabel="Aucun jeu en favori" href="/library/favorite-games" />
-      </View>
-      </View>
-    </PullToRefresh>
+// Tuiles de statistiques all-time (maquette « Votre année », étendue à tout
+// l'historique à la demande d'Étienne). Repli : tant que le serveur de prod
+// n'expose pas le détail jeux (en cours / terminés), une seule tuile « joués ».
+function StatTiles({ stats }: { stats: ProfileStatsDto }) {
+  const t = watchTime(stats.showMinutes + stats.movieMinutes);
+  const timeValue = t.months > 0 ? `${t.months} mois` : t.days > 0 ? `${t.days} j` : `${t.hours} h`;
+  const tiles: { key: string; value: string; label: string }[] = [
+    { key: 'episodes', value: stats.episodesWatched.toLocaleString('fr-FR'), label: 'épisodes vus' },
+    { key: 'movies', value: stats.moviesWatched.toLocaleString('fr-FR'), label: 'films vus' },
+    { key: 'time', value: timeValue, label: 'de visionnage' },
+    { key: 'shows', value: stats.showsCount.toLocaleString('fr-FR'), label: 'séries suivies' },
+  ];
+  if (typeof stats.gamesPlaying === 'number' && typeof stats.gamesCompleted === 'number') {
+    tiles.push({ key: 'gplaying', value: stats.gamesPlaying.toLocaleString('fr-FR'), label: 'jeux en cours' });
+    tiles.push({ key: 'gcompleted', value: stats.gamesCompleted.toLocaleString('fr-FR'), label: 'jeux terminés' });
+  } else {
+    tiles.push({ key: 'gplayed', value: stats.gamesPlayed.toLocaleString('fr-FR'), label: 'jeux joués' });
+  }
+  return (
+    <View style={styles.tilesGrid}>
+      {tiles.map((tile, i) => (
+        <AppearItem key={tile.key} index={i} style={styles.tileWrap}>
+          <View style={styles.tile} accessible accessibilityLabel={`${tile.value} ${tile.label}`}>
+            <Text style={styles.tileValue} numberOfLines={1}>
+              {tile.value}
+            </Text>
+            <Text style={styles.tileLabel} numberOfLines={1}>
+              {tile.label}
+            </Text>
+          </View>
+        </AppearItem>
+      ))}
+    </View>
   );
 }
 
@@ -277,7 +355,7 @@ function Counter({ n, label, border, onPress }: { n: number; label: string; bord
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`${n} ${label}`}
-      accessibilityHint={'Ouvre le d\u00e9tail de cette activit\u00e9 sociale'}
+      accessibilityHint={'Ouvre le détail de cette activité sociale'}
     >
       <Text style={styles.counterN}>{n}</Text>
       <Text style={styles.counterL}>{label}</Text>
@@ -285,7 +363,7 @@ function Counter({ n, label, border, onPress }: { n: number; label: string; bord
   );
 }
 
-// Carte « Listes » façon TV Time : collage des affiches + titre en surimpression.
+// Carte « Listes » : collage des affiches + titre en surimpression.
 function ListCollageCard({ title, posterPaths, width }: { title: string; posterPaths: string[]; width: number }) {
   return (
     <View style={[styles.listcard, { width }]} accessible accessibilityLabel={`Liste ${title}`}>
@@ -300,61 +378,6 @@ function ListCollageCard({ title, posterPaths, width }: { title: string; posterP
       </View>
       <LinearGradient colors={['transparent', 'rgba(13, 8, 28, 0.88)']} style={StyleSheet.absoluteFill} />
       <Text style={styles.listTitle}>{title}</Text>
-    </View>
-  );
-}
-
-// Le chevron n'apparaît que si la section mène quelque part (onPress). Sinon
-// (Statistiques, Listes), pas de faux « cliquable ».
-function Section({ title, children, onPress }: { title: string; children: React.ReactNode; onPress?: () => void }) {
-  const head = (
-    <View style={styles.sectHead}>
-      <Text accessibilityRole="header" style={styles.sectTitle}>{title}</Text>
-      {onPress ? (
-        <View style={styles.sectionActionIcon}>
-          <Feather name="chevron-right" size={19} color={COLORS.primary} />
-        </View>
-      ) : null}
-    </View>
-  );
-  return (
-    <View style={styles.section}>
-      {onPress ? (
-        <Pressable
-          onPress={onPress}
-          accessibilityRole="button"
-          accessibilityLabel={`Ouvrir ${title}`}
-          style={({ pressed }) => [styles.sectionHeaderButton, pressed && styles.sectionHeaderPressed]}
-        >
-          {head}
-        </Pressable>
-      ) : head}
-      {children}
-    </View>
-  );
-}
-
-function StatCard({ icon, ionicon, title, values }: { icon?: keyof typeof Feather.glyphMap; ionicon?: keyof typeof Ionicons.glyphMap; title: string; values: [number, string][] }) {
-  return (
-    <View style={styles.statcard} accessible accessibilityLabel={`${title}, ${values.map(([value, label]) => `${value} ${label.toLowerCase()}`).join(', ')}`}>
-      <View style={styles.statTop}>
-        <View style={styles.statIcon}>
-          {ionicon ? (
-            <Ionicons name={ionicon} size={18} color={COLORS.primary} />
-          ) : (
-            <Feather name={icon ?? 'activity'} size={18} color={COLORS.primary} />
-          )}
-        </View>
-        <Text style={styles.statTitle}>{title}</Text>
-      </View>
-      <View style={styles.statVals}>
-        {values.map(([v, l]) => (
-          <View key={l} style={styles.statValue}>
-            <Text style={styles.statV}>{v}</Text>
-            <Text style={styles.statL}>{l}</Text>
-          </View>
-        ))}
-      </View>
     </View>
   );
 }
@@ -379,9 +402,9 @@ function PosterRow({
   const router = useRouter();
   return (
     <View style={styles.posterSection}>
-      {/* Toute la ligne de titre ouvre la page dédiée (façon TV Time). */}
+      {/* Toute la ligne de titre ouvre la page dédiée. */}
       <Pressable
-        style={({ pressed }) => [styles.sectHead, styles.posterSectionHead, pressed && styles.sectionHeaderPressed]}
+        style={({ pressed }) => [styles.sectHead, pressed && styles.sectHeadPressed]}
         onPress={() => router.push(href as Parameters<typeof router.push>[0])}
         accessibilityRole="button"
         accessibilityLabel={`Ouvrir ${title}`}
@@ -389,17 +412,19 @@ function PosterRow({
       >
         <View style={styles.posterTitleRow}>
           {heart ? (
-            // Pastille rouge + cœur blanc AVANT le titre, comme TV Time.
             <View style={styles.heartBadge}>
               <Feather name="heart" size={14} color="#FFFFFF" />
             </View>
           ) : null}
           <Text style={styles.sectTitle}>{title}</Text>
         </View>
-        <View style={styles.sectionActionIcon}><Feather name="chevron-right" size={19} color={COLORS.primary} /></View>
+        <View style={styles.sectAction}>
+          <Text style={styles.sectActionText}>Tout afficher</Text>
+          <Feather name="chevron-right" size={16} color={COLORS.primary} />
+        </View>
       </Pressable>
       {items.length === 0 ? (
-        // Section toujours visible façon TV Time, avec un état vide.
+        // Section toujours visible, avec un état vide.
         <View style={styles.emptyRow}>
           <View style={styles.emptyPoster}>
             {isGame ? (
@@ -427,117 +452,96 @@ function PosterRow({
   );
 }
 
-// Densité recalée sur TV Time (captures profil Etienne vs Boloss, 2026-07-15) :
-// tout était ~15 % trop gros → moins d'infos visibles. Nom 20, compteurs 18/13,
-// titres de section 18, stats 19, en-tête 180, marges resserrées.
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: COLORS.bg },
+  screen: { flex: 1, backgroundColor: COLORS.pageMuted },
+  header: {
+    backgroundColor: COLORS.white,
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: COLORS.borderLight,
+  },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: SPACE.xs },
+  headerBtn: {
+    width: SIZES.touch,
+    height: SIZES.touch,
+    borderRadius: RADIUS.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.surfaceMuted,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+  },
+  headerBtnPressed: { opacity: 0.72, transform: [{ scale: 0.96 }] },
+  headerBadge: {
+    position: 'absolute',
+    top: -3,
+    right: -3,
+    minWidth: 18,
+    height: 18,
+    borderRadius: RADIUS.pill,
+    borderWidth: 2,
+    borderColor: COLORS.white,
+    backgroundColor: COLORS.notif,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  headerBadgeText: { color: '#FFFFFF', fontSize: 9, fontFamily: FONTS.extraBold },
   screenContent: { flexGrow: 1, paddingBottom: SPACE.xl },
   canvas: { width: '100%', maxWidth: SIZES.contentMax, alignSelf: 'center' },
-  body: { paddingHorizontal: SPACE.md, paddingTop: SPACE.sm },
-  head: {
-    backgroundColor: '#241B3D',
-    justifyContent: 'flex-end',
+  body: { paddingHorizontal: SPACE.md, paddingTop: SPACE.xs },
+  // Bannière en carte arrondie (maquette) — au-dessus des stats, pas pleine page.
+  banner: {
+    minHeight: 176,
+    marginHorizontal: SPACE.md,
+    marginTop: SPACE.md,
+    borderRadius: RADIUS.sheet,
     overflow: 'hidden',
-    borderBottomLeftRadius: RADIUS.sheet,
-    borderBottomRightRadius: RADIUS.sheet,
+    justifyContent: 'flex-end',
+    backgroundColor: '#241B3D',
+    ...SHADOW.card,
   },
   prismShape: { position: 'absolute', opacity: 0.8 },
   prismShapePrimary: { width: 190, height: 190, borderRadius: 95, backgroundColor: COLORS.primary, right: -50, top: -18 },
   prismShapeSecondary: { width: 132, height: 132, borderRadius: 36, backgroundColor: COLORS.secondary, right: 104, top: 42 },
   prismShapeTertiary: { width: 92, height: 92, borderRadius: 46, backgroundColor: COLORS.tertiary, left: -20, bottom: 12 },
-  bell: {
+  editBtn: {
     position: 'absolute',
-    right: SPACE.md + SIZES.touch + SPACE.xs,
-    width: SIZES.touch,
-    height: SIZES.touch,
+    top: SPACE.sm,
+    right: SPACE.sm,
     zIndex: 2,
-    borderRadius: RADIUS.control,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.24)',
-    backgroundColor: 'rgba(17,11,35,0.42)',
+    minHeight: 36,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-  badge: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    minWidth: 19,
-    height: 19,
+    gap: 6,
+    paddingHorizontal: SPACE.sm,
     borderRadius: RADIUS.pill,
-    borderWidth: 2,
-    borderColor: '#241B3D',
-    backgroundColor: COLORS.notif,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 4,
-  },
-  badgeText: { color: '#FFFFFF', fontSize: 10, fontFamily: FONTS.extraBold },
-  dots: {
-    position: 'absolute',
-    right: SPACE.md,
-    width: SIZES.touch,
-    height: SIZES.touch,
-    zIndex: 2,
-    borderRadius: RADIUS.control,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.24)',
     backgroundColor: 'rgba(17,11,35,0.42)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.28)',
   },
-  headerActionPressed: { opacity: 0.72, transform: [{ scale: 0.96 }] },
-  headRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.md, paddingHorizontal: SPACE.lg, paddingTop: 72, paddingBottom: SPACE.lg },
+  editBtnPressed: { backgroundColor: 'rgba(17,11,35,0.62)', transform: [{ scale: 0.97 }] },
+  editBtnText: { color: '#FFFFFF', fontSize: 12.5, fontFamily: FONTS.bold },
+  bannerRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.md, padding: SPACE.md, paddingTop: 56 },
   avatarWrap: { flexShrink: 0 },
   avatar: {
-    width: 82,
-    height: 82,
-    borderRadius: 41,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     borderWidth: 3,
     borderColor: '#FFFFFF',
     backgroundColor: COLORS.primary,
   },
   avatarEmpty: { alignItems: 'center', justifyContent: 'center' },
-  avatarInit: { color: '#FFFFFF', fontSize: 32, fontFamily: FONTS.extraBold },
-  identityCopy: { flex: 1, minWidth: 0, alignItems: 'flex-start' },
-  profileEyebrow: { color: 'rgba(255,255,255,0.72)', fontSize: 10, letterSpacing: 1.3, textTransform: 'uppercase', fontFamily: FONTS.bold },
-  name: { color: '#FFFFFF', fontSize: 26, lineHeight: 32, fontFamily: FONTS.extraBold },
-  modif: {
-    minHeight: SIZES.touch,
-    marginTop: SPACE.xxs,
-    paddingHorizontal: SPACE.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-    borderRadius: RADIUS.pill,
-    backgroundColor: 'rgba(255,255,255,0.14)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.28)',
-  },
-  modifPressed: { backgroundColor: 'rgba(255,255,255,0.24)', transform: [{ scale: 0.98 }] },
-  modifText: { color: '#FFFFFF', fontSize: 13, fontFamily: FONTS.bold },
-  // Pastille de niveau (gamification) : coin bas-droit de l'avatar, jaune, bord blanc.
-  levelPill: {
-    position: 'absolute',
-    bottom: -3,
-    right: -3,
-    minWidth: 27,
-    height: 27,
-    borderRadius: RADIUS.pill,
-    backgroundColor: COLORS.yellow,
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 5,
-  },
-  levelPillText: { color: COLORS.onAccent, fontSize: 11, fontFamily: FONTS.extraBold },
+  avatarInit: { color: '#FFFFFF', fontSize: 28, fontFamily: FONTS.extraBold },
+  identityCopy: { flex: 1, minWidth: 0 },
+  name: { color: '#FFFFFF', fontSize: 24, lineHeight: 30, fontFamily: FONTS.extraBold },
+  levelLine: { color: 'rgba(255,255,255,0.82)', fontSize: 13.5, lineHeight: 18, fontFamily: FONTS.semiBold, marginTop: 2 },
   counters: {
     flexDirection: 'row',
     marginHorizontal: SPACE.md,
-    marginTop: -SPACE.md,
-    zIndex: 3,
+    marginTop: SPACE.sm,
     overflow: 'hidden',
     borderRadius: RADIUS.card,
     borderWidth: 1,
@@ -545,55 +549,56 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surface,
     ...SHADOW.card,
   },
-  counter: { flex: 1, minHeight: 76, alignItems: 'center', justifyContent: 'center', paddingHorizontal: SPACE.xxs },
+  counter: { flex: 1, minHeight: 72, alignItems: 'center', justifyContent: 'center', paddingHorizontal: SPACE.xxs },
   counterPressed: { backgroundColor: COLORS.primarySoft },
   counterBorder: { borderLeftWidth: 1, borderLeftColor: COLORS.borderLight },
-  counterN: { color: COLORS.text, fontSize: 21, lineHeight: 26, fontFamily: FONTS.extraBold },
+  counterN: { color: COLORS.text, fontSize: 20, lineHeight: 25, fontFamily: FONTS.extraBold },
   counterL: { color: COLORS.textMuted, fontFamily: FONTS.medium, fontSize: 11, textAlign: 'center' },
-  trophiesRow: {
-    minHeight: 72,
+  // Tuiles de statistiques (grille 2 colonnes, maquette).
+  tilesGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACE.sm },
+  tileWrap: { flexBasis: '47%', flexGrow: 1 },
+  tile: {
+    minHeight: 84,
+    justifyContent: 'center',
+    paddingHorizontal: SPACE.md,
+    paddingVertical: SPACE.sm,
+    borderRadius: RADIUS.card,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    backgroundColor: COLORS.surface,
+    ...SHADOW.card,
+  },
+  tileValue: { color: COLORS.text, fontSize: 24, lineHeight: 30, fontFamily: FONTS.extraBold },
+  tileLabel: { color: COLORS.textMuted, fontSize: 13, lineHeight: 18, fontFamily: FONTS.regular, marginTop: 1 },
+  // Encart streak → Trophées.
+  streakCard: {
+    minHeight: 68,
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACE.sm,
     padding: SPACE.md,
-    marginBottom: SPACE.sm,
+    marginTop: SPACE.sm,
+    marginBottom: SPACE.xs,
     borderRadius: RADIUS.card,
     borderWidth: 1,
     borderColor: COLORS.borderLight,
     backgroundColor: COLORS.surface,
     ...SHADOW.card,
   },
-  trophiesIconWrap: {
-    width: SIZES.touch, height: SIZES.touch, borderRadius: RADIUS.control, backgroundColor: COLORS.yellow,
+  streakIcon: {
+    width: 40, height: 40, flexShrink: 0, borderRadius: RADIUS.control, backgroundColor: COLORS.yellow,
     alignItems: 'center', justifyContent: 'center',
   },
-  trophiesTitle: { fontSize: 17, lineHeight: 22, fontFamily: FONTS.extraBold, color: COLORS.text },
-  trophiesSub: { fontSize: 13, lineHeight: 18, fontFamily: FONTS.regular, color: COLORS.textMuted, marginTop: 2 },
+  streakTitle: { fontSize: 16, lineHeight: 21, fontFamily: FONTS.extraBold, color: COLORS.text },
+  streakSub: { fontSize: 13, lineHeight: 18, fontFamily: FONTS.regular, color: COLORS.textMuted, marginTop: 1 },
   cardPressed: { opacity: 0.86, transform: [{ scale: 0.99 }] },
   section: { paddingVertical: SPACE.sm },
-  sectionHeaderButton: { borderRadius: RADIUS.control },
-  sectionHeaderPressed: { backgroundColor: COLORS.primarySoft },
   sectHead: { minHeight: SIZES.touch, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: SPACE.sm, marginBottom: SPACE.xs },
+  sectHeadPressed: { opacity: 0.8 },
   sectTitle: { flexShrink: 1, color: COLORS.text, fontSize: 19, lineHeight: 25, fontFamily: FONTS.extraBold },
-  sectionActionIcon: { width: 36, height: 36, flexShrink: 0, borderRadius: RADIUS.control, backgroundColor: COLORS.primarySoft, alignItems: 'center', justifyContent: 'center' },
-  statsContent: { gap: SPACE.sm, paddingBottom: SPACE.xxs },
-  statcard: {
-    width: 276,
-    minHeight: 132,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
-    borderRadius: RADIUS.card,
-    backgroundColor: COLORS.surface,
-    ...SHADOW.card,
-  },
-  statTop: { flexDirection: 'row', alignItems: 'center', gap: SPACE.sm, padding: SPACE.sm, borderBottomWidth: 1, borderBottomColor: COLORS.borderLight },
-  statIcon: { width: 34, height: 34, flexShrink: 0, borderRadius: RADIUS.control, backgroundColor: COLORS.primarySoft, alignItems: 'center', justifyContent: 'center' },
-  statTitle: { flex: 1, color: COLORS.text, fontSize: 14, lineHeight: 19, fontFamily: FONTS.semiBold },
-  statVals: { flex: 1, minHeight: 66, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', padding: SPACE.sm },
-  statValue: { flex: 1, alignItems: 'center' },
-  statV: { color: COLORS.text, fontSize: 22, lineHeight: 27, fontFamily: FONTS.extraBold },
-  statL: { color: COLORS.textMuted, fontSize: 10, fontFamily: FONTS.bold, letterSpacing: 0.5 },
+  sectAction: { flexDirection: 'row', alignItems: 'center', gap: 2, flexShrink: 0 },
+  sectActionPressed: { opacity: 0.7 },
+  sectActionText: { color: COLORS.primary, fontSize: 13, fontFamily: FONTS.bold },
   listsContent: { gap: SPACE.sm, paddingBottom: SPACE.xxs },
   listcard: { height: 148, borderRadius: RADIUS.card, backgroundColor: '#241B3D', justifyContent: 'flex-end', padding: SPACE.md, overflow: 'hidden', ...SHADOW.card },
   listPosterSlot: { flex: 1, backgroundColor: COLORS.imagePlaceholder },
@@ -602,7 +607,6 @@ const styles = StyleSheet.create({
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: COLORS.border },
   dotActive: { width: 18, backgroundColor: COLORS.primary },
   posterSection: { paddingVertical: SPACE.sm },
-  posterSectionHead: { borderRadius: RADIUS.control },
   posterTitleRow: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: SPACE.xs },
   heartBadge: { width: 30, height: 30, borderRadius: RADIUS.pill, backgroundColor: COLORS.secondary, alignItems: 'center', justifyContent: 'center' },
   mediaContent: { gap: 10, paddingBottom: SPACE.xxs },

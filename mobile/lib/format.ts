@@ -2,6 +2,11 @@ export function episodeCode(season: number, ep: number): string {
   return `S${String(season).padStart(2, '0')} | E${String(ep).padStart(2, '0')}`;
 }
 
+// Variante compacte façon maquette Prisme (« S2 · E2 ») : file « À voir ».
+export function episodeCodeCompact(season: number, ep: number): string {
+  return `S${season} · E${ep}`;
+}
+
 const MONTHS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
 
 export function shortDateFr(iso: string | null | undefined): string {

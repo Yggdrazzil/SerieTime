@@ -49,6 +49,9 @@ export type QueueItemDto = {
   nextEpisode: EpisodeDto | null;
   remainingCount: number;
   badges: ('PREMIERE' | 'NOUVEAU' | 'PLUS_RECENT')[];
+  // Progression de la série (épisodes diffusés hors spéciaux). Optionnel :
+  // absent tant que le serveur de prod n'est pas redéployé → barre masquée.
+  progress?: { watched: number; total: number };
 };
 
 export type UpcomingItemDto = {
@@ -68,6 +71,10 @@ export type ProfileStatsDto = {
   // Jeux vidéo : suivis + « joués » (en cours ou terminés).
   gamesCount: number;
   gamesPlayed: number;
+  // Détail par statut (tuiles du profil). Optionnels : absents tant que le
+  // serveur n'est pas redéployé — repli sur `gamesPlayed` côté client.
+  gamesPlaying?: number;
+  gamesCompleted?: number;
 };
 
 // Gamification (spec 2026-07-16 §9/§10) — miroir de GET /api/gamification/me.

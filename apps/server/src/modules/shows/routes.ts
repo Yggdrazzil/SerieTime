@@ -177,6 +177,12 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
         }
       }
 
+      // Progression de la série (barres de la file « À voir ») : mêmes règles
+      // que la bibliothèque (/api/shows) — épisodes diffusés, spéciaux exclus.
+      const aired = refs.filter(
+        (e) => e.seasonNumber > 0 && (!e.airDate || new Date(e.airDate).getTime() <= now.getTime()),
+      );
+
       items.push({
         group,
         media: serializeMedia(status.media, status, lang),
@@ -185,6 +191,7 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
           : null,
         remainingCount: Math.max(0, remaining - 1),
         badges,
+        progress: { watched: aired.filter((e) => e.watched).length, total: aired.length },
       });
     }
 
