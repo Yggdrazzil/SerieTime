@@ -4,6 +4,7 @@ import { Feather } from '@expo/vector-icons';
 import { api } from '@/lib/api';
 import { COLORS, FONTS, RADIUS, SHADOW, SIZES, SPACE } from '@/lib/theme';
 import { SlideUpBar } from '@/components/anim';
+import { useHideTabBar } from '@/lib/tabBarHidden';
 import type { FeedItem } from './types';
 
 type DetailInfo = {
@@ -44,6 +45,9 @@ export function DescriptionOverlay({
 }) {
   const [info, setInfo] = useState<DetailInfo | null>(null);
   const [loading, setLoading] = useState(false);
+  // Sheet du bas : la tab bar flottante passerait devant le bouton
+  // « Voir la fiche » — on la cache tant que le panneau est ouvert.
+  useHideTabBar(visible);
 
   useEffect(() => {
     if (!visible) return;
