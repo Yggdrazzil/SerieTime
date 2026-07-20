@@ -145,6 +145,24 @@ export async function gamesRoutes(app: FastifyInstance): Promise<void> {
     return { ok: true, isOwned: owned };
   });
 
+  // Temps de jeu DÉCLARATIF (demande produit 2026-07-20) : l'utilisateur pose
+  // ses heures à la bascule de statut (feuille sur la fiche jeu) ou les corrige
+  // à tout moment. `hours: null` efface la déclaration. Écrase la valeur Steam
+  // le cas échéant (déclaration explicite > import).
+  app.post('/api/games/:id/playtime', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const { hours } = z.object({ hours: z.number().min(0).max(100_000).nullable() }).parse(request.body);
+    const media = await prisma.media.findFirst({ where: { id, type: 'game' } });
+    if (!media) return reply.code(404).send({ error: 'not_found' });
+    const playtimeMinutes = hours === null ? null : Math.round(hours * 60);
+    await prisma.userMediaStatus.upsert({
+      where: { userId_mediaId: { userId: request.userId, mediaId: id } },
+      create: { userId: request.userId, mediaId: id, status: 'wishlist', playtimeMinutes },
+      update: { playtimeMinutes },
+    });
+    return { ok: true, playtimeMinutes };
+  });
+
   app.post('/api/games/:id/status', async (request, reply) => {
     const { id } = request.params as { id: string };
     const { status } = z.object({ status: z.enum(GAME_STATUSES) }).parse(request.body);

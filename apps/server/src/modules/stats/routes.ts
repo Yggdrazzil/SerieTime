@@ -58,7 +58,7 @@ export async function statsRoutes(app: FastifyInstance): Promise<void> {
     const now = new Date();
     const since = new Date(now.getTime() - WEEKS * 7 * DAY);
 
-    const [watchedEps, showLib, movieLib, watchedMovies] = await Promise.all([
+    const [watchedEps, showLib, movieLib, watchedMovies, gameLib] = await Promise.all([
       // Épisodes vus (dates + runtime + série) pour totaux, hebdo, marathons.
       prisma.userEpisodeStatus.findMany({
         where: { userId, status: 'watched', watchedAt: { not: null } },
@@ -81,6 +81,17 @@ export async function statsRoutes(app: FastifyInstance): Promise<void> {
       prisma.userMediaStatus.findMany({
         where: { userId, status: 'completed', media: { type: 'movie' } },
         select: { completedAt: true, lastWatchedAt: true, media: { select: { runtime: true } } },
+      }),
+      // Bibliothèque jeux : statuts, possession, temps déclaré, genres,
+      // identité pour le « top par temps de jeu » (onglet Jeux des stats).
+      prisma.userMediaStatus.findMany({
+        where: { userId, media: { type: 'game' }, isHidden: false },
+        select: {
+          status: true,
+          isOwned: true,
+          playtimeMinutes: true,
+          media: { select: { id: true, title: true, localizedTitle: true, posterPath: true, genres: true } },
+        },
       }),
     ]);
 
@@ -178,6 +189,28 @@ export async function statsRoutes(app: FastifyInstance): Promise<void> {
         moviesAdded: movieLib.length,
         weekly: weeks.map((ts) => ({ label: label(ts), count: mvWeekly.get(ts)?.count ?? 0, hours: Math.round((mvWeekly.get(ts)?.minutes ?? 0) / 60) })),
         genres: topCounts(movieLib.flatMap((m) => splitGenres(m.media.genres)), 6),
+      },
+      // ===== JEUX (onglet Jeux des stats — temps 100 % déclaratif) =====
+      games: {
+        tracked: gameLib.length,
+        playing: gameLib.filter((g) => g.status === 'playing').length,
+        completed: gameLib.filter((g) => g.status === 'completed').length,
+        abandoned: gameLib.filter((g) => g.status === 'abandoned').length,
+        wishlist: gameLib.filter((g) => g.status === 'wishlist').length,
+        owned: gameLib.filter((g) => g.isOwned).length,
+        minutes: gameLib.reduce((sum, g) => sum + (g.playtimeMinutes ?? 0), 0),
+        // Top par temps déclaré : point d'entrée vers la fiche (édition).
+        topByPlaytime: gameLib
+          .filter((g) => (g.playtimeMinutes ?? 0) > 0)
+          .sort((a, b) => (b.playtimeMinutes ?? 0) - (a.playtimeMinutes ?? 0))
+          .slice(0, 8)
+          .map((g) => ({
+            id: g.media.id,
+            title: g.media.localizedTitle ?? g.media.title,
+            posterPath: g.media.posterPath,
+            minutes: g.playtimeMinutes ?? 0,
+          })),
+        genres: topCounts(gameLib.flatMap((g) => splitGenres(g.media.genres)), 6),
       },
     };
   });

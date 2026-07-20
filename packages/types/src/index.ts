@@ -142,6 +142,9 @@ export type ProfileStatsDto = {
   // serveur n'est pas redéployé — le client replie alors sur `gamesPlayed`.
   gamesPlaying?: number;
   gamesCompleted?: number;
+  // Temps de jeu total en minutes (déclaratif + Steam). Optionnel : absent
+  // tant que le serveur n'est pas redéployé.
+  gamePlaytimeMinutes?: number;
 };
 
 export type ListDto = {

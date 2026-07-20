@@ -6,7 +6,7 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
-Dernière mise à jour : **2026-07-20** (Claude/Étienne) — fusion du thème « Glass » dans main (verre liquide, web app) + retours UX (en-têtes épurés, pseudo unique) + Accueil/Profil rapprochés des maquettes Prisme
+Dernière mise à jour : **2026-07-20** (Claude/Étienne) — refonte des Statistiques (3 univers dont Jeux, composition originale), temps de jeu déclaratif, tuiles de temps du profil, médailles SVG des Trophées/Badges
 
 ---
 
@@ -90,6 +90,42 @@ la migration visuelle doit encore être exécutée sans modifier la logique mét
 6. Publication native optionnelle (EAS Build APK, puis stores).
 
 ## Journal des modifications
+
+### 2026-07-20 — Claude/Étienne : stats refondues, temps de jeu déclaratif, médailles
+- **Statistiques (`/stats`) — composition PlotTime originale** (rupture avec la
+  présentation TV Time) : segments **Séries / Films / Jeux** en pilule Prisme,
+  **carte héro « temps » en dégradé** avec durée décomposée mois·j·h,
+  tuiles duo, **graphique hebdo à barres arrondies dégradé rose→violet**
+  (semaine courante mise en avant), **genres en barres proportionnelles**
+  (fini le tableau deux colonnes), chaînes en **chips comptées**, marathons
+  médaillés or/argent/bronze, bouton « Comparer avec mes abonnements » en
+  pilule pleine, accès Badges avec progression.
+- **Nouvel univers Jeux dans les stats** : héro « temps de jeu déclaré »
+  (dégradé or), tuiles en cours / terminés / abandonnés / possédés / voulus /
+  suivis, **« Tes plus grosses sessions »** (top jeux par temps déclaré, tap →
+  fiche pour corriger), genres. Serveur : bloc `games` ajouté à
+  `/api/stats/detailed` (état vide propre tant que la prod n'est pas redéployée).
+- **Temps de jeu déclaratif** : nouvel endpoint `POST /api/games/:id/playtime`
+  (heures → minutes, `null` efface ; écrase la valeur Steam). Sur la fiche jeu,
+  passer un jeu **En cours / Terminé / Abandonné** ouvre une **feuille non
+  bloquante** « Combien d'heures as-tu passé sur … ? » (« Plus tard » possible),
+  et la ligne **Temps de jeu** des Informations devient **éditable** à tout
+  moment (point d'édition unique, accessible depuis le Profil → Jeux → fiche et
+  Stats → Jeux → top). Test serveur `game-playtime.test.ts` (3 cas).
+- **Profil — tuiles de temps** : « X mois Y j Z h devant les séries et films »
+  et « X j Y h de jeu (déclaré) » en tuiles pleine largeur
+  (`ProfileStatsDto.gamePlaytimeMinutes`), en plus des compteurs scindés jeux
+  en cours / jeux terminés (repli inchangé si serveur non redéployé).
+- **Trophées & Badges — médailles** : nouveau composant `components/medals.tsx`
+  (SVG) — **jetons métalliques** avec dégradés par palier (bronze/argent/or/
+  platine), arête en relief, **reflet spéculaire**, **anneau de progression
+  circulaire** vers le prochain palier (dégradé Prisme), verrouillé = étain +
+  cadenas ; **médaillon de niveau** avec anneau d'XP. Trophées : héro nuit
+  violette avec formes Prisme, flamme streak sur dégradé chaud, défis sur
+  ProgressBar, modale de badge redessinée (chip de palier). Page Badges :
+  mêmes médailles (or = débloqué), synthèse avec progression.
+- **Validation** : typecheck mobile + serveur verts ; tests serveur ciblés
+  verts (playtime 3/3, stats) ; export Expo Web complet.
 
 ### 2026-07-20 — Claude/Étienne : retours UX (en-têtes, 18+, édition profil scindée, pseudo unique)
 - **Accueil** : le raccourci Profil (avatar) disparaît de l'en-tête ; seule la
