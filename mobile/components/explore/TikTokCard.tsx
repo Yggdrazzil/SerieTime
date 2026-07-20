@@ -343,7 +343,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 20,
     right: 92,
-    bottom: 82,
+    // Au-dessus de la tab bar flottante (même repère que le rail d'actions).
+    bottom: 108,
   },
   kindBadge: {
     minHeight: 28,

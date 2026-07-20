@@ -1,10 +1,10 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, Pressable, StyleSheet, Animated, Platform } from 'react-native';
+import { View, Pressable, StyleSheet, Animated, Platform } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQueryClient } from '@tanstack/react-query';
-import { COLORS, FONTS, GLASS_BLUR, RADIUS, SHADOW } from '@/lib/theme';
+import { COLORS, GLASS_BLUR, RADIUS, SHADOW } from '@/lib/theme';
 import { useTabResetStore } from '@/lib/tabReset';
 import { useTabBarHidden } from '@/lib/tabBarHidden';
 import { useReduceMotion } from '@/lib/useReduceMotion';
@@ -36,16 +36,15 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
   // Un sheet du bas est ouvert (détails Explorer…) : la barre flottante
   // masquerait ses boutons — on la retire le temps de l'overlay.
   const hidden = useTabBarHidden();
-  // Explorer = plein cadre : barre MINI (icônes seules, hauteur réduite) pour
-  // ne pas mordre sur la colonne d'actions du feed (retour Benjamin 2026-07-21).
-  const mini = activeRouteName === 'explore';
   if (hidden) return null;
 
   return (
     // `box-none` : les zones transparentes autour de la pilule laissent passer
     // les touches vers le contenu qui défile derrière (barre FLOTTANTE).
-    <View pointerEvents="box-none" style={[styles.shell, { paddingBottom: mini ? Math.max(insets.bottom, 4) : Math.max(insets.bottom, 8) }]}>
-      <View style={[styles.bar, mini && styles.barMini]}>
+    // Barre MINI partout (retour Benjamin 2026-07-21) : icônes seules, hauteur
+    // réduite — les libellés vivent dans accessibilityLabel.
+    <View pointerEvents="box-none" style={[styles.shell, { paddingBottom: Math.max(insets.bottom, 4) }]}>
+      <View style={styles.bar}>
         {visibleRoutes.map((route) => {
           const actuallyFocused = activeRouteName === route.name;
           const focused =
@@ -68,7 +67,7 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
           return (
             <Pressable
               key={route.key}
-              style={({ pressed }) => [styles.item, mini && styles.itemMini, focused && styles.itemActive, pressed && styles.itemPressed]}
+              style={({ pressed }) => [styles.item, focused && styles.itemActive, pressed && styles.itemPressed]}
               onPress={onPress}
               onLongPress={onLongPress}
               accessibilityRole="tab"
@@ -80,14 +79,6 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
                 focused={focused}
                 showDot={route.name === 'explore' && !focused}
               />
-              {mini ? null : (
-                <Text
-                  numberOfLines={1}
-                  style={[styles.label, focused && styles.labelActive, { color: focused ? COLORS.navActive : COLORS.textMuted }]}
-                >
-                  {LABELS[route.name] ?? route.name}
-                </Text>
-              )}
             </Pressable>
           );
         })}
@@ -131,29 +122,24 @@ const styles = StyleSheet.create({
   },
   bar: {
     flexDirection: 'row',
-    minHeight: 64,
+    minHeight: 46,
     backgroundColor: COLORS.surface,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: COLORS.border,
     borderRadius: RADIUS.sheet,
     paddingHorizontal: 4,
-    paddingVertical: 5,
+    paddingVertical: 3,
     ...SHADOW.card,
     ...GLASS_BLUR,
   },
-  barMini: { minHeight: 46, paddingVertical: 3 },
   item: {
     flex: 1,
-    minHeight: 48,
+    minHeight: 40,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 2,
     borderRadius: RADIUS.card,
   },
-  itemMini: { minHeight: 38 },
   itemActive: { backgroundColor: COLORS.primarySoft },
   itemPressed: { opacity: 0.72 },
-  label: { color: COLORS.text, fontFamily: FONTS.regular, fontSize: 10.5 },
-  labelActive: { fontFamily: FONTS.bold },
   dot: { position: 'absolute', top: -2, right: -4, width: 7, height: 7, borderRadius: 4, backgroundColor: COLORS.notif },
 });
