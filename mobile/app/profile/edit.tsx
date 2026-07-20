@@ -120,7 +120,7 @@ export default function EditProfile() {
       />
 
       {/* Photo de profil — grand aperçu circulaire, actions dessous. */}
-      <SectionHeader title="Photo de profil" eyebrow="Visible partout dans l'app" />
+      <SectionHeader title="Photo de profil" />
       <PrismeCard elevated style={styles.card}>
         {avatarUrl ? (
           <Image source={{ uri: tmdbImage(avatarUrl, 'w342') ?? avatarUrl }} style={styles.avatarPreview} resizeMode="cover" />

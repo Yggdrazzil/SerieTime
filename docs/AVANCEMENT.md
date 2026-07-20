@@ -6,7 +6,7 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
-Dernière mise à jour : **2026-07-20** (Claude/Étienne) — refonte des Statistiques (3 univers dont Jeux, composition originale), temps de jeu déclaratif, tuiles de temps du profil, médailles SVG des Trophées/Badges
+Dernière mise à jour : **2026-07-20** (Claude/Étienne) — thème Glass web réellement réparé (`enableScreens(true)` : scènes d'onglets inactives enfin masquées, transparence de la pilule retrouvée), validé par scénario Chromium sur l'export statique
 
 ---
 
@@ -90,6 +90,28 @@ la migration visuelle doit encore être exécutée sans modifier la logique mét
 6. Publication native optionnelle (EAS Build APK, puis stores).
 
 ## Journal des modifications
+
+### 2026-07-20 — Claude/Étienne : Glass web VRAIMENT réparé (superposition + pilule opaque)
+- **Cause racine identifiée** (reproduction locale Chromium/Playwright sur
+  l'export web) : sur web, react-native-screens est **désactivé par défaut**
+  (`ENABLE_SCREENS = plateforme native`) et, dans ce mode, le fallback de
+  `@react-navigation/bottom-tabs` rend chaque onglet dans une View brute **sans
+  aucun masquage** — les scènes inactives restent peintes (zIndex −1). Les
+  fonds opaques des autres thèmes les recouvrent ; les voiles translucides de
+  Glass les laissaient transparaître (superposition), et l'empilement des
+  voiles formait un mur quasi opaque derrière la pilule (aucun effet de verre).
+  Le correctif précédent (`enableScreens(false)`) était donc un no-op.
+- **Correctif** (`mobile/app/_layout.tsx`, web + Glass uniquement) :
+  `enableScreens(true)` — les onglets passent par `Screen.web` de
+  react-native-screens qui masque réellement les scènes inactives
+  (`display:none`). Une seule scène peinte → plus de superposition, et le
+  `backdrop-filter` de la pilule échantillonne enfin le contenu qui défile.
+- **Validation** : scénario complet (login → Profil → Paramètres → retour →
+  Accueil → Agenda) joué dans Chromium sur le serveur dev **et** sur l'export
+  statique (`expo export -p web`, parité prod) — une seule scène visible dans
+  le DOM à chaque étape, captures à l'appui ; `tsc --noEmit` OK.
+- **Édition du profil** : mention « Visible partout dans l'app » retirée sous
+  « Photo de profil ».
 
 ### 2026-07-20 — Claude : refonte Communauté, côté serveur (QG agrégé anti-spam)
 - **`GET /api/social/overview`** (`apps/server/src/modules/social/routes.ts`) :

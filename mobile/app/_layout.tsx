@@ -44,13 +44,19 @@ const navTheme =
     ? { ...baseNavTheme, colors: { ...baseNavTheme.colors, background: 'transparent' } }
     : baseNavTheme;
 
-// Glass (web) — correctif de la SUPERPOSITION des écrans : react-native-screens
-// laisse les scènes inactives montées et VISIBLES dans le DOM ; elles sont
-// d'ordinaire masquées par les fonds opaques des écrans, mais les fonds Glass
-// sont des voiles translucides → tous les onglets/écrans transparaissaient.
-// On repasse ici sur les vues classiques de React Navigation (scènes inactives
-// en display:none). Web + Glass uniquement : aucun impact natif ni autres thèmes.
-if (Platform.OS === 'web' && THEME === 'glass') enableScreens(false);
+// Glass (web) — correctif de la SUPERPOSITION des onglets. Sur web, les
+// screens sont DÉSACTIVÉS par défaut (react-native-screens : ENABLE_SCREENS =
+// plateforme native) et, screens désactivés, le fallback de
+// @react-navigation/bottom-tabs rend chaque scène dans une View brute SANS
+// AUCUN masquage : les onglets inactifs restent peints, seulement relégués en
+// zIndex -1. Les fonds opaques des autres thèmes recouvrent ces scènes ; les
+// voiles translucides de Glass les laissent transparaître (superposition, et
+// pilule de nav « opaque » car le blur échantillonnait l'empilement des
+// voiles). enableScreens(true) fait passer les onglets par Screen.web de
+// react-native-screens, qui masque VRAIMENT les scènes inactives
+// (display:none). Web + Glass uniquement : aucun impact natif, et les autres
+// thèmes web gardent leur comportement actuel (scroll conservé entre onglets).
+if (Platform.OS === 'web' && THEME === 'glass') enableScreens(true);
 
 export default function RootLayout() {
   // Police de l'app (voir FONTS dans lib/theme.ts) — chargée avant tout rendu.
@@ -85,7 +91,7 @@ export default function RootLayout() {
               Sur le web, ces options sont ignorées → l'animation « Pop » au montage
               de chaque page prend le relais. */}
           {/* Glass : cartes transparentes (le dégradé du document transparaît) —
-              la superposition est neutralisée par enableScreens(false) ci-dessus. */}
+              la superposition est neutralisée par enableScreens(true) ci-dessus. */}
           <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: THEME === 'glass' ? 'transparent' : COLORS.white }, animation: 'slide_from_right' }}>
             <Stack.Screen name="index" />
             <Stack.Screen name="setup" />
