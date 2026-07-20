@@ -573,6 +573,36 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
     }
     const recentGroups = [...groups.values()].slice(0, 30);
 
+    // Nombre d'épisodes RÉEL des groupes séries, depuis UserEpisodeStatus :
+    // un marquage en masse (mark-all-watched, watched-previous) upserte N
+    // statuts mais ne crée qu'UN événement média-niveau — compter les
+    // événements affichait « a vu 1 épisode » au lieu de N. On agrège les
+    // statuts (ami, série, jour Paris) en une requête bornée (fenêtre 7 j,
+    // amis + médias des groupes affichés). Les WatchEvents restent la source
+    // de l'ordre et du refId kudos. Fallback : groupe sans statut ce jour-là
+    // (données legacy, épisodes décochés depuis) → comptage par événements.
+    const recentShowMediaIds = [
+      ...new Set(recentGroups.filter((g) => g.event.media.type === 'show').map((g) => g.event.mediaId)),
+    ];
+    const epStatusRows =
+      recentShowMediaIds.length === 0
+        ? []
+        : await prisma.userEpisodeStatus.findMany({
+            where: {
+              userId: { in: [...new Set(recentGroups.map((g) => g.event.userId))] },
+              status: 'watched',
+              watchedAt: { gte: since7d },
+              episode: { show: { mediaId: { in: recentShowMediaIds } } },
+            },
+            select: { userId: true, watchedAt: true, episode: { select: { show: { select: { mediaId: true } } } } },
+          });
+    const epCountByGroup = new Map<string, number>();
+    for (const r of epStatusRows) {
+      if (!r.watchedAt) continue;
+      const key = `${r.userId}:${r.episode.show.mediaId}:${dayKeyParis(r.watchedAt)}`;
+      epCountByGroup.set(key, (epCountByGroup.get(key) ?? 0) + 1);
+    }
+
     // Niveau + streak de tous les utilisateurs affichés, en UNE requête.
     const progress = await progressMap([
       ...new Set([...nowDeduped, ...recentGroups.map((g) => g.event), ...badgeRows].map((x) => x.userId)),
@@ -621,14 +651,23 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
           : null,
         lastAt: e.eventDate.toISOString(),
       })),
-      recent: recentGroups.map(({ event: e, count }) => ({
-        user: overviewUser(e.user),
-        media: mediaOf(e.media),
-        day: dayKeyParis(e.eventDate),
-        count, // nb d'épisodes du jour (1 pour un film/jeu)
-        refId: e.id, // WatchEvent le plus récent du groupe → cible kudos (kind 'watch')
-        reactions: reactionsFor('watch', e.id),
-      })),
+      recent: recentGroups.map(({ event: e, count }) => {
+        // Séries : nb d'épisodes du jour depuis UserEpisodeStatus (les
+        // marquages en masse ne créent qu'un événement) ; films/jeux : nb
+        // d'événements (1 par visionnage).
+        const epCount =
+          e.media.type === 'show'
+            ? epCountByGroup.get(`${e.userId}:${e.mediaId}:${dayKeyParis(e.eventDate)}`) ?? 0
+            : 0;
+        return {
+          user: overviewUser(e.user),
+          media: mediaOf(e.media),
+          day: dayKeyParis(e.eventDate),
+          count: epCount > 0 ? epCount : count,
+          refId: e.id, // WatchEvent le plus récent du groupe → cible kudos (kind 'watch')
+          reactions: reactionsFor('watch', e.id),
+        };
+      }),
       badges: badgeRows.map((b) => ({
         user: overviewUser(b.user),
         badge: {
@@ -874,8 +913,13 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
 
   // --- Défi hebdo ----------------------------------------------------------
   // Minutes vues depuis lundi 00:00 Europe/Paris, pour moi + mes abonnements.
-  // Agrégation en SQL brut (pattern leaderboard) : épisodes via WatchEvent
-  // 'watched' joints à Episode→Show→Media, films via le runtime du média.
+  // Agrégation en SQL brut (pattern leaderboard stats) sur les STATUTS, pas
+  // sur les WatchEvents : un marquage en masse (mark-all-watched,
+  // watched-previous) upserte N UserEpisodeStatus mais ne crée qu'UN SEUL
+  // événement média-niveau — compter les événements sous-comptait donc les
+  // saisons cochées d'un coup (~0 min au lieu de N × runtime). Séries via
+  // UserEpisodeStatus.watchedAt, films via UserMediaStatus.completedAt (posé
+  // par POST /api/movies/:id/watched, remis à null par /unwatched).
   app.get('/api/social/challenge/weekly', async (request) => {
     const weekStart = mondayStartParis();
     // Blocage : les comptes que j'ai bloqués sortent de MON défi hebdo (même
@@ -885,33 +929,39 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
       blockedIdSet(request.userId),
     ]);
     const ids = [request.userId, ...[...followingIds].filter((id) => !blockedIds.has(id))];
-    const [rows, users] = await Promise.all([
+    const [epRows, mvRows, users] = await Promise.all([
       prisma.$queryRaw<{ userId: string; minutes: bigint | number | null }[]>`
-        SELECT we.userId AS userId,
-               SUM(CASE
-                     WHEN we.episodeId IS NOT NULL THEN
-                       CASE WHEN e.runtime > 0 THEN e.runtime
-                            WHEN sm.runtime > 0 THEN sm.runtime
-                            ELSE ${EP_FALLBACK_MIN} END
-                     WHEN med.type = 'movie' THEN
-                       CASE WHEN med.runtime > 0 THEN med.runtime ELSE ${MOVIE_FALLBACK_MIN} END
-                     ELSE 0
-                   END) AS minutes
-        FROM "WatchEvent" we
-        JOIN "Media" med ON med.id = we.mediaId
-        LEFT JOIN "Episode" e ON e.id = we.episodeId
-        LEFT JOIN "Show" s ON s.id = e.showId
-        LEFT JOIN "Media" sm ON sm.id = s.mediaId
-        WHERE we.eventType = 'watched'
-          AND we.userId IN (${Prisma.join(ids)})
-          AND we.eventDate >= ${weekStart.getTime()}
-        GROUP BY we.userId`,
+        SELECT ues.userId AS userId,
+               SUM(CASE WHEN e.runtime > 0 THEN e.runtime
+                        WHEN m.runtime > 0 THEN m.runtime
+                        ELSE ${EP_FALLBACK_MIN} END) AS minutes
+        FROM "UserEpisodeStatus" ues
+        JOIN "Episode" e ON e.id = ues.episodeId
+        JOIN "Show" s ON s.id = e.showId
+        JOIN "Media" m ON m.id = s.mediaId
+        WHERE ues.status = 'watched'
+          AND ues.userId IN (${Prisma.join(ids)})
+          AND ues.watchedAt >= ${weekStart.getTime()}
+        GROUP BY ues.userId`,
+      prisma.$queryRaw<{ userId: string; minutes: bigint | number | null }[]>`
+        SELECT ums.userId AS userId,
+               SUM(CASE WHEN m.runtime > 0 THEN m.runtime ELSE ${MOVIE_FALLBACK_MIN} END) AS minutes
+        FROM "UserMediaStatus" ums
+        JOIN "Media" m ON m.id = ums.mediaId
+        WHERE ums.status = 'completed'
+          AND m.type = 'movie'
+          AND ums.userId IN (${Prisma.join(ids)})
+          AND ums.completedAt >= ${weekStart.getTime()}
+        GROUP BY ums.userId`,
       prisma.user.findMany({
         where: { id: { in: ids } },
         select: { id: true, displayName: true, avatarUrl: true },
       }),
     ]);
-    const minutesById = new Map(rows.map((r) => [r.userId, Number(r.minutes ?? 0)]));
+    const minutesById = new Map<string, number>();
+    for (const r of [...epRows, ...mvRows]) {
+      minutesById.set(r.userId, (minutesById.get(r.userId) ?? 0) + Number(r.minutes ?? 0));
+    }
     const entries = users
       .map((u) => ({
         userId: u.id,

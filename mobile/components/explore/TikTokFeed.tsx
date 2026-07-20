@@ -87,6 +87,12 @@ export function TikTokFeed() {
     queryClient.invalidateQueries({ queryKey: ['movies'] });
     queryClient.invalidateQueries({ queryKey: ['profile'] });
     queryClient.invalidateQueries({ queryKey: ['games', 'library'] });
+    // Fiches détaillées (clés SINGULIER : ['show', id] / ['movie', id] /
+    // ['game', id]) : sans cette invalidation, une fiche déjà en cache gardait
+    // l'ancien statut après un « Déjà vu »/« À voir » posé depuis l'Explorer.
+    queryClient.invalidateQueries({ queryKey: ['show'] });
+    queryClient.invalidateQueries({ queryKey: ['movie'] });
+    queryClient.invalidateQueries({ queryKey: ['game'] });
   }, [queryClient]);
 
   // Flux infini : re-tire une page et ajoute les nouveautés (dédup). 2 fetchs

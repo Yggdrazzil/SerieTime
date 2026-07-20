@@ -469,9 +469,10 @@ function EpisodePage({
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['shows'] });
-      queryClient.invalidateQueries({
-        queryKey: ['show', mediaId, 'episodes'],
-      });
+      // ['show', mediaId] couvre la fiche détaillée (statut/progression) ET
+      // ['show', mediaId, 'episodes'] (préfixe) — la fiche en cache doit
+      // refléter l'épisode coché/décoché depuis la sheet.
+      queryClient.invalidateQueries({ queryKey: ['show', mediaId] });
       queryClient.invalidateQueries({ queryKey: ['profile'] });
       queryClient.invalidateQueries({ queryKey: ['gamification'] });
     },
@@ -538,9 +539,8 @@ function EpisodePage({
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['shows'] });
-      queryClient.invalidateQueries({
-        queryKey: ['show', mediaId, 'episodes'],
-      });
+      // Fiche détaillée + liste d'épisodes (préfixe ['show', mediaId]).
+      queryClient.invalidateQueries({ queryKey: ['show', mediaId] });
       queryClient.invalidateQueries({ queryKey: ['profile'] });
       queryClient.invalidateQueries({ queryKey: ['gamification'] });
     },
