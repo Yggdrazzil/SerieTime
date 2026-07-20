@@ -103,7 +103,8 @@ function dateLabel(value: string): string {
   });
 }
 
-function UserAvatar({
+// Exporté : réutilisé par le QG de l'onglet Communauté (components/communityHQ.tsx).
+export function UserAvatar({
   user,
   onPress,
   size = 46,
@@ -229,8 +230,8 @@ function Tab({
   );
 }
 
-// Exporté : réutilisé par l'onglet Communauté ((tabs)/community.tsx), qui
-// peut injecter un en-tête de liste (carrousel « Tes amis ont adoré »).
+// Exporté : un en-tête de liste peut être injecté par l'écran hôte. Depuis la
+// refonte Communauté 2026-07-20, seul cet écran /social l'utilise encore.
 export function FeedTab({ header }: { header?: React.ReactElement }) {
   const queryClient = useQueryClient();
   const { data, isLoading, isError, refetch, isRefetching } = useQuery({
@@ -476,7 +477,7 @@ function ReactionBar({
   );
 }
 
-// Exporté : réutilisé par l'onglet Communauté ((tabs)/community.tsx).
+// Exporté : réutilisé par l'écran poussé « Amis » (app/friends.tsx).
 export function FriendsTab() {
   const router = useRouter();
   const queryClient = useQueryClient();

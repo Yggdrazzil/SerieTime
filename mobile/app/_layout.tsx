@@ -94,6 +94,7 @@ export default function RootLayout() {
             <Stack.Screen name="show/[id]" options={{ animation: 'slide_from_bottom' }} />
             <Stack.Screen name="settings" />
             <Stack.Screen name="social" />
+            <Stack.Screen name="friends" />
             <Stack.Screen name="notifications" />
             <Stack.Screen name="user/[id]" />
             <Stack.Screen name="profile/edit" options={{ animation: 'slide_from_bottom' }} />

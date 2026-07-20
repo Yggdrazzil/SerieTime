@@ -1,39 +1,50 @@
 import React, { useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter, type Href } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { usePullRefresh } from '@/lib/usePullRefresh';
 import { COLORS, SIZES, SPACE } from '@/lib/theme';
-import { SegmentedFilter, TabHeader } from '@/components/prisme';
+import { IconAction, SegmentedFilter, TabHeader } from '@/components/prisme';
 import { EmptyState, Loading, LoadError } from '@/components/ui';
 import { FadeSwitch } from '@/components/anim';
 import { useTabResetSeq } from '@/lib/tabReset';
-import { ClubsTab, FriendsLovedCarousel, WeeklyChallengeCard } from '@/components/community';
-import { FeedTab, FriendsTab } from '../social';
+import { WeeklyChallengeCard } from '@/components/community';
+import { DiscussionsTab, FriendsHQTab } from '@/components/communityHQ';
 import { LeaderboardBoard, type Leaderboard } from '../stats/leaderboard';
 
-// Onglet Communauté (décision équipe 2026-07-20) : remplace l'ex-onglet
-// Bibliothèque (doublon du Profil). Regroupe le fil d'activité des
-// abonnements (épisodes vus, notes, badges débloqués), le classement entre
-// amis, la recherche de profils et les clubs par média.
-type CommunityTab = 'feed' | 'ranking' | 'friends' | 'clubs';
+// Onglet Communauté (refonte V1, 2026-07-20) : trois segments — « Amis »
+// (le QG : qui regarde quoi, visionnages récents + kudos, derniers badges,
+// recommandations), « Défis » (défi hebdo + classement entre amis) et
+// « Discussions » (fils de commentaires actifs chez les amis). La recherche
+// de profils vit désormais sur l'écran poussé /friends (loupe en en-tête).
+type CommunityTab = 'amis' | 'defis' | 'discussions';
 const TAB_OPTIONS: { value: CommunityTab; label: string }[] = [
-  { value: 'feed', label: 'Fil' },
-  { value: 'ranking', label: 'Classement' },
-  { value: 'friends', label: 'Amis' },
-  { value: 'clubs', label: 'Clubs' },
+  { value: 'amis', label: 'Amis' },
+  { value: 'defis', label: 'Défis' },
+  { value: 'discussions', label: 'Discussions' },
 ];
 
 export default function CommunityScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const resetSeq = useTabResetSeq('community');
-  const [tab, setTab] = useState<CommunityTab>('feed');
+  const [tab, setTab] = useState<CommunityTab>('amis');
 
   return (
     <View key={resetSeq} style={styles.screen}>
       <View style={[styles.header, { paddingTop: insets.top }]}>
-        <TabHeader title="Communauté" />
+        <TabHeader
+          title="Communauté"
+          trailing={
+            <IconAction
+              icon="search"
+              label="Trouver des amis"
+              onPress={() => router.push('/friends' as Href)}
+            />
+          }
+        />
         <SegmentedFilter
           options={TAB_OPTIONS}
           value={tab}
@@ -43,23 +54,21 @@ export default function CommunityScreen() {
         />
       </View>
       <FadeSwitch trigger={tab}>
-        {tab === 'feed' ? (
-          <FeedTab header={<FriendsLovedCarousel />} />
-        ) : tab === 'ranking' ? (
-          <RankingSection />
-        ) : tab === 'friends' ? (
-          <FriendsTab />
+        {tab === 'amis' ? (
+          <FriendsHQTab />
+        ) : tab === 'defis' ? (
+          <ChallengesSection />
         ) : (
-          <ClubsTab />
+          <DiscussionsTab />
         )}
       </FadeSwitch>
     </View>
   );
 }
 
-// Classement entre amis (temps séries / films) — même tableau que l'écran
-// Stats, embarqué directement dans l'onglet.
-function RankingSection() {
+// Segment « Défis » : défi hebdo + classement entre amis (temps séries /
+// films) — même tableau que l'écran Stats, embarqué directement dans l'onglet.
+function ChallengesSection() {
   const queryClient = useQueryClient();
   const [kind, setKind] = useState<'series' | 'movies'>('series');
   const { data, isLoading, isError, refetch, isRefetching } = useQuery({
@@ -78,7 +87,7 @@ function RankingSection() {
   return (
     <ScrollView
       showsVerticalScrollIndicator={false}
-      contentContainerStyle={styles.rankingContent}
+      contentContainerStyle={styles.challengesContent}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
@@ -97,7 +106,7 @@ function RankingSection() {
         value={kind}
         onChange={setKind}
         accessibilityLabel="Filtrer le classement"
-        style={styles.rankingTabs}
+        style={styles.challengesTabs}
       />
       {isLoading ? (
         <Loading />
@@ -106,7 +115,7 @@ function RankingSection() {
       ) : entries.length <= 1 ? (
         <EmptyState
           title="Personne à comparer"
-          message="Abonne-toi à des amis (onglet Amis) pour lancer le classement."
+          message="Suis des amis (loupe en haut de l'onglet) pour lancer le classement."
         />
       ) : (
         <LeaderboardBoard entries={entries} />
@@ -125,12 +134,12 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.borderLight,
   },
   tabs: { width: '100%', maxWidth: SIZES.contentMax, alignSelf: 'center' },
-  rankingContent: {
+  challengesContent: {
     padding: SPACE.md,
     paddingBottom: 120,
     width: '100%',
     maxWidth: SIZES.contentMax,
     alignSelf: 'center',
   },
-  rankingTabs: { marginBottom: SPACE.sm },
+  challengesTabs: { marginBottom: SPACE.sm },
 });

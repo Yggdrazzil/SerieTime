@@ -10,6 +10,7 @@ import { blockedIdSet } from './blocks.js';
 import { BADGES, findBlockedTerm, levelTitle, nextLevelXp } from '@serietime/core';
 import { scheduleRecompute } from '../gamification/service.js';
 import { EP_FALLBACK_MIN, MOVIE_FALLBACK_MIN } from '../../lib/runtimeFallbacks.js';
+import { dayKeyParis } from '../../lib/parisTime.js';
 
 // Ordre favoris (drag & drop) partagé avec /api/profile : positionnés d'abord,
 // puis les plus anciennement ajoutés.
@@ -498,6 +499,202 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
     return { items };
   });
 
+  // --- QG Communauté (refonte) --------------------------------------------
+  // Vue agrégée de l'onglet Communauté en UNE requête HTTP : « En ce moment »
+  // (dernier visionnage de chaque ami), « Récemment vus » (groupé anti-spam
+  // par ami × média × jour Paris) et « Derniers badges ». Toutes les requêtes
+  // sont BORNÉES (fenêtres temporelles + take) et batchées (pas de N+1).
+  app.get('/api/social/overview', async (request) => {
+    const lang = await getUserLang(request.userId);
+    const [followingIds, blockedIds] = await Promise.all([
+      followingIdSet(request.userId),
+      blockedIdSet(request.userId),
+    ]);
+    const friendIds = [...followingIds].filter((id) => !blockedIds.has(id));
+    if (friendIds.length === 0) return { now: [], recent: [], badges: [] };
+
+    const since7d = new Date(Date.now() - 7 * 86_400_000);
+    const since14d = new Date(Date.now() - 14 * 86_400_000);
+
+    // « En ce moment » : le DERNIER WatchEvent 'watched' par ami. Un groupBy
+    // (borné à 15 amis, index [userId, eventDate]) donne les couples
+    // (ami, dernière date), puis les événements sont rechargés en un findMany.
+    const latestPerFriend = await prisma.watchEvent.groupBy({
+      by: ['userId'],
+      where: { userId: { in: friendIds }, eventType: 'watched' },
+      _max: { eventDate: true },
+      orderBy: { _max: { eventDate: 'desc' } },
+      take: 15,
+    });
+    const latestPairs = latestPerFriend.flatMap((g) =>
+      g._max.eventDate ? [{ userId: g.userId, eventDate: g._max.eventDate }] : [],
+    );
+
+    const [nowEvents, recentEvents, badgeRows] = await Promise.all([
+      latestPairs.length === 0
+        ? []
+        : prisma.watchEvent.findMany({
+            where: { eventType: 'watched', OR: latestPairs },
+            include: { user: true, media: true, episode: true },
+            orderBy: { eventDate: 'desc' },
+            take: 60, // garde-fou (égalités de date) — dédupliqué par ami ci-dessous
+          }),
+      // « Récemment vus » : fenêtre 7 jours, plafond dur d'événements bruts.
+      prisma.watchEvent.findMany({
+        where: { userId: { in: friendIds }, eventType: 'watched', eventDate: { gte: since7d } },
+        include: { user: true, media: true, episode: true },
+        orderBy: { eventDate: 'desc' },
+        take: 500,
+      }),
+      prisma.userBadge.findMany({
+        where: { userId: { in: friendIds }, unlockedAt: { gte: since14d } },
+        include: { user: true },
+        orderBy: { unlockedAt: 'desc' },
+        take: 20,
+      }),
+    ]);
+
+    // 1 entrée par ami (le plus récent) — les égalités de date sont dédupliquées.
+    const seenNow = new Set<string>();
+    const nowDeduped = nowEvents
+      .filter((e) => (seenNow.has(e.userId) ? false : (seenNow.add(e.userId), true)))
+      .slice(0, 15);
+
+    // Agrégation anti-spam : (ami, média, jour Paris) → 1 groupe. Les événements
+    // arrivent triés eventDate desc : le premier vu d'un groupe est son plus
+    // récent (refId cible des kudos, lastAt), et l'ordre d'insertion des groupes
+    // est déjà l'ordre lastAt desc.
+    const groups = new Map<string, { event: (typeof recentEvents)[number]; count: number }>();
+    for (const e of recentEvents) {
+      const key = `${e.userId}:${e.mediaId}:${dayKeyParis(e.eventDate)}`;
+      const g = groups.get(key);
+      if (g) g.count += 1;
+      else groups.set(key, { event: e, count: 1 });
+    }
+    const recentGroups = [...groups.values()].slice(0, 30);
+
+    // Niveau + streak de tous les utilisateurs affichés, en UNE requête.
+    const progress = await progressMap([
+      ...new Set([...nowDeduped, ...recentGroups.map((g) => g.event), ...badgeRows].map((x) => x.userId)),
+    ]);
+    const overviewUser = (u: PublicUser) => ({
+      id: u.id,
+      displayName: u.displayName,
+      avatarUrl: u.avatarUrl,
+      level: progress.get(u.id)?.level ?? 1,
+      streak: progress.get(u.id)?.currentStreak ?? 0,
+    });
+    const mediaOf = (m: (typeof recentEvents)[number]['media']) => ({
+      id: m.id,
+      title: mediaTitle(m, lang),
+      posterPath: m.posterPath,
+      type: m.type,
+    });
+
+    // Réactions (kudos) de tous les refIds en UNE requête ActivityReaction.
+    const reactionRows = await prisma.activityReaction.findMany({
+      where: {
+        OR: [
+          { kind: 'watch', refId: { in: recentGroups.map((g) => g.event.id) } },
+          { kind: 'badge', refId: { in: badgeRows.map((b) => b.id) } },
+        ],
+      },
+      select: { kind: true, refId: true, userId: true, emoji: true },
+    });
+    const reactionsByRef = new Map<string, { total: number; mine: string[] }>();
+    for (const r of reactionRows) {
+      const key = `${r.kind}:${r.refId}`;
+      const agg = reactionsByRef.get(key) ?? { total: 0, mine: [] };
+      agg.total += 1;
+      if (r.userId === request.userId && !agg.mine.includes(r.emoji)) agg.mine.push(r.emoji);
+      reactionsByRef.set(key, agg);
+    }
+    const reactionsFor = (kind: ReactionKind, refId: string) =>
+      reactionsByRef.get(`${kind}:${refId}`) ?? { total: 0, mine: [] as string[] };
+
+    return {
+      now: nowDeduped.map((e) => ({
+        user: overviewUser(e.user),
+        media: mediaOf(e.media),
+        episode: e.episode
+          ? { seasonNumber: e.episode.seasonNumber, episodeNumber: e.episode.episodeNumber }
+          : null,
+        lastAt: e.eventDate.toISOString(),
+      })),
+      recent: recentGroups.map(({ event: e, count }) => ({
+        user: overviewUser(e.user),
+        media: mediaOf(e.media),
+        day: dayKeyParis(e.eventDate),
+        count, // nb d'épisodes du jour (1 pour un film/jeu)
+        refId: e.id, // WatchEvent le plus récent du groupe → cible kudos (kind 'watch')
+        reactions: reactionsFor('watch', e.id),
+      })),
+      badges: badgeRows.map((b) => ({
+        user: overviewUser(b.user),
+        badge: {
+          id: b.badgeId,
+          label: BADGES.find((def) => def.id === b.badgeId)?.label ?? b.badgeId,
+          tier: b.tier,
+        },
+        unlockedAt: b.unlockedAt.toISOString(),
+        refId: b.id, // UserBadge.id → cible kudos (kind 'badge')
+        reactions: reactionsFor('badge', b.id),
+      })),
+    };
+  });
+
+  // Fils de discussion où mes amis sont actifs (14 derniers jours), groupés
+  // par média. Anti-spoiler : ni texte des commentaires ni numéros d'épisode
+  // dans la liste — l'utilisateur ouvre la fiche pour lire.
+  app.get('/api/social/discussions', async (request) => {
+    const lang = await getUserLang(request.userId);
+    const [followingIds, blockedIds] = await Promise.all([
+      followingIdSet(request.userId),
+      blockedIdSet(request.userId),
+    ]);
+    const friendIds = [...followingIds].filter((id) => !blockedIds.has(id));
+    if (friendIds.length === 0) return { threads: [] };
+
+    const since14d = new Date(Date.now() - 14 * 86_400_000);
+    // Racines ET réponses comptent comme activité (borné : fenêtre + take).
+    const comments = await prisma.comment.findMany({
+      where: { userId: { in: friendIds }, createdAt: { gte: since14d } },
+      include: { user: true, media: true },
+      orderBy: { createdAt: 'desc' },
+      take: 400,
+    });
+
+    type Thread = {
+      media: (typeof comments)[number]['media'];
+      commentCount: number;
+      participants: Map<string, PublicUser>;
+      lastAt: Date;
+    };
+    // Commentaires triés desc : le premier d'un média fixe lastAt (le plus
+    // récent) et l'ordre d'insertion des fils est déjà l'ordre lastAt desc.
+    const byMedia = new Map<string, Thread>();
+    for (const c of comments) {
+      const t =
+        byMedia.get(c.mediaId) ??
+        ({ media: c.media, commentCount: 0, participants: new Map(), lastAt: c.createdAt } satisfies Thread);
+      t.commentCount += 1;
+      if (!t.participants.has(c.userId) && t.participants.size < 3) t.participants.set(c.userId, c.user);
+      byMedia.set(c.mediaId, t);
+    }
+    return {
+      threads: [...byMedia.values()].slice(0, 20).map((t) => ({
+        media: { id: t.media.id, title: mediaTitle(t.media, lang), posterPath: t.media.posterPath, type: t.media.type },
+        commentCount: t.commentCount,
+        participants: [...t.participants.values()].map((u) => ({
+          id: u.id,
+          displayName: u.displayName,
+          avatarUrl: u.avatarUrl,
+        })),
+        lastAt: t.lastAt.toISOString(),
+      })),
+    };
+  });
+
   // Réaction emoji sur un item du fil (toggle, comme les réactions de
   // commentaires) : chaque emoji est indépendant. La cible est polymorphe.
   app.post('/api/social/feed/react', async (request, reply) => {
@@ -509,9 +706,10 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
       })
       .parse(request.body);
     // La cible doit exister (WatchEvent/Comment/UserBadge selon le kind).
-    const target =
+    // mediaId (quand la cible en a un) sert au deep-link de la notification kudos.
+    const target: { id: string; userId: string; mediaId?: string } | null =
       kind === 'watch'
-        ? await prisma.watchEvent.findUnique({ where: { id: refId }, select: { id: true, userId: true } })
+        ? await prisma.watchEvent.findUnique({ where: { id: refId }, select: { id: true, userId: true, mediaId: true } })
         : kind === 'comment'
           ? await prisma.comment.findUnique({ where: { id: refId }, select: { id: true, userId: true } })
           : await prisma.userBadge.findUnique({ where: { id: refId }, select: { id: true, userId: true } });
@@ -573,6 +771,21 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
       }
     };
     const reacted = await toggle();
+    // Kudos : notifier le propriétaire à la CRÉATION seulement (jamais au
+    // retrait). Kind 'comment' exclu : les likes de commentaires ont déjà leur
+    // notification 'comment_reaction' via POST /api/comments/:id/react — le
+    // chemin feed n'en crée pas non plus, pour ne pas doubler le flux existant.
+    // Guard owner === moi (réagir à sa propre activité est autorisé) ; le
+    // filtre blocage est déjà dans notifyUser.
+    if (reacted && kind !== 'comment' && target.userId !== request.userId) {
+      const me = await prisma.user.findUnique({ where: { id: request.userId }, select: { displayName: true } });
+      const actorName = me?.displayName ?? 'Quelqu’un';
+      await notifyUser(target.userId, request.userId, {
+        type: 'reaction',
+        title: kind === 'badge' ? `${actorName} a salué ton badge` : `${actorName} a salué ton activité`,
+        mediaId: target.mediaId,
+      });
+    }
     // Total toutes emojis confondues sur la cible (kind 'comment' : store
     // CommentReaction + éventuelles ActivityReaction legacy, comme le feed).
     const count =

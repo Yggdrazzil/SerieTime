@@ -40,7 +40,7 @@ la migration visuelle doit encore être exécutée sans modifier la logique mét
 | Menu « … » de la fiche | ✅ Fait | Personnaliser (affiche + bannière, séries **et** films), Favoris, Ajouter à une liste, Regarder plus tard, Supprimer, Partager |
 | Consultation ≠ suivi | ✅ Fait | Taper un résultat ouvre la fiche sans l'ajouter ; seul le `+` suit (statut « Pas commencée » ; « En cours » au 1er épisode vu) |
 | Recherche (design TV Time) | ✅ Fait | Onglets SÉRIES ET FILMS / JEUX / UTILISATEURS, « Annuler », `+` jaunes, debounce |
-| Social : abonnements, fil d'activité | ✅ Fait | Follow/unfollow, fil des visionnages/commentaires des personnes suivies |
+| Social : abonnements, fil d'activité | ✅ Fait | Follow/unfollow, fil des visionnages/commentaires des personnes suivies ; QG agrégé anti-spam (`/api/social/overview` + `/api/social/discussions`, serveur prêt) |
 | Social : commentaires, réponses, réactions | ✅ Fait | Fils de discussion, réactions multi-emoji (❤️👍😂😮😢) |
 | Profil public + confidentialité | ✅ Fait | Écran `/user/[id]` : pastille niveau + titre + streak, section Trophées (badges débloqués), compteurs Séries/Films/Épisodes/Jeux, favoris séries/films/jeux, séries récentes. Gamification (réputation) visible même sur un profil privé ; stats/récents/favoris masqués aux non-abonnés |
 | Notifications in-app | ✅ Fait | Cloche + badge ; ami qui commente/favorise, réponse ou réaction à un commentaire |
@@ -90,6 +90,27 @@ la migration visuelle doit encore être exécutée sans modifier la logique mét
 6. Publication native optionnelle (EAS Build APK, puis stores).
 
 ## Journal des modifications
+
+### 2026-07-20 — Claude : refonte Communauté, côté serveur (QG agrégé anti-spam)
+- **`GET /api/social/overview`** (`apps/server/src/modules/social/routes.ts`) :
+  le QG de l'onglet Communauté en UNE requête HTTP — `now` (« En ce moment » :
+  dernier WatchEvent 'watched' par ami, 1 entrée/ami, max 15), `recent`
+  (« Récemment vus » agrégé par ami × média × jour Paris via `dayKeyParis`,
+  fenêtre 7 j, max 30 groupes, `count` = épisodes du jour, `refId` = événement
+  le plus récent → cible kudos) et `badges` (14 j, max 20, `refId` =
+  `UserBadge.id`). Follows filtrés blocklist, requêtes bornées, réactions +
+  niveaux/streaks chargés en batch (pas de N+1).
+- **`GET /api/social/discussions`** : fils où mes amis sont actifs (14 j),
+  groupés par média — `commentCount`, `participants` (max 3, amis uniquement),
+  `lastAt` ; **anti-spoiler** : ni texte des commentaires ni numéros d'épisode.
+- **Notification kudos** : `POST /api/social/feed/react` notifie le
+  propriétaire à la CRÉATION d'une réaction (type `reaction`, « X a salué ton
+  activité / ton badge ») — jamais au retrait, jamais soi-même, kind `comment`
+  exclu (flux `comment_reaction` existant), blocages filtrés par `notifyUser`.
+- **Tests** : `src/__tests__/social-overview.test.ts` (9 tests) — agrégation
+  par jour, filtres bloqués/non-suivis, kudos → notification, toggle off sans
+  notification, filtre blocage. `tsc --noEmit` 0 ; suite vitest 230/231 (seul
+  échec préexistant : `api.test.ts` /health APP_NAME).
 
 ### 2026-07-20 — Claude/Étienne : retours UX v2 (barre flottante, Glass réparé, profil peaufiné)
 - **Barre de navigation FLOTTANTE (tous thèmes)** : la pilule est posée en
