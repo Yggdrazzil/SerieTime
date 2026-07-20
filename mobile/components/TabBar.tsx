@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQueryClient } from '@tanstack/react-query';
 import { COLORS, FONTS, GLASS_BLUR, RADIUS, SHADOW } from '@/lib/theme';
 import { useTabResetStore } from '@/lib/tabReset';
+import { useTabBarHidden } from '@/lib/tabBarHidden';
 import { useReduceMotion } from '@/lib/useReduceMotion';
 
 const NATIVE = Platform.OS !== 'web';
@@ -32,6 +33,10 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
   const bumpReset = useTabResetStore((s) => s.bump);
   const activeRouteName = state.routes[state.index]?.name;
   const visibleRoutes = state.routes.filter((route) => VISIBLE_ROUTES.has(route.name));
+  // Un sheet du bas est ouvert (détails Explorer…) : la barre flottante
+  // masquerait ses boutons — on la retire le temps de l'overlay.
+  const hidden = useTabBarHidden();
+  if (hidden) return null;
 
   return (
     // `box-none` : les zones transparentes autour de la pilule laissent passer
