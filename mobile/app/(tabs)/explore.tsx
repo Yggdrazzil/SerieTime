@@ -258,6 +258,10 @@ function MediaResults({ query, rawQuery }: { query: string; rawQuery: string }) 
       queryClient.invalidateQueries({ queryKey: ['shows'] });
       queryClient.invalidateQueries({ queryKey: ['movies'] });
       queryClient.invalidateQueries({ queryKey: ['profile'] });
+      // Fiches détaillées (clés singulier) : une fiche déjà en cache doit
+      // refléter le suivi/watchlist posé depuis la recherche.
+      queryClient.invalidateQueries({ queryKey: ['show'] });
+      queryClient.invalidateQueries({ queryKey: ['movie'] });
     } finally {
       setAddingKey(null);
     }
@@ -397,6 +401,9 @@ function GameResults({ query, rawQuery }: { query: string; rawQuery: string }) {
       else await api.post('/api/games/add-from-igdb', { igdbId: r.igdbId, status: 'wishlist' });
       setFollowed((f) => ({ ...f, [keyOf(r)]: true }));
       queryClient.invalidateQueries({ queryKey: ['games', 'library'] });
+      // Fiche jeu (clé singulier ['game', id]) : reflète le statut « Voulus »
+      // posé depuis la recherche même si la fiche est déjà en cache.
+      queryClient.invalidateQueries({ queryKey: ['game'] });
     } finally {
       setAddingKey(null);
     }

@@ -274,26 +274,21 @@ describe('Feature 3 — défi hebdo', () => {
     // exclut désormais les comptes bloqués (cf. audit-social-fixes.test.ts).
     // On lève le blocage pour retrouver le scénario nominal (Dave suivi, 0 min).
     await db.block.deleteMany({ where: { blockerId: uid('Alice') } });
-    // Alice regarde l'épisode (runtime 50) cette semaine.
-    await db.watchEvent.create({
-      data: {
-        userId: uid('Alice'),
-        mediaId: showMediaId,
-        episodeId,
-        eventType: 'watched',
-        eventDate: new Date(),
-        source: 'manual',
-      },
+    // Alice regarde l'épisode (runtime 50) cette semaine. Le défi hebdo se
+    // base sur les STATUTS (UserEpisodeStatus/UserMediaStatus), pas sur les
+    // WatchEvents (sous-comptage des marquages en masse) : on pose le statut,
+    // comme le ferait POST /api/episodes/:id/watched.
+    await db.userEpisodeStatus.create({
+      data: { userId: uid('Alice'), episodeId, status: 'watched', watchedAt: new Date() },
     });
-    // Bob a un vieux visionnage (il y a 8 jours) : hors semaine, non compté.
-    await db.watchEvent.create({
-      data: {
-        userId: uid('Bob'),
-        mediaId: movieBId,
-        eventType: 'watched',
-        eventDate: new Date(Date.now() - 8 * 86_400_000),
-        source: 'manual',
-      },
+    // Bob a vu movieA (runtime null → fallback 115) cette semaine : statut
+    // completed avec completedAt, comme le pose POST /api/movies/:id/watched.
+    await db.userMediaStatus.create({
+      data: { userId: uid('Bob'), mediaId: movieAId, status: 'completed', completedAt: new Date() },
+    });
+    // Bob a aussi un vieux visionnage (il y a 8 jours) : hors semaine, non compté.
+    await db.userMediaStatus.create({
+      data: { userId: uid('Bob'), mediaId: movieBId, status: 'completed', completedAt: new Date(Date.now() - 8 * 86_400_000) },
     });
 
     const res = await app.inject({ method: 'GET', url: '/api/social/challenge/weekly', headers: bearer('Alice') });

@@ -358,6 +358,9 @@ function FavPicker({
       if (qc.isMutating({ mutationKey: ['fav-toggle', kind] }) === 1) {
         qc.invalidateQueries({ queryKey: [kind === 'movie' ? 'movies' : 'shows'] });
         qc.invalidateQueries({ queryKey: ['profile'] });
+        // Fiche détaillée (clé singulier ['movie'|'show', id]) : le cœur de la
+        // fiche doit refléter le favori basculé depuis cette grille.
+        qc.invalidateQueries({ queryKey: [kind === 'movie' ? 'movie' : 'show'] });
       }
     },
   });

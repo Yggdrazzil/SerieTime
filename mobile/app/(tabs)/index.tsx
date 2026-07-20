@@ -102,6 +102,9 @@ function QueueView() {
       qc.invalidateQueries({ queryKey: ['shows'] });
       qc.invalidateQueries({ queryKey: ['profile'] });
       qc.invalidateQueries({ queryKey: ['gamification'] }); // XP/badges/streak (spec 2026-07-16 §10)
+      // Fiche série (clé singulier ['show', id] + ses épisodes) : une fiche
+      // déjà en cache doit refléter l'épisode coché depuis l'agenda.
+      qc.invalidateQueries({ queryKey: ['show'] });
     },
   });
   // Décocher depuis l'historique : l'épisode redevient « à voir ». Mise à jour
@@ -125,6 +128,8 @@ function QueueView() {
       qc.invalidateQueries({ queryKey: ['shows'] });
       qc.invalidateQueries({ queryKey: ['profile'] });
       qc.invalidateQueries({ queryKey: ['gamification'] }); // XP/badges/streak (spec 2026-07-16 §10)
+      // Fiche série (clé singulier) : reflète l'épisode décoché depuis l'historique.
+      qc.invalidateQueries({ queryKey: ['show'] });
     },
   });
 
