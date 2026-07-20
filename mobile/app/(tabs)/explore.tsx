@@ -21,7 +21,6 @@ import { api, tmdbImage } from '@/lib/api';
 import { useDebounced } from '@/lib/useDebounced';
 import { COLORS, FONTS, RADIUS, SHADOW, SIZES, SPACE } from '@/lib/theme';
 import { EmptyState, LoadError } from '@/components/ui';
-import { TabHeader } from '@/components/prisme';
 import { AppearItem, FadeSwitch, PopIn, Skeleton } from '@/components/anim';
 import { useTabResetSeq } from '@/lib/tabReset';
 import { TikTokFeed } from '@/components/explore/TikTokFeed';
@@ -70,6 +69,8 @@ function ExploreScreenInner() {
 
   const searching = query.trim().length > 1;
   const compact = width < 420;
+  // En-tête « actif » (agrandi) : champ focalisé OU saisie en cours.
+  const headerActive = focused || query.length > 0;
   const cancel = () => {
     setQuery('');
     setTab('media');
@@ -78,16 +79,17 @@ function ExploreScreenInner() {
 
   return (
     <View style={styles.screen}>
-      <View style={[styles.header, { paddingTop: insets.top + SPACE.sm }]}>
+      {/* En-tête MINIMAL en navigation (l'image du feed prime) : pas de titre,
+          barre de recherche compacte. Elle reprend sa taille confortable dès le
+          focus ou une saisie (retour Benjamin 2026-07-21). */}
+      <View style={[styles.header, headerActive ? styles.headerActive : null, { paddingTop: insets.top + (headerActive ? SPACE.sm : SPACE.xxs) }]}>
         <View style={styles.headerContent}>
-          <TabHeader title="Explorer" />
-
-          <View style={[styles.searchbar, focused && styles.searchbarFocused]}>
-            <View style={[styles.searchIcon, focused && styles.searchIconFocused]} accessible={false}>
-              <Feather name="search" size={18} color={focused ? COLORS.onPrimary : COLORS.primary} />
+          <View style={[styles.searchbar, !headerActive && styles.searchbarCompact, focused && styles.searchbarFocused]}>
+            <View style={[styles.searchIcon, !headerActive && styles.searchIconCompact, focused && styles.searchIconFocused]} accessible={false}>
+              <Feather name="search" size={headerActive ? 18 : 15} color={focused ? COLORS.onPrimary : COLORS.primary} />
             </View>
             <TextInput
-              style={[styles.input, Platform.OS === 'web' && ({ outlineStyle: 'none' } as never)]}
+              style={[styles.input, !headerActive && styles.inputCompact, Platform.OS === 'web' && ({ outlineStyle: 'none' } as never)]}
               placeholder="Séries, films, jeux, profils…"
               placeholderTextColor={COLORS.textMuted}
               value={query}
@@ -578,11 +580,12 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: COLORS.surface,
     paddingHorizontal: SPACE.md,
-    paddingBottom: SPACE.md,
+    paddingBottom: SPACE.xs,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: COLORS.borderLight,
     zIndex: 2,
   },
+  headerActive: { paddingBottom: SPACE.md },
   headerContent: {
     width: '100%',
     maxWidth: SIZES.contentMax,
@@ -606,6 +609,10 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     paddingHorizontal: 4,
   },
+  // Mode navigation : barre discrète, l'image du feed prend la place.
+  searchbarCompact: { minHeight: 36 },
+  searchIconCompact: { width: 26, height: 26 },
+  inputCompact: { minHeight: 32, paddingVertical: 4, fontSize: 14.5 },
   searchIcon: {
     width: 40,
     height: 40,
