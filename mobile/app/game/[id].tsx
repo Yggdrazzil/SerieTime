@@ -754,7 +754,7 @@ const ptStyles = StyleSheet.create({
     width: '100%',
     maxWidth: 360,
     alignItems: 'center',
-    backgroundColor: COLORS.surface,
+    backgroundColor: COLORS.sheet,
     borderRadius: RADIUS.sheet,
     padding: SPACE.lg,
     ...SHADOW.card,
@@ -1929,7 +1929,7 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.sheet,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: COLORS.border,
-    backgroundColor: COLORS.surface,
+    backgroundColor: COLORS.sheet,
     ...SHADOW.season,
   },
   listSheet: {

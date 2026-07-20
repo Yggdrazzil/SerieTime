@@ -94,7 +94,7 @@ const styles = StyleSheet.create({
   overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: COLORS.overlay },
   wrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: SPACE.lg },
   card: {
-    backgroundColor: COLORS.surface, borderRadius: RADIUS.sheet, borderWidth: 1, borderColor: COLORS.borderLight,
+    backgroundColor: COLORS.sheet, borderRadius: RADIUS.sheet, borderWidth: 1, borderColor: COLORS.borderLight,
     padding: SPACE.lg, width: '100%', maxWidth: 420, ...SHADOW.card,
   },
   iconWrap: {

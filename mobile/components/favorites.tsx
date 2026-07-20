@@ -439,8 +439,8 @@ const styles = StyleSheet.create({
   divider: { height: 1, backgroundColor: COLORS.borderLight, marginBottom: 12 },
   // Feuilles basses
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
-  sheet: { backgroundColor: COLORS.white, borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingTop: 6 },
-  sheetFloating: { backgroundColor: COLORS.white, borderRadius: 14, marginHorizontal: 14, paddingVertical: 2, overflow: 'hidden' },
+  sheet: { backgroundColor: COLORS.sheet, borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingTop: 6 },
+  sheetFloating: { backgroundColor: COLORS.sheet, borderRadius: 14, marginHorizontal: 14, paddingVertical: 2, overflow: 'hidden' },
   sheetTitle: { color: COLORS.text, fontSize: 18, fontFamily: FONTS.extraBold, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 10 },
   sheetSep: { height: 1, backgroundColor: COLORS.borderLight, marginHorizontal: 20 },
   optionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 12 },

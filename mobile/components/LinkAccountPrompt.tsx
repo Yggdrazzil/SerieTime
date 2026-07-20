@@ -75,7 +75,7 @@ export function LinkAccountPrompt() {
 
 const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: COLORS.overlay, alignItems: 'center', justifyContent: 'center', padding: 28 },
-  card: { backgroundColor: COLORS.white, borderRadius: 14, padding: 20, width: '100%', maxWidth: 380 },
+  card: { backgroundColor: COLORS.sheet, borderRadius: 14, padding: 20, width: '100%', maxWidth: 380 },
   title: { color: COLORS.text, fontSize: 18, fontFamily: FONTS.extraBold, textAlign: 'center', marginBottom: 8 },
   message: { color: COLORS.textMuted, fontSize: 15, fontFamily: FONTS.regular, lineHeight: 21, textAlign: 'center' },
   buttons: { gap: 10, marginTop: 18 },

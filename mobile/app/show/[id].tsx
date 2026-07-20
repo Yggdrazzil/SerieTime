@@ -2041,7 +2041,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     overflow: 'hidden',
     borderRadius: RADIUS.sheet,
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.sheet,
     borderWidth: 1,
     borderColor: COLORS.border,
     ...SHADOW.card,

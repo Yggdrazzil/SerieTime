@@ -20,7 +20,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, tmdbImage } from '@/lib/api';
 import type { EpisodeDto } from '@/lib/types';
 import { episodeCode } from '@/lib/format';
-import { COLORS, FONTS, RADIUS, SHADOW, SIZES, SPACE } from '@/lib/theme';
+import { COLORS, FONTS, RADIUS, SHADOW, SIZES, SPACE, THEME } from '@/lib/theme';
 import { CheckCircle } from '@/components/ui';
 import { Stars } from '@/components/Stars';
 import { MarkPreviousPopup, hasUnwatchedPrevious } from '@/components/MarkPreviousPopup';
@@ -908,7 +908,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderTopLeftRadius: RADIUS.sheet,
     borderTopRightRadius: RADIUS.sheet,
-    backgroundColor: COLORS.bg,
+    // Glass : fond quasi opaque (COLORS.sheet) — la feuille flotte au-dessus de
+    // la file, un fond-voile la rendait illisible. Autres thèmes : inchangés.
+    backgroundColor: THEME === 'glass' ? COLORS.sheet : COLORS.bg,
     ...SHADOW.card,
   },
   topBar: {

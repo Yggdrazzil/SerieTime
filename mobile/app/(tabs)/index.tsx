@@ -15,20 +15,39 @@ import { EpisodeSheet, type EpisodeSheetTarget } from '@/components/EpisodeSheet
 import { useTabResetSeq } from '@/lib/tabReset';
 import { AppearItem, PopIn } from '@/components/anim';
 import { useFloatingSection, FloatingSectionPill } from '@/components/FloatingSection';
-import { TabHeader } from '@/components/prisme';
+import { SegmentedFilter, TabHeader } from '@/components/prisme';
 import { QueueSkeleton } from '@/components/skeletons';
 import { usePullRefresh } from '@/lib/usePullRefresh';
+
+// Accueil coupé en trois (demande produit 2026-07-20, miroir de l'Agenda) :
+// Séries = la file d'épisodes à voir (contenu historique de l'Accueil),
+// Films = les films ajoutés mais pas encore vus, Jeux = les jeux « Voulus »
+// pas encore commencés.
+type HomeTab = 'series' | 'movies' | 'games';
+const HOME_TABS: { value: HomeTab; label: string }[] = [
+  { value: 'series', label: 'Séries' },
+  { value: 'movies', label: 'Films' },
+  { value: 'games', label: 'Jeux' },
+];
 
 export default function ShowsScreen() {
   const insets = useSafeAreaInsets();
   // Re-clic sur Accueil : le remontage rejoue le scroll initial de la file.
   const resetSeq = useTabResetSeq('index');
+  const [tab, setTab] = useState<HomeTab>('series');
   return (
     <View key={resetSeq} style={{ flex: 1, backgroundColor: COLORS.pageMuted }}>
       <View style={[styles.homeHeader, { paddingTop: insets.top }]}>
         <TabHeader title="À voir" trailing={<HomeHeaderActions />} />
+        <SegmentedFilter
+          options={HOME_TABS}
+          value={tab}
+          onChange={setTab}
+          accessibilityLabel="Choisir le type de contenu à voir"
+          style={styles.homeTabs}
+        />
       </View>
-      <QueueView />
+      {tab === 'series' ? <QueueView /> : tab === 'movies' ? <MoviesToWatchView /> : <GamesWishlistView />}
     </View>
   );
 }
@@ -288,17 +307,140 @@ function QueueView() {
   );
 }
 
-// En-tête de section de la file (maquette : libellé + compteur d'épisodes).
-function GroupHead({ label, count }: { label: string; count: number }) {
+// En-tête de section de la file (maquette : libellé + compteur — épisodes par
+// défaut, films/jeux dans les sous-onglets de l'Accueil).
+function GroupHead({ label, count, unit = 'épisode' }: { label: string; count: number; unit?: string }) {
   return (
     <View style={styles.groupHead}>
       <Text accessibilityRole="header" style={styles.groupHeadLabel}>
         {label}
       </Text>
       <Text style={styles.groupHeadCount}>
-        {count} épisode{count > 1 ? 's' : ''}
+        {count} {unit}{count > 1 ? 's' : ''}
       </Text>
     </View>
+  );
+}
+
+// --- Sous-onglet Films : les films AJOUTÉS mais pas encore vus (déjà sortis,
+// les sorties futures vivent dans l'Agenda > Films). Même source que
+// l'Agenda (`/api/movies`), cache partagé.
+type MoviesResponse = { toWatch: MediaDto[]; upcoming: { media: MediaDto; releaseDate: string }[] };
+
+function MoviesToWatchView() {
+  const router = useRouter();
+  const { data, isLoading, isError, refetch, isRefetching } = useQuery({
+    queryKey: ['movies'],
+    queryFn: () => api.get<MoviesResponse>('/api/movies'),
+  });
+  const { refreshing, onRefresh } = usePullRefresh([refetch]);
+  if (isLoading) return <QueueSkeleton />;
+  if (isError && !data) return <LoadError onRetry={refetch} busy={isRefetching} />;
+  const items = data?.toWatch ?? [];
+  if (items.length === 0)
+    return <EmptyState title="Aucun film à voir" message="Ajoutez des films depuis Explorer : ils vous attendront ici." />;
+  return (
+    <ScrollView
+      contentContainerStyle={styles.homeListContent}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} colors={[COLORS.primary]} />}
+    >
+      <View style={styles.queueColumn}>
+        <GroupHead label="À voir" count={items.length} unit="film" />
+        {items.map((media, i) => (
+          <AppearItem key={media.id} index={i}>
+            <ToWatchRow
+              title={media.title}
+              sub={media.year ? String(media.year) : null}
+              uri={tmdbImage(media.posterPath ?? null, 'w342')}
+              onPress={() => router.push(`/show/${media.id}?type=movie`)}
+              hint="Ouvre la fiche du film"
+            />
+          </AppearItem>
+        ))}
+      </View>
+    </ScrollView>
+  );
+}
+
+// --- Sous-onglet Jeux : les jeux marqués « Voulu » (donc pas encore
+// commencés — dès qu'on y joue, le statut passe à « En cours »).
+type HomeGameDto = { id: string; title: string; posterPath: string | null; year: number | null };
+
+function GamesWishlistView() {
+  const router = useRouter();
+  const { data, isLoading, isError, refetch, isRefetching } = useQuery({
+    queryKey: ['games', 'library'],
+    queryFn: () => api.get<{ wishlist: HomeGameDto[] }>('/api/games'),
+  });
+  const { refreshing, onRefresh } = usePullRefresh([refetch]);
+  if (isLoading) return <QueueSkeleton />;
+  if (isError && !data) return <LoadError onRetry={refetch} busy={isRefetching} />;
+  const items = data?.wishlist ?? [];
+  if (items.length === 0)
+    return (
+      <EmptyState
+        title="Aucun jeu en attente"
+        message="Marquez des jeux en « Voulu » depuis Explorer : votre liste d'envies s'affichera ici."
+      />
+    );
+  return (
+    <ScrollView
+      contentContainerStyle={styles.homeListContent}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} colors={[COLORS.primary]} />}
+    >
+      <View style={styles.queueColumn}>
+        <GroupHead label="Voulus" count={items.length} unit="jeu" />
+        {items.map((game, i) => (
+          <AppearItem key={game.id} index={i}>
+            <ToWatchRow
+              title={game.title}
+              sub={game.year ? String(game.year) : null}
+              uri={tmdbImage(game.posterPath, 'w342')}
+              onPress={() => router.push(`/game/${game.id}`)}
+              hint="Ouvre la fiche du jeu"
+            />
+          </AppearItem>
+        ))}
+      </View>
+    </ScrollView>
+  );
+}
+
+// Rangée commune Films/Jeux de l'Accueil : affiche + titre (+ année).
+function ToWatchRow({
+  title,
+  sub,
+  uri,
+  onPress,
+  hint,
+}: {
+  title: string;
+  sub: string | null;
+  uri: string | null;
+  onPress: () => void;
+  hint: string;
+}) {
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.toWatchRow, pressed && styles.toWatchRowPressed]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={sub ? `${title}, ${sub}` : title}
+      accessibilityHint={hint}
+    >
+      {uri ? (
+        <Image source={{ uri }} style={styles.toWatchPoster} resizeMode="cover" accessible={false} />
+      ) : (
+        <View style={[styles.toWatchPoster, styles.toWatchPosterEmpty]} accessible={false}>
+          <Feather name="image" size={22} color={COLORS.textSoft} />
+        </View>
+      )}
+      <View style={styles.toWatchBody}>
+        <Text style={styles.toWatchTitle} numberOfLines={2}>{title}</Text>
+        {sub ? <Text style={styles.toWatchSub}>{sub}</Text> : null}
+      </View>
+      <Feather name="chevron-right" size={20} color={COLORS.textSoft} />
+    </Pressable>
   );
 }
 
@@ -572,10 +714,33 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: COLORS.borderLight,
   },
+  // Sous-onglets Séries / Films / Jeux (miroir de l'Agenda).
+  homeTabs: { width: '100%', maxWidth: SIZES.contentMax, alignSelf: 'center', marginTop: SPACE.xs },
   // File « À voir » : contenu centré et borné à contentMax comme l'agenda et la
   // bibliothèque (les cartes ne s'étirent plus bord à bord sur web/tablette).
   queueContent: { alignItems: 'center', paddingBottom: SIZES.tabBar + SPACE.xl },
   queueColumn: { width: '100%', maxWidth: SIZES.contentMax },
+  // Listes Films à voir / Jeux voulus.
+  homeListContent: { alignItems: 'center', paddingBottom: SIZES.tabBar + SPACE.xl },
+  toWatchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACE.sm,
+    marginHorizontal: SPACE.md,
+    marginBottom: SPACE.sm,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    borderRadius: RADIUS.card,
+    padding: SPACE.sm,
+    ...SHADOW.card,
+  },
+  toWatchRowPressed: { opacity: 0.85 },
+  toWatchPoster: { width: 52, height: 76, borderRadius: RADIUS.small, backgroundColor: COLORS.imagePlaceholder },
+  toWatchPosterEmpty: { alignItems: 'center', justifyContent: 'center' },
+  toWatchBody: { flex: 1, minWidth: 0 },
+  toWatchTitle: { color: COLORS.text, fontFamily: FONTS.semiBold, fontSize: 15 },
+  toWatchSub: { color: COLORS.textMuted, fontFamily: FONTS.regular, fontSize: 13, marginTop: 2 },
   agendaContent: {
     alignItems: 'center',
     paddingTop: SPACE.xxs,

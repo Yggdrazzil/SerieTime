@@ -371,7 +371,7 @@ const styles = StyleSheet.create({
   // Modale badge.
   modalOverlay: { flex: 1, backgroundColor: COLORS.overlay, alignItems: 'center', justifyContent: 'center', padding: SPACE.xl },
   modalCard: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: COLORS.sheet,
     borderRadius: RADIUS.sheet,
     padding: SPACE.lg,
     alignItems: 'center',

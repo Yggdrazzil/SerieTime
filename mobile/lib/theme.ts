@@ -31,6 +31,10 @@ const LIGHT = {
   bg: '#F7F5FA',
   pageMuted: '#F1EDF4',
   surface: '#FFFFFF',
+  // Fond des menus/feuilles FLOTTANTS (menu « … », modales, sheets) : identique
+  // à `surface` partout… sauf en Glass, où il est quasi opaque — un menu posé
+  // au-dessus du contenu doit rester lisible (retour produit 2026-07-20).
+  sheet: '#FFFFFF',
   surfaceMuted: '#F1EDF4',
   text: '#201A24',
   textMuted: '#736B78',
@@ -81,6 +85,7 @@ const DARK: Palette = {
   bg: '#121217',
   pageMuted: '#0C0C10',
   surface: '#1B1B22',
+  sheet: '#1B1B22',
   surfaceMuted: '#24242C',
   text: '#F1F1F4',
   textMuted: '#9C9CA8',
@@ -131,6 +136,7 @@ const SUNSET: Palette = {
   bg: '#FAF5EE',
   pageMuted: '#F1E9DD',
   surface: '#FDFAF4',
+  sheet: '#FDFAF4',
   text: '#40332A',
   surfaceMuted: '#F1E9DD',
   textMuted: '#8D7B6C',
@@ -177,6 +183,7 @@ const MIDNIGHT: Palette = {
   bg: '#0B075A',
   pageMuted: '#070440',
   surface: '#160F73',
+  sheet: '#160F73',
   text: '#F3F1FF',
   textMuted: '#A9A3E0',
   surfaceMuted: '#1E1780',
@@ -233,6 +240,8 @@ const GLASS: Palette = {
   bg: 'rgba(246,248,253,0.35)',
   pageMuted: 'rgba(238,242,250,0.30)',
   surface: 'rgba(255,255,255,0.55)',
+  // Menus flottants : quasi opaque (lisibilité au-dessus du contenu).
+  sheet: 'rgba(252,251,255,0.94)',
   surfaceMuted: 'rgba(255,255,255,0.34)',
   text: '#1F1D2B',
   textMuted: 'rgba(31,29,43,0.64)',
