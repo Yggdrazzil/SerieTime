@@ -17,6 +17,7 @@ import {
 } from '@expo-google-fonts/mulish';
 import { COLORS, IS_DARK, THEME, THEME_COLOR_META, setThemeColorMeta } from '@/lib/theme';
 import { GamificationToastHost } from '@/lib/useGamificationToasts';
+import { UserPreviewSheet } from '@/components/UserPreviewSheet';
 
 // Web : le fond du document et la couleur des barres du navigateur suivent le
 // thème (sinon bandes blanches autour de l'app en sombre/Sunset). Le
@@ -115,6 +116,9 @@ export default function RootLayout() {
           {/* Toast global de déblocage (niveau/badge) — monté une fois, visible
               quel que soit l'écran (spec 2026-07-16 §10). */}
           <GamificationToastHost />
+          {/* Aperçu de profil en popup — hôte unique au niveau racine (couvre
+              aussi les écrans poussés), piloté par lib/userPreview.ts. */}
+          <UserPreviewSheet />
           </ThemeProvider>
         </QueryClientProvider>
       </SafeAreaProvider>

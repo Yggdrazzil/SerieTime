@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, tmdbImage } from '@/lib/api';
 import { useDebounced } from '@/lib/useDebounced';
+import { useOpenUserPreview } from '@/lib/userPreview';
 import { COLORS, FONTS, RADIUS, SHADOW, SIZES, SPACE } from '@/lib/theme';
 import { EmptyState, Loading, LoadError } from '@/components/ui';
 import { AppearItem, FadeSwitch, PressableScale } from '@/components/anim';
@@ -124,7 +125,7 @@ export function UserAvatar({
       ]}
       accessibilityRole={onPress ? 'button' : 'image'}
       accessibilityLabel={user.displayName}
-      accessibilityHint={onPress ? 'Ouvre son profil public' : undefined}
+      accessibilityHint={onPress ? 'Affiche un aperçu de son profil' : undefined}
     >
       {uri ? (
         <Image
@@ -326,7 +327,7 @@ export function FeedTab({ header }: { header?: React.ReactElement }) {
 type FeedCardProps = { item: FeedItem; onToggle: (item: FeedItem) => void };
 
 const BadgeFeedCard = React.memo(function BadgeFeedCard({ item, onToggle }: FeedCardProps) {
-  const router = useRouter();
+  const openUserPreview = useOpenUserPreview();
   const tierLabel =
     TIER_LABELS[item.badge?.tier ?? 0] ??
     'palier ' + String(item.badge?.tier ?? '');
@@ -335,7 +336,7 @@ const BadgeFeedCard = React.memo(function BadgeFeedCard({ item, onToggle }: Feed
       <View style={styles.feedCardMain}>
         <UserAvatar
           user={item.user}
-          onPress={() => router.push(('/user/' + item.user.id) as Href)}
+          onPress={() => openUserPreview(item.user.id)}
         />
         <View style={styles.feedCopy}>
           <Text style={styles.feedText}>
@@ -365,6 +366,7 @@ const BadgeFeedCard = React.memo(function BadgeFeedCard({ item, onToggle }: Feed
 
 const MediaFeedCard = React.memo(function MediaFeedCard({ item, onToggle }: FeedCardProps) {
   const router = useRouter();
+  const openUserPreview = useOpenUserPreview();
   const media = item.media!;
   const poster = tmdbImage(media.posterPath, 'w185');
   return (
@@ -372,7 +374,7 @@ const MediaFeedCard = React.memo(function MediaFeedCard({ item, onToggle }: Feed
       <View style={styles.feedCardMain}>
       <UserAvatar
         user={item.user}
-        onPress={() => router.push(('/user/' + item.user.id) as Href)}
+        onPress={() => openUserPreview(item.user.id)}
       />
       <PressableScale
         style={styles.feedMainTap}
@@ -479,7 +481,7 @@ function ReactionBar({
 
 // Exporté : réutilisé par l'écran poussé « Amis » (app/friends.tsx).
 export function FriendsTab() {
-  const router = useRouter();
+  const openUserPreview = useOpenUserPreview();
   const queryClient = useQueryClient();
   const [q, setQ] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -553,9 +555,9 @@ export function FriendsTab() {
         <View style={styles.userCard}>
           <Pressable
             style={styles.userTap}
-            onPress={() => router.push(('/user/' + user.id) as Href)}
+            onPress={() => openUserPreview(user.id)}
             accessibilityRole="button"
-            accessibilityLabel={'Ouvrir le profil de ' + user.displayName}
+            accessibilityLabel={'Aperçu du profil de ' + user.displayName}
           >
             <UserAvatar user={user} />
             <View style={styles.userCopy}>

@@ -821,7 +821,8 @@ function EpisodePage({
             '/comments/' +
               mediaId +
               '?title=' +
-              encodeURIComponent(mediaTitle)
+              encodeURIComponent(mediaTitle) +
+              '&type=show'
           ) as Href);
         }}
         accessibilityRole="button"

@@ -1262,8 +1262,9 @@ function CommunityRatings({ mediaId }: { mediaId: string }) {
   );
 }
 
-// Rangée « Commentaires » (compteur + chevron) : ouvre la page dédiée.
-function CommentsRowLink({ mediaId, title }: { mediaId: string; title: string }) {
+// Rangée « Commentaires » (compteur + chevron) : ouvre la page dédiée. `type`
+// est transmis à /comments/[id] pour que son en-tête sache rouvrir la fiche.
+function CommentsRowLink({ mediaId, title, type }: { mediaId: string; title: string; type: 'show' | 'movie' }) {
   const router = useRouter();
   const q = useQuery({
     queryKey: ['comments', mediaId],
@@ -1273,7 +1274,7 @@ function CommentsRowLink({ mediaId, title }: { mediaId: string; title: string })
   return (
     <Pressable
       style={[styles.section, styles.commentsRow]}
-      onPress={() => router.push(`/comments/${mediaId}?title=${encodeURIComponent(title)}`)}
+      onPress={() => router.push(`/comments/${mediaId}?title=${encodeURIComponent(title)}&type=${type}`)}
       accessibilityRole="button"
       accessibilityLabel={`Commentaires, ${total}`}
       accessibilityHint="Ouvre tous les commentaires"
@@ -1337,7 +1338,7 @@ function AboutTab({ media, detail, mediaId, tracking, interest, setInterest, onS
       <CastSection cast={detail.cast ?? []} mediaId={mediaId} type="show" />
       <AlsoWatched items={detail.recommendations ?? []} type="show" />
       <CommunityRatings mediaId={mediaId} />
-      <CommentsRowLink mediaId={mediaId} title={media.title} />
+      <CommentsRowLink mediaId={mediaId} title={media.title} type="show" />
     </ScrollView>
   );
 }
@@ -1362,7 +1363,7 @@ function MovieBody({ media, detail, mediaId, tracking, onScroll, topPad }: any) 
 
       <CastSection cast={detail.cast ?? []} mediaId={mediaId} type="movie" />
       <AlsoWatched items={detail.recommendations ?? []} type="movie" />
-      <CommentsRowLink mediaId={mediaId} title={media.title} />
+      <CommentsRowLink mediaId={mediaId} title={media.title} type="movie" />
     </ScrollView>
   );
 }

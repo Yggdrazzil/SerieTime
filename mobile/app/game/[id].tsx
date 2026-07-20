@@ -1415,7 +1415,9 @@ function CommentsRow({ mediaId, title }: { mediaId: string; title: string }) {
   return (
     <Pressable
       style={({ pressed }) => [styles.section, styles.commentsRow, pressed && styles.commentsRowPressed]}
-      onPress={() => router.push(('/comments/' + mediaId + '?title=' + encodeURIComponent(title)) as Href)}
+      onPress={() =>
+        router.push(('/comments/' + mediaId + '?title=' + encodeURIComponent(title) + '&type=game') as Href)
+      }
       accessibilityRole="button"
       accessibilityLabel={'Voir les commentaires sur ' + title}
       accessibilityHint="Ouvre la discussion dédiée à ce jeu"

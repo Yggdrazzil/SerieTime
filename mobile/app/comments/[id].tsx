@@ -15,13 +15,14 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import { goBack } from '@/lib/nav';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, FONTS, RADIUS, SHADOW, SIZES, SPACE } from '@/lib/theme';
 import { EmptyState, LoadError } from '@/components/ui';
 import { Pop, AppearItem, Skeleton } from '@/components/anim';
 import { useReduceMotion } from '@/lib/useReduceMotion';
+import { useOpenUserPreview } from '@/lib/userPreview';
 import { useComments, SORT_LABEL } from '@/components/comments/useComments';
 import { CommentCard } from '@/components/comments/CommentCard';
 import { BlockedCommentPopup } from '@/components/comments/BlockedCommentPopup';
@@ -54,9 +55,16 @@ function CommentsSkeleton() {
   );
 }
 
+// Types de média connus : conditionnent le lien « Voir la fiche » de l'en-tête.
+type MediaKind = 'show' | 'movie' | 'game';
+function parseMediaKind(value?: string): MediaKind | null {
+  return value === 'show' || value === 'movie' || value === 'game' ? value : null;
+}
+
 export default function CommentsScreen() {
-  const { id, title } = useLocalSearchParams<{ id: string; title?: string }>();
+  const { id, title, type } = useLocalSearchParams<{ id: string; title?: string; type?: string }>();
   const router = useRouter();
+  const openUserPreview = useOpenUserPreview();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const reduce = useReduceMotion();
@@ -116,6 +124,31 @@ export default function CommentsScreen() {
     if (!busy) setComposer(false);
   };
 
+  // Retour vers la fiche du média (retour Étienne) : seulement quand l'appelant
+  // a transmis le type — sans lui, on ne sait pas quelle fiche ouvrir.
+  const mediaKind = parseMediaKind(type);
+  const ficheHref: Href | null = mediaKind
+    ? ((mediaKind === 'game'
+        ? '/game/' + id
+        : '/show/' + id + (mediaKind === 'movie' ? '?type=movie' : '')) as Href)
+    : null;
+
+  const headerCopy = (
+    <>
+      <Text style={styles.headEyebrow}>DISCUSSION</Text>
+      <View style={styles.headTitleRow}>
+        <Text accessibilityRole="header" style={styles.headTitle} numberOfLines={1}>{title ?? 'Commentaires'}</Text>
+        {ficheHref ? (
+          <Feather name="chevron-right" size={17} color={COLORS.textMuted} accessible={false} />
+        ) : null}
+      </View>
+      <Text style={styles.headCount}>
+        {total} commentaire{total !== 1 ? 's' : ''}
+        {ficheHref ? ' · Voir la fiche' : ''}
+      </Text>
+    </>
+  );
+
   return (
     <Pop style={styles.screen}>
       <View style={[styles.header, { paddingTop: insets.top + SPACE.xs }]}>
@@ -128,11 +161,19 @@ export default function CommentsScreen() {
           >
             <Feather name="chevron-left" size={26} color={COLORS.text} />
           </Pressable>
-          <View style={styles.headerCopy}>
-            <Text style={styles.headEyebrow}>DISCUSSION</Text>
-            <Text accessibilityRole="header" style={styles.headTitle} numberOfLines={1}>{title ?? 'Commentaires'}</Text>
-            <Text style={styles.headCount}>{total} commentaire{total !== 1 ? 's' : ''}</Text>
-          </View>
+          {ficheHref ? (
+            <Pressable
+              style={({ pressed }) => [styles.headerCopy, pressed && styles.pressed]}
+              onPress={() => router.push(ficheHref)}
+              accessibilityRole="button"
+              accessibilityLabel={'Ouvrir la fiche de ' + (title ?? 'ce média')}
+              accessibilityHint="Quitte la discussion pour la fiche du média"
+            >
+              {headerCopy}
+            </Pressable>
+          ) : (
+            <View style={styles.headerCopy}>{headerCopy}</View>
+          )}
           <View style={styles.headSide} />
         </View>
       </View>
@@ -202,7 +243,7 @@ export default function CommentsScreen() {
                     if (postError) clearPostError();
                   }}
                   onPostReply={() => postReply(comment.id)}
-                  onOpenUser={(userId) => router.push(`/user/${userId}`)}
+                  onOpenUser={(userId) => openUserPreview(userId)}
                 />
               </AppearItem>
             )}
@@ -345,6 +386,7 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.control,
   },
   headerCopy: { flex: 1, minWidth: 0, alignItems: 'center', paddingHorizontal: SPACE.xs },
+  headTitleRow: { maxWidth: '100%', flexDirection: 'row', alignItems: 'center', gap: 2 },
   headEyebrow: {
     color: COLORS.primary,
     fontSize: 10.5,
@@ -352,7 +394,7 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.extraBold,
     letterSpacing: 1.1,
   },
-  headTitle: { color: COLORS.text, fontSize: 19, lineHeight: 24, fontFamily: FONTS.extraBold },
+  headTitle: { flexShrink: 1, color: COLORS.text, fontSize: 19, lineHeight: 24, fontFamily: FONTS.extraBold },
   headCount: { marginTop: 1, color: COLORS.textMuted, fontSize: 12.5, lineHeight: 17, fontFamily: FONTS.regular },
   toolbar: {
     backgroundColor: COLORS.surface,

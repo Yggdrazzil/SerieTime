@@ -1,9 +1,10 @@
 import React from 'react';
-import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter, type Href } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { api, tmdbImage } from '@/lib/api';
+import { useOpenUserPreview } from '@/lib/userPreview';
 import { COLORS, FONTS, RADIUS, SPACE } from '@/lib/theme';
 import { PrismeCard, ProgressBar, SectionHeader } from '@/components/prisme';
 import { Poster } from '@/components/ui';
@@ -94,6 +95,7 @@ export function FriendsLovedCarousel() {
 // --- Défi de la semaine (segment Défis) ------------------------------------
 
 export function WeeklyChallengeCard() {
+  const openUserPreview = useOpenUserPreview();
   const { data, isLoading, isError } = useQuery({
     queryKey: ['social', 'challenge', 'weekly'],
     queryFn: () =>
@@ -123,9 +125,23 @@ export function WeeklyChallengeCard() {
         </Text>
       ) : (
         entries.map((entry, index) => (
-          <View
+          // Rangée d'un AMI : tap → aperçu de son profil (popup). Ma rangée
+          // reste inerte (pas d'aperçu de soi-même).
+          <Pressable
             key={entry.userId}
-            style={[styles.challengeRow, entry.isMe && styles.challengeRowMe]}
+            style={({ pressed }) => [
+              styles.challengeRow,
+              entry.isMe && styles.challengeRowMe,
+              pressed && !entry.isMe && styles.challengeRowPressed,
+            ]}
+            onPress={() => openUserPreview(entry.userId)}
+            disabled={entry.isMe}
+            accessibilityRole={entry.isMe ? undefined : 'button'}
+            accessibilityLabel={
+              entry.isMe
+                ? undefined
+                : 'Aperçu du profil de ' + entry.displayName + ', ' + minutesLabel(entry.minutes) + ' cette semaine'
+            }
           >
             <Text style={styles.challengeRank}>{index + 1}</Text>
             {entry.avatarUrl ? (
@@ -160,7 +176,7 @@ export function WeeklyChallengeCard() {
               />
             </View>
             <Text style={styles.challengeMinutes}>{minutesLabel(entry.minutes)}</Text>
-          </View>
+          </Pressable>
         ))
       )}
       <Text style={styles.challengeFoot}>Depuis lundi</Text>
@@ -213,6 +229,7 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.control,
   },
   challengeRowMe: { backgroundColor: COLORS.primarySoft },
+  challengeRowPressed: { opacity: 0.72 },
   challengeRank: {
     width: 20,
     textAlign: 'center',

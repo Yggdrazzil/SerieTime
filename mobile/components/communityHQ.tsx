@@ -18,6 +18,7 @@ import { EmptyState, Loading, LoadError, Poster } from '@/components/ui';
 import { MedalBadge, TIER_LABELS, type MedalTier } from '@/components/medals';
 import { AppearItem } from '@/components/anim';
 import { usePullRefresh } from '@/lib/usePullRefresh';
+import { useOpenUserPreview } from '@/lib/userPreview';
 import { FriendsLovedCarousel } from '@/components/community';
 import { UserAvatar } from '@/app/social';
 
@@ -329,8 +330,11 @@ export function FriendsHQTab() {
 }
 
 // Un ami « en ce moment » : avatar, prénom, mini-affiche et dernière activité.
+// Le tap sur la carte ouvre la fiche du média ; le tap sur l'AVATAR ouvre
+// l'aperçu du profil (popup, lib/userPreview.ts).
 function NowItem({ entry }: { entry: NowEntry }) {
   const router = useRouter();
+  const openUserPreview = useOpenUserPreview();
   const caption = (entry.episode ? episodeCode(entry.episode) + ' · ' : '') + relTime(entry.lastAt);
   return (
     <Pressable
@@ -345,11 +349,7 @@ function NowItem({ entry }: { entry: NowEntry }) {
       }
       accessibilityHint="Ouvre la fiche du média"
     >
-      {/* Décoratif : le Pressable parent porte le label ; sans ce pointerEvents,
-          l'avatar (Pressable interne) avalerait le press. */}
-      <View pointerEvents="none" accessible={false}>
-        <UserAvatar user={entry.user} size={48} />
-      </View>
+      <UserAvatar user={entry.user} size={48} onPress={() => openUserPreview(entry.user.id)} />
       <Text style={styles.nowName} numberOfLines={1}>
         {firstName(entry.user.displayName)}
       </Text>
@@ -400,13 +400,15 @@ function RecentCard({ entry, onKudos }: { entry: RecentEntry; onKudos: () => voi
   );
 }
 
-// Petite carte badge : avatar de l'ami, médaille du palier, label + kudos.
+// Petite carte badge : avatar de l'ami (tap → aperçu du profil), médaille du
+// palier, label + kudos.
 function BadgeCard({ entry, onKudos }: { entry: BadgeEntry; onKudos: () => void }) {
+  const openUserPreview = useOpenUserPreview();
   const tier = medalTier(entry.badge.tier);
   return (
     <PrismeCard style={styles.badgeCard}>
       <View style={styles.badgeHead}>
-        <UserAvatar user={entry.user} size={34} />
+        <UserAvatar user={entry.user} size={34} onPress={() => openUserPreview(entry.user.id)} />
         <Text style={styles.badgeUser} numberOfLines={1}>
           {firstName(entry.user.displayName)}
         </Text>
@@ -451,7 +453,12 @@ export function DiscussionsTab() {
             thread={thread}
             onOpen={() =>
               router.push(
-                ('/comments/' + thread.media.id + '?title=' + encodeURIComponent(thread.media.title)) as Href,
+                ('/comments/' +
+                  thread.media.id +
+                  '?title=' +
+                  encodeURIComponent(thread.media.title) +
+                  '&type=' +
+                  thread.media.type) as Href,
               )
             }
           />

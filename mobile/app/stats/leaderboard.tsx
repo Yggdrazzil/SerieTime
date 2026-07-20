@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, Image } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Image, Pressable } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { api, tmdbImage } from '@/lib/api';
 import { watchTime } from '@/lib/format';
 import { goBack } from '@/lib/nav';
+import { useOpenUserPreview } from '@/lib/userPreview';
 import { COLORS, FONTS, RADIUS, SPACE } from '@/lib/theme';
 import { ScreenShell, ScreenHeader, SegmentedFilter, PrismeCard, IconAction } from '@/components/prisme';
 import { Loading, LoadError, EmptyState } from '@/components/ui';
@@ -40,8 +41,10 @@ function fmt(minutes: number): string {
 const MEDAL: Record<number, string> = { 1: '#D4A017', 2: '#9AA2AA', 3: '#CD7F32' };
 
 // Tableau de classement seul (carte + rangées) : partagé entre cet écran et
-// l'onglet Communauté ((tabs)/community.tsx).
+// l'onglet Communauté ((tabs)/community.tsx). Un tap sur la rangée d'un AMI
+// ouvre l'aperçu de son profil (popup) — pas sur ma propre rangée.
 export function LeaderboardBoard({ entries }: { entries: LeaderboardEntry[] }) {
+  const openUserPreview = useOpenUserPreview();
   return (
     <PrismeCard elevated>
       <View style={styles.head}>
@@ -53,7 +56,15 @@ export function LeaderboardBoard({ entries }: { entries: LeaderboardEntry[] }) {
         const medal = MEDAL[rank];
         return (
           <AppearItem key={e.userId} index={i}>
-            <View style={[styles.row, e.isMe && styles.rowMe]}>
+            <Pressable
+              style={({ pressed }) => [styles.row, e.isMe && styles.rowMe, pressed && !e.isMe && styles.rowPressed]}
+              onPress={() => openUserPreview(e.userId)}
+              disabled={e.isMe}
+              accessibilityRole={e.isMe ? undefined : 'button'}
+              accessibilityLabel={
+                e.isMe ? undefined : 'Aperçu du profil de ' + e.displayName + ', rang ' + rank + ', ' + fmt(e.minutes)
+              }
+            >
               <View style={[styles.rankWrap, medal ? { backgroundColor: medal } : null]}>
                 <Text style={[styles.rank, medal ? styles.rankMedal : null]}>{rank}</Text>
               </View>
@@ -69,7 +80,7 @@ export function LeaderboardBoard({ entries }: { entries: LeaderboardEntry[] }) {
                 {e.isMe ? <Text style={styles.me}>vous</Text> : null}
               </View>
               <Text style={styles.time}>{fmt(e.minutes)}</Text>
-            </View>
+            </Pressable>
           </AppearItem>
         );
       })}
@@ -130,6 +141,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1, borderTopColor: COLORS.borderLight, borderRadius: RADIUS.control,
   },
   rowMe: { backgroundColor: COLORS.primarySoft, borderTopColor: 'transparent' },
+  rowPressed: { opacity: 0.72 },
   rankWrap: {
     width: 30, height: 30, borderRadius: RADIUS.pill, flexShrink: 0,
     alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.surfaceMuted,
