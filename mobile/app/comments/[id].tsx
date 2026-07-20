@@ -434,7 +434,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     paddingHorizontal: SPACE.md,
     paddingTop: SPACE.xs,
-    backgroundColor: COLORS.surface,
+    backgroundColor: COLORS.sheet,
     borderWidth: 1,
     borderColor: COLORS.borderLight,
     borderRadius: RADIUS.sheet,

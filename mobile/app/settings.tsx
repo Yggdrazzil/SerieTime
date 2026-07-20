@@ -917,7 +917,7 @@ const styles = StyleSheet.create({
   deleteText: { fontSize: 13, fontFamily: FONTS.extraBold, letterSpacing: 0.6, color: COLORS.danger, textAlign: 'center' },
   btnPressed: { opacity: 0.86, transform: [{ scale: 0.99 }] },
   overlay: { flex: 1, backgroundColor: COLORS.overlay, justifyContent: 'center', alignItems: 'center', paddingHorizontal: SPACE.lg },
-  sheet: { backgroundColor: COLORS.surface, borderRadius: RADIUS.sheet, padding: SPACE.lg, ...SHADOW.card, ...GLASS_BLUR },
+  sheet: { backgroundColor: COLORS.sheet, borderRadius: RADIUS.sheet, padding: SPACE.lg, ...SHADOW.card, ...GLASS_BLUR },
   sheetHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: SPACE.sm },
   sheetTitle: { color: COLORS.text, fontSize: 17, fontFamily: FONTS.extraBold },
   hint: { fontSize: 14, fontFamily: FONTS.regular, color: COLORS.textMuted, lineHeight: 19, marginBottom: SPACE.sm },

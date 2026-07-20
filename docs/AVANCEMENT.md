@@ -6,7 +6,7 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
-Dernière mise à jour : **2026-07-20** (Claude/Étienne) — thème Glass web réellement réparé (`enableScreens(true)` : scènes d'onglets inactives enfin masquées, transparence de la pilule retrouvée), validé par scénario Chromium sur l'export statique
+Dernière mise à jour : **2026-07-21** — ligne de suivi compacte sur toutes les fiches + tab bar mini (Claude/Benjamin) ; Accueil scindé en sous-onglets Séries / Films (à voir) / Jeux (voulus) et Glass affiné — menus flottants opaques, pilule plus transparente (Claude/Étienne)
 
 ---
 
@@ -117,6 +117,28 @@ la migration visuelle doit encore être exécutée sans modifier la logique mét
   (remplacée par la ligne) ; entrées de menu « Regarder plus tard » et
   « Arrêter de regarder » (strictement identiques aux pilules À voir/Arrêtée).
   Libellé `watchlist` harmonisé : « À voir » (menu + toast).
+
+### 2026-07-20 — Claude/Étienne : sous-onglets Accueil + équilibre Glass (menus/pilule)
+- **Accueil scindé en Séries / Films / Jeux** (miroir de l'Agenda,
+  `mobile/app/(tabs)/index.tsx`) : Séries = la file d'épisodes historique
+  (défaut à l'ouverture) ; **Films** = les films ajoutés mais pas encore vus
+  (`/api/movies` → `toWatch`, déjà sortis — les sorties futures restent dans
+  Agenda > Films) ; **Jeux** = les jeux marqués « Voulu » pas encore commencés
+  (`/api/games` → `wishlist`). Rangées affiche + titre + année, caches
+  partagés avec l'Agenda et l'onglet Jeux.
+- **Glass — menus flottants lisibles** : nouveau rôle de palette `sheet`
+  (fond des menus « … », modales et feuilles) — identique à `surface` dans
+  tous les thèmes SAUF Glass où il est quasi opaque
+  (`rgba(252,251,255,0.94)`). Appliqué à tous les menus/modales flottants :
+  menus « … » des fiches série/jeu, feuille épisode, heures de jeu,
+  commentaires, filtres bibliothèques, pseudo (Paramètres), badge (Trophées),
+  blocage (profil public), signalement, favoris, popups divers. Zéro
+  changement visuel hors Glass (`white`/`surface` y étaient identiques).
+- **Glass — pilule de navigation plus transparente** : voile abaissé à
+  `rgba(255,255,255,0.36)` (au lieu de `surface` 0.55) sur web où le flou
+  d'arrière-plan maintient la lisibilité ; natif et autres thèmes inchangés.
+- Validation : scénario Chromium (sous-onglets, modale pseudo, pilule) sur le
+  dev server + export statique compilé ; `tsc --noEmit` OK.
 
 ### 2026-07-20 — Claude/Étienne : Glass web VRAIMENT réparé (superposition + pilule opaque)
 - **Cause racine identifiée** (reproduction locale Chromium/Playwright sur

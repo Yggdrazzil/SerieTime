@@ -398,7 +398,7 @@ const styles = StyleSheet.create({
     paddingTop: SPACE.xs,
     borderTopLeftRadius: RADIUS.sheet,
     borderTopRightRadius: RADIUS.sheet,
-    backgroundColor: COLORS.surface,
+    backgroundColor: COLORS.sheet,
     ...SHADOW.card,
   },
   sheetHandle: {

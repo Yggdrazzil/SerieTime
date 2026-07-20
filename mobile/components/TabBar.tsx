@@ -4,7 +4,7 @@ import { Feather } from '@expo/vector-icons';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQueryClient } from '@tanstack/react-query';
-import { COLORS, GLASS_BLUR, RADIUS, SHADOW } from '@/lib/theme';
+import { COLORS, GLASS_BLUR, RADIUS, SHADOW, THEME } from '@/lib/theme';
 import { useTabResetStore } from '@/lib/tabReset';
 import { useTabBarHidden } from '@/lib/tabBarHidden';
 import { useReduceMotion } from '@/lib/useReduceMotion';
@@ -123,7 +123,11 @@ const styles = StyleSheet.create({
   bar: {
     flexDirection: 'row',
     minHeight: 46,
-    backgroundColor: COLORS.surface,
+    // Glass (web) : voile plus léger que `surface` (0.55) — le blur maintient la
+    // lisibilité et le contenu transparaît davantage derrière la pilule
+    // (équilibre demandé le 2026-07-20). Natif glass : pas de blur → on garde
+    // le voile standard. Autres thèmes : inchangés.
+    backgroundColor: THEME === 'glass' && !NATIVE ? 'rgba(255,255,255,0.36)' : COLORS.surface,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: COLORS.border,
     borderRadius: RADIUS.sheet,

@@ -683,7 +683,7 @@ const styles = StyleSheet.create({
   modalOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: COLORS.overlay },
   modalCard: {
     padding: SPACE.lg,
-    backgroundColor: COLORS.surface,
+    backgroundColor: COLORS.sheet,
     borderTopLeftRadius: RADIUS.sheet,
     borderTopRightRadius: RADIUS.sheet,
   },

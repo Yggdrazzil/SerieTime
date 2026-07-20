@@ -68,7 +68,7 @@ const styles = StyleSheet.create({
   overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: COLORS.overlay },
   wrap: { ...StyleSheet.absoluteFillObject, justifyContent: 'flex-end', alignItems: 'center', paddingHorizontal: SPACE.sm },
   card: {
-    width: '100%', maxWidth: 520, backgroundColor: COLORS.surface, borderRadius: RADIUS.sheet,
+    width: '100%', maxWidth: 520, backgroundColor: COLORS.sheet, borderRadius: RADIUS.sheet,
     borderWidth: 1, borderColor: COLORS.borderLight, padding: SPACE.lg, paddingTop: SPACE.sm, ...SHADOW.card,
   },
   handle: { width: 40, height: 4, alignSelf: 'center', borderRadius: RADIUS.pill, backgroundColor: COLORS.border, marginBottom: SPACE.md },
