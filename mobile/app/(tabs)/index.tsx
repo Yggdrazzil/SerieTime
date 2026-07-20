@@ -1,18 +1,20 @@
 import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { View, Text, ScrollView, StyleSheet, Pressable, Image, ActivityIndicator, RefreshControl, Platform } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, tmdbImage } from '@/lib/api';
 import type { EpisodeDto, MediaDto, QueueItemDto, UpcomingItemDto } from '@/lib/types';
-import { queueGroupLabel, episodeCode, airTimeLabel } from '@/lib/format';
+import { queueGroupLabel, episodeCode, episodeCodeCompact, airTimeLabel } from '@/lib/format';
 import { COLORS, SHADOW, FONTS, RADIUS, SPACE, SIZES } from '@/lib/theme';
 import { PillHeader, EmptyState, LoadError, ShowPill, Badge, CheckCircle } from '@/components/ui';
-import { EpisodeQueueCard } from '@/components/EpisodeQueueCard';
+import { EpisodeQueueCard, SeriesProgressBar } from '@/components/EpisodeQueueCard';
 import { EpisodeSheet, type EpisodeSheetTarget } from '@/components/EpisodeSheet';
 import { useTabResetSeq } from '@/lib/tabReset';
-import { AppearItem } from '@/components/anim';
+import { useAppStore } from '@/lib/store';
+import { AppearItem, PopIn } from '@/components/anim';
 import { useFloatingSection, FloatingSectionPill } from '@/components/FloatingSection';
 import { TabHeader } from '@/components/prisme';
 import { QueueSkeleton } from '@/components/skeletons';
@@ -25,9 +27,54 @@ export default function ShowsScreen() {
   return (
     <View key={resetSeq} style={{ flex: 1, backgroundColor: COLORS.pageMuted }}>
       <View style={[styles.homeHeader, { paddingTop: insets.top }]}>
-        <TabHeader title="À voir" />
+        <TabHeader title="À voir" trailing={<HomeHeaderActions />} />
       </View>
       <QueueView />
+    </View>
+  );
+}
+
+// Raccourcis d'en-tête (disposition maquette) : notifications + profil.
+function HomeHeaderActions() {
+  const router = useRouter();
+  const user = useAppStore((s) => s.user);
+  const { data: unreadData } = useQuery({
+    queryKey: ['notifications', 'unread'],
+    queryFn: () => api.get<{ unreadCount: number }>('/api/notifications/unread-count'),
+    refetchInterval: 30_000,
+  });
+  const unread = unreadData?.unreadCount ?? 0;
+  const avatar = tmdbImage(user?.avatarUrl, 'w185') ?? user?.avatarUrl ?? null;
+  return (
+    <View style={styles.headerActions}>
+      <Pressable
+        style={({ pressed }) => [styles.headerBtn, pressed && styles.headerBtnPressed]}
+        onPress={() => router.push('/notifications')}
+        accessibilityRole="button"
+        accessibilityLabel={unread > 0 ? `Notifications, ${unread} non lue${unread > 1 ? 's' : ''}` : 'Notifications'}
+        accessibilityHint="Ouvre le centre de notifications"
+      >
+        <Feather name="bell" size={19} color={COLORS.text} />
+        {unread > 0 ? (
+          <PopIn style={styles.headerBadge}>
+            <Text style={styles.headerBadgeText}>{unread > 9 ? '9+' : unread}</Text>
+          </PopIn>
+        ) : null}
+      </Pressable>
+      <Pressable
+        style={({ pressed }) => [styles.headerAvatarBtn, pressed && styles.headerBtnPressed]}
+        onPress={() => router.push('/profile' as Href)}
+        accessibilityRole="button"
+        accessibilityLabel="Ouvrir mon profil"
+      >
+        {avatar ? (
+          <Image source={{ uri: avatar }} style={styles.headerAvatar} />
+        ) : (
+          <View style={[styles.headerAvatar, styles.headerAvatarEmpty]}>
+            <Text style={styles.headerAvatarInit}>{(user?.displayName ?? '?').slice(0, 1).toUpperCase()}</Text>
+          </View>
+        )}
+      </Pressable>
     </View>
   );
 }
@@ -144,8 +191,13 @@ function QueueView() {
       />
     );
 
+  // Héro « À regarder maintenant » (maquette) : le tout premier épisode
+  // regardable de la file (le tri serveur place déjà le plus pertinent en tête).
+  const heroItem = (data?.items ?? []).find((it) => it.nextEpisode) ?? null;
   const groups = new Map<string, QueueItemDto[]>();
-  (data?.items ?? []).forEach((it) => groups.set(it.group, [...(groups.get(it.group) ?? []), it]));
+  (data?.items ?? [])
+    .filter((it) => it !== heroItem)
+    .forEach((it) => groups.set(it.group, [...(groups.get(it.group) ?? []), it]));
 
   return (
     <View style={{ flex: 1 }}>
@@ -176,7 +228,7 @@ function QueueView() {
             }
           }}
         >
-          <PillHeader label="Historique de visionnage" />
+          <GroupHead label="Historique de visionnage" count={historyItems.length} />
           {historyItems.map((it) => (
             <EpisodeQueueCard
               key={`h-${it.episode.id}`}
@@ -190,12 +242,29 @@ function QueueView() {
           ))}
         </View>
       ) : null}
+      {heroItem?.nextEpisode ? (
+        <View style={styles.queueColumn} onLayout={registerSection('À regarder maintenant')}>
+          <HeroCard
+            item={heroItem}
+            marking={mark.isPending}
+            onMark={() => mark.mutate(heroItem.nextEpisode!.id)}
+            onOpenEpisode={() =>
+              setSheet({
+                mediaId: heroItem.media.id,
+                mediaTitle: heroItem.media.title,
+                posterPath: heroItem.media.posterPath,
+                episode: heroItem.nextEpisode!,
+              })
+            }
+          />
+        </View>
+      ) : null}
       {(() => {
         // Index continu à travers les groupes pour une entrée en cascade.
         let n = -1;
         return [...groups.entries()].map(([group, items]) => (
           <View key={group} style={styles.queueColumn} onLayout={registerSection(queueGroupLabel(group))}>
-            <PillHeader label={queueGroupLabel(group)} />
+            <GroupHead label={queueGroupLabel(group)} count={items.length} />
             {items.map((item) => {
               n += 1;
               return (
@@ -229,6 +298,134 @@ function QueueView() {
 
       <EpisodeSheet target={sheet} onClose={() => setSheet(null)} />
     </View>
+  );
+}
+
+// En-tête de section de la file (maquette : libellé + compteur d'épisodes).
+function GroupHead({ label, count }: { label: string; count: number }) {
+  return (
+    <View style={styles.groupHead}>
+      <Text accessibilityRole="header" style={styles.groupHeadLabel}>
+        {label}
+      </Text>
+      <Text style={styles.groupHeadCount}>
+        {count} épisode{count > 1 ? 's' : ''}
+      </Text>
+    </View>
+  );
+}
+
+const HERO_BADGES: Record<string, { label: string; variant: 'black' | 'yellow' }> = {
+  PREMIERE: { label: 'PREMIERE', variant: 'black' },
+  NOUVEAU: { label: 'NOUVEAU', variant: 'yellow' },
+  PLUS_RECENT: { label: 'PLUS RÉCENT', variant: 'black' },
+};
+
+// Carte héro « À regarder maintenant » (maquette Prisme) : backdrop de la
+// série, dégradé de lisibilité, progression et action « Marquer vu ». Le titre
+// ouvre la fiche série, la carte ouvre la fiche épisode (mêmes gestes que les
+// rangées de la file).
+function HeroCard({
+  item,
+  marking,
+  onMark,
+  onOpenEpisode,
+}: {
+  item: QueueItemDto;
+  marking: boolean;
+  onMark: () => void;
+  onOpenEpisode: () => void;
+}) {
+  const router = useRouter();
+  const ep = item.nextEpisode!;
+  const backdrop =
+    tmdbImage(item.media.backdropPath, 'w780') ?? tmdbImage(ep.stillPath, 'w300') ?? tmdbImage(item.media.posterPath, 'w342');
+  const openShow = () => router.push(`/show/${item.media.id}`);
+  const pct = item.progress && item.progress.total > 0
+    ? Math.max(0, Math.min(100, (item.progress.watched / item.progress.total) * 100))
+    : null;
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.hero, pressed && styles.heroPressed]}
+      onPress={onOpenEpisode}
+      accessibilityRole="button"
+      accessibilityLabel={`À regarder maintenant : ${item.media.title}, ${episodeCodeCompact(ep.seasonNumber, ep.episodeNumber)}, ${ep.title}`}
+      accessibilityHint="Ouvre le détail de l'épisode"
+    >
+      {backdrop ? (
+        <Image source={{ uri: backdrop }} style={StyleSheet.absoluteFill} resizeMode="cover" accessible={false} />
+      ) : (
+        <View style={[StyleSheet.absoluteFill, styles.heroFallback]} />
+      )}
+      <LinearGradient colors={['rgba(23,15,45,0.16)', 'rgba(15,9,32,0.90)']} style={StyleSheet.absoluteFill} />
+      <View style={styles.heroContent}>
+        <Text style={styles.heroEyebrow}>À REGARDER MAINTENANT</Text>
+        <Pressable
+          onPress={(event) => {
+            event.stopPropagation();
+            openShow();
+          }}
+          hitSlop={4}
+          accessibilityRole="button"
+          accessibilityLabel={`Ouvrir ${item.media.title}`}
+        >
+          <Text style={styles.heroTitle} numberOfLines={2}>
+            {item.media.title}
+          </Text>
+        </Pressable>
+        <Text style={styles.heroEp} numberOfLines={1}>
+          {episodeCodeCompact(ep.seasonNumber, ep.episodeNumber)} — {ep.title}
+        </Text>
+        {pct !== null ? (
+          <View
+            style={styles.heroTrack}
+            accessible
+            accessibilityRole="progressbar"
+            accessibilityLabel={`${item.progress!.watched} épisode${item.progress!.watched > 1 ? 's' : ''} vu${item.progress!.watched > 1 ? 's' : ''} sur ${item.progress!.total}`}
+            accessibilityValue={{ min: 0, max: item.progress!.total, now: item.progress!.watched }}
+          >
+            <LinearGradient
+              colors={[COLORS.secondary, COLORS.primary]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={[styles.heroFill, { width: `${pct}%` }]}
+            />
+          </View>
+        ) : null}
+        <View style={styles.heroActions}>
+          <Pressable
+            style={({ pressed }) => [styles.heroBtn, pressed && styles.heroBtnPressed, marking && styles.heroBtnBusy]}
+            disabled={marking}
+            onPress={(event) => {
+              event.stopPropagation();
+              onMark();
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Marquer l'épisode comme vu"
+            accessibilityState={{ disabled: marking, busy: marking }}
+          >
+            {marking ? (
+              <ActivityIndicator size="small" color={COLORS.onPrimary} />
+            ) : (
+              <Feather name="check" size={17} color={COLORS.onPrimary} />
+            )}
+            <Text style={styles.heroBtnText}>Marquer vu</Text>
+          </Pressable>
+          {item.badges.map((b) => {
+            const badge = HERO_BADGES[b];
+            return badge ? <Badge key={b} label={badge.label} variant={badge.variant} /> : null;
+          })}
+          {item.remainingCount > 0 ? (
+            <Text
+              style={styles.heroPlus}
+              accessibilityLabel={`${item.remainingCount} épisode${item.remainingCount > 1 ? 's' : ''} supplémentaire${item.remainingCount > 1 ? 's' : ''}`}
+            >
+              +{item.remainingCount}
+            </Text>
+          ) : null}
+        </View>
+      </View>
+    </Pressable>
   );
 }
 
@@ -438,4 +635,90 @@ const styles = StyleSheet.create({
   epTitle: { color: COLORS.textMuted, fontFamily: FONTS.regular, fontSize: 13, lineHeight: 18 },
   badgeRow: { flexDirection: 'row', marginTop: 2 },
   multi: { color: COLORS.secondary, fontFamily: FONTS.bold, fontSize: 12, lineHeight: 16, marginTop: SPACE.xxs },
+  // Raccourcis d'en-tête Accueil (cloche + avatar, disposition maquette).
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: SPACE.xs },
+  headerBtn: {
+    width: SIZES.touch,
+    height: SIZES.touch,
+    borderRadius: RADIUS.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.surfaceMuted,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+  },
+  headerBtnPressed: { opacity: 0.72, transform: [{ scale: 0.96 }] },
+  headerBadge: {
+    position: 'absolute',
+    top: -3,
+    right: -3,
+    minWidth: 18,
+    height: 18,
+    borderRadius: RADIUS.pill,
+    borderWidth: 2,
+    borderColor: COLORS.white,
+    backgroundColor: COLORS.notif,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  headerBadgeText: { color: '#FFFFFF', fontSize: 9, fontFamily: FONTS.extraBold },
+  headerAvatarBtn: { width: SIZES.touch, height: SIZES.touch, alignItems: 'center', justifyContent: 'center' },
+  headerAvatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.primarySoft },
+  headerAvatarEmpty: { alignItems: 'center', justifyContent: 'center' },
+  headerAvatarInit: { color: COLORS.primary, fontSize: 15, fontFamily: FONTS.extraBold },
+  // En-têtes de section de la file (libellé + compteur, façon « Ensuite »).
+  groupHead: {
+    minHeight: SIZES.touch,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: SPACE.sm,
+    paddingHorizontal: SPACE.md,
+    paddingTop: SPACE.sm,
+    paddingBottom: SPACE.xxs,
+  },
+  groupHeadLabel: { flexShrink: 1, color: COLORS.text, fontSize: 20, lineHeight: 26, fontFamily: FONTS.extraBold },
+  groupHeadCount: { flexShrink: 0, color: COLORS.textMuted, fontSize: 13, fontFamily: FONTS.semiBold },
+  // Carte héro « À regarder maintenant ».
+  hero: {
+    minHeight: 220,
+    marginHorizontal: SPACE.md,
+    marginTop: SPACE.sm,
+    marginBottom: SPACE.xs,
+    borderRadius: RADIUS.card,
+    overflow: 'hidden',
+    justifyContent: 'flex-end',
+    backgroundColor: '#241B3D',
+    ...SHADOW.card,
+  },
+  heroPressed: { opacity: 0.92 },
+  heroFallback: { backgroundColor: '#241B3D' },
+  heroContent: { padding: SPACE.md, gap: 6 },
+  heroEyebrow: { color: 'rgba(255,255,255,0.78)', fontSize: 11, letterSpacing: 1.2, fontFamily: FONTS.bold },
+  heroTitle: { color: '#FFFFFF', fontSize: 26, lineHeight: 32, fontFamily: FONTS.extraBold },
+  heroEp: { color: 'rgba(255,255,255,0.86)', fontSize: 14, lineHeight: 19, fontFamily: FONTS.medium },
+  heroTrack: {
+    height: 7,
+    borderRadius: RADIUS.pill,
+    backgroundColor: 'rgba(255,255,255,0.24)',
+    overflow: 'hidden',
+    marginTop: 4,
+  },
+  heroFill: { height: '100%', borderRadius: RADIUS.pill },
+  heroActions: { flexDirection: 'row', alignItems: 'center', gap: SPACE.sm, marginTop: SPACE.xs },
+  heroBtn: {
+    minHeight: SIZES.touch,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACE.xs,
+    paddingHorizontal: SPACE.md,
+    borderRadius: RADIUS.pill,
+    backgroundColor: COLORS.primary,
+  },
+  heroBtnPressed: { opacity: 0.86, transform: [{ scale: 0.98 }] },
+  heroBtnBusy: { opacity: 0.6 },
+  heroBtnText: { color: COLORS.onPrimary, fontSize: 15, fontFamily: FONTS.extraBold },
+  heroPlus: { color: '#FFFFFF', fontSize: 13, fontFamily: FONTS.extraBold },
 });

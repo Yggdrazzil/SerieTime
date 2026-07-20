@@ -6,7 +6,7 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
-Dernière mise à jour : **2026-07-20** (Claude) — fonctionnalités communautaires côté mobile : réactions ❤️ sur le fil, carrousel « Tes amis ont adoré », défi hebdo, streaks visibles, clubs par média (onglet Communauté)
+Dernière mise à jour : **2026-07-20** (Claude/Étienne) — Accueil et Profil rapprochés des maquettes Prisme : héro « À regarder maintenant », barres de progression de série (nouvel exposé serveur), bannière profil en carte, tuiles de stats all-time (dont jeux en cours / terminés)
 
 ---
 
@@ -90,6 +90,41 @@ la migration visuelle doit encore être exécutée sans modifier la logique mét
 6. Publication native optionnelle (EAS Build APK, puis stores).
 
 ## Journal des modifications
+
+### 2026-07-20 — Claude/Étienne : Accueil & Profil rapprochés des maquettes Prisme
+- **Serveur** — `GET /api/shows/queue` expose désormais `progress {watched,total}`
+  par série (épisodes diffusés hors spéciaux, même sémantique que la
+  bibliothèque) : c'était le point n°1 des « retours Benjamin » (barres de
+  progression). `GET /api/profile` expose `gamesPlaying` / `gamesCompleted`
+  (détail par statut). Champs **optionnels** côté client : tant que la prod n'a
+  pas redéployé le serveur, l'app masque les barres et replie sur « jeux joués ».
+- **Accueil** (`(tabs)/index.tsx`) : carte **héro « À regarder maintenant »**
+  (backdrop, S·E — titre, barre de progression dégradée, bouton « Marquer vu »,
+  badges et +N conservés) pour le premier épisode de la file ; rangées
+  restylées façon maquette (`EpisodeQueueCard` : vignette affiche arrondie,
+  titre, « S2 · E4 — Titre », barre de progression, coche ronde) ; en-têtes de
+  groupes « libellé + N épisodes » ; **cloche de notifications (badge non-lus)
+  et avatar → Profil** dans l'en-tête. Historique masqué au-dessus, feuille
+  épisode, groupes, pastille flottante, +N, badges et mutations optimistes
+  inchangés. `UpcomingView` (Agenda) non touché.
+- **Profil** (`(tabs)/profile.tsx`) : **bannière en carte arrondie** au-dessus
+  des stats (avatar incrusté à bord blanc, nom, « Niveau X · Titre », bouton
+  Modifier) au lieu de la couverture pleine page ; en-tête d'onglet compact
+  avec cloche + réglages ; **tuiles de stats all-time** en grille 2 colonnes
+  (épisodes vus, films vus, temps de visionnage, séries suivies, **jeux en
+  cours**, **jeux terminés**) avec « Tout afficher » → `/stats` ; **encart
+  streak** (série de X jours, record) → `/trophies` ; favoris remontés
+  (séries/films/jeux préférés) puis Listes et bibliothèques Séries/Films/Jeux.
+  Compteurs sociaux, tri des favoris, toutes les destinations et données
+  conservés ; l'effet meta theme-color de l'ancienne couverture est retiré.
+- **Types** : `QueueItemDto.progress?` et `ProfileStatsDto.gamesPlaying?/
+  gamesCompleted?` (packages/types + miroir mobile) ; `episodeCodeCompact()`
+  (« S2 · E2 ») dans `lib/format.ts`.
+- **Validation** : typecheck mobile + serveur + packages verts ; **158 tests
+  core** verts ; **suite serveur complète 199/199 (32 fichiers) verte** —
+  première exécution intégrale depuis le début du chantier (le moteur Prisma
+  la bloquait sous Windows ; elle tourne sous Linux, session cloud) ; export
+  Expo Web complet (42 pages).
 
 ### 2026-07-20 — Claude : 5 fonctionnalités communautaires (côté mobile)
 - **Réactions sur le fil** (`app/social.tsx`) : cœur ❤️ + compteur en pied de

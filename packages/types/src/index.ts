@@ -115,6 +115,10 @@ export type QueueItemDto = {
   nextEpisode: EpisodeDto | null;
   remainingCount: number;
   badges: ('PREMIERE' | 'NOUVEAU' | 'PLUS_RECENT')[];
+  // Progression de visionnage de la série (épisodes diffusés hors spéciaux),
+  // même sémantique que /api/shows (bibliothèque). Optionnel : absent tant que
+  // le serveur n'est pas redéployé — le client masque alors la barre.
+  progress?: { watched: number; total: number };
 };
 
 export type UpcomingItemDto = {
@@ -134,6 +138,10 @@ export type ProfileStatsDto = {
   // Jeux vidéo : suivis + « joués » (en cours ou terminés).
   gamesCount: number;
   gamesPlayed: number;
+  // Détail par statut (tuiles du profil). Optionnels : absents tant que le
+  // serveur n'est pas redéployé — le client replie alors sur `gamesPlayed`.
+  gamesPlaying?: number;
+  gamesCompleted?: number;
 };
 
 export type ListDto = {

@@ -13,7 +13,7 @@ async function computeStats(userId: string): Promise<ProfileStatsDto> {
   // rafraîchissements longs du profil. Mêmes règles que packages/core
   // (`episodesWatchTimeMinutes` : runtime épisode > 0, sinon runtime série,
   // sinon 40 min ; films : runtime > 0, sinon 110 min).
-  const [showsCount, moviesCount, ratingsCount, epAgg, movieAgg, gamesCount, gamesPlayed] = await Promise.all([
+  const [showsCount, moviesCount, ratingsCount, epAgg, movieAgg, gamesCount, gamesPlayed, gamesPlaying, gamesCompleted] = await Promise.all([
     prisma.userMediaStatus.count({ where: { userId, media: { type: 'show' } } }),
     prisma.userMediaStatus.count({ where: { userId, media: { type: 'movie' } } }),
     prisma.userEpisodeStatus.count({ where: { userId, rating: { not: null } } }).then(async (episodeRatings) => {
@@ -41,6 +41,13 @@ async function computeStats(userId: string): Promise<ProfileStatsDto> {
     prisma.userMediaStatus.count({
       where: { userId, media: { type: 'game' }, isHidden: false, status: { in: ['playing', 'completed'] } },
     }),
+    // Détail par statut (tuiles du profil) : en cours / terminés.
+    prisma.userMediaStatus.count({
+      where: { userId, media: { type: 'game' }, isHidden: false, status: 'playing' },
+    }),
+    prisma.userMediaStatus.count({
+      where: { userId, media: { type: 'game' }, isHidden: false, status: 'completed' },
+    }),
   ]);
   return {
     showsCount,
@@ -52,6 +59,8 @@ async function computeStats(userId: string): Promise<ProfileStatsDto> {
     movieMinutes: Number(movieAgg[0]?.minutes ?? 0),
     gamesCount,
     gamesPlayed,
+    gamesPlaying,
+    gamesCompleted,
   };
 }
 
