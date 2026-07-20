@@ -151,6 +151,15 @@ function PreviewContent({ userId, onClose }: { userId: string; onClose: () => vo
     router.push(('/user/' + userId) as Href);
   };
 
+  const openLibrary = () => {
+    if (!data) return;
+    onClose();
+    router.push({
+      pathname: '/user-library',
+      params: { id: data.id, name: data.displayName, type: 'show' },
+    });
+  };
+
   if (isLoading) {
     return (
       <View style={styles.stateBox} accessibilityLabel="Chargement du profil">
@@ -280,6 +289,20 @@ function PreviewContent({ userId, onClose }: { userId: string; onClose: () => vo
           <Feather name="arrow-right" size={16} color={COLORS.onPrimary} />
         </Pressable>
       </View>
+
+      {/* Lien discret vers la bibliothèque intégrale (séries, films, jeux). */}
+      {!data.restricted ? (
+        <Pressable
+          style={({ pressed }) => [styles.libraryLink, pressed && styles.pressed]}
+          onPress={openLibrary}
+          accessibilityRole="button"
+          accessibilityLabel={'Voir la bibliothèque de ' + data.displayName}
+          accessibilityHint="Ouvre la liste complète de ses séries, films et jeux"
+        >
+          <Feather name="grid" size={14} color={COLORS.primary} />
+          <Text style={styles.libraryLinkText}>SA BIBLIOTHÈQUE</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -397,5 +420,16 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.pill,
   },
   profileText: { color: COLORS.onPrimary, fontSize: 13, fontFamily: FONTS.extraBold, letterSpacing: 0.5 },
+  libraryLink: {
+    minHeight: SIZES.touch,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    gap: SPACE.xxs,
+    marginTop: SPACE.xs,
+    paddingHorizontal: SPACE.md,
+  },
+  libraryLinkText: { color: COLORS.primary, fontSize: 12, fontFamily: FONTS.extraBold, letterSpacing: 0.5 },
   pressed: { opacity: 0.78 },
 });

@@ -354,6 +354,28 @@ export default function UserProfileScreen() {
                   </View>
                 ) : null}
 
+                <Pressable
+                  style={({ pressed }) => [styles.libraryLink, pressed && styles.pressed]}
+                  onPress={() =>
+                    router.push({
+                      pathname: '/user-library',
+                      params: { id: data.id, name: data.displayName, type: 'show' },
+                    })
+                  }
+                  accessibilityRole="button"
+                  accessibilityLabel={'Voir toute la bibliothèque de ' + data.displayName}
+                  accessibilityHint="Ouvre la liste complète de ses séries, films et jeux"
+                >
+                  <View style={styles.libraryIcon} accessible={false}>
+                    <Feather name="grid" size={17} color={COLORS.primary} />
+                  </View>
+                  <View style={styles.libraryCopy}>
+                    <Text style={styles.libraryTitle}>Voir toute sa bibliothèque</Text>
+                    <Text style={styles.librarySubtitle}>Séries, films et jeux suivis</Text>
+                  </View>
+                  <Feather name="chevron-right" size={20} color={COLORS.textSoft} />
+                </Pressable>
+
                 <MediaRail title="Séries récentes" eyebrow="DERNIÈRES ACTIVITÉS" items={data.recentShows} kind="show" />
                 <MediaRail title="Séries préférées" eyebrow="COUPS DE CŒUR" items={data.favoriteShows} kind="show" favorite />
                 <MediaRail title="Films préférés" eyebrow="COUPS DE CŒUR" items={data.favoriteMovies} kind="movie" favorite />
@@ -655,6 +677,31 @@ const styles = StyleSheet.create({
   lockedIcon: { width: 58, height: 58, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.primarySoft, borderRadius: 29 },
   lockedTitle: { marginTop: SPACE.md, color: COLORS.text, fontSize: 20, lineHeight: 26, fontFamily: FONTS.extraBold, textAlign: 'center' },
   lockedBody: { marginTop: SPACE.xs, color: COLORS.textMuted, fontSize: 14, lineHeight: 21, fontFamily: FONTS.regular, textAlign: 'center' },
+  libraryLink: {
+    minHeight: SIZES.touchComfortable,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACE.sm,
+    marginHorizontal: SPACE.md,
+    paddingHorizontal: SPACE.md,
+    paddingVertical: SPACE.sm,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    borderRadius: RADIUS.card,
+    ...SHADOW.card,
+  },
+  libraryIcon: {
+    width: 38,
+    height: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.primarySoft,
+    borderRadius: 19,
+  },
+  libraryCopy: { flex: 1, minWidth: 0 },
+  libraryTitle: { color: COLORS.text, fontSize: 15, lineHeight: 20, fontFamily: FONTS.extraBold },
+  librarySubtitle: { marginTop: 1, color: COLORS.textMuted, fontSize: 12, lineHeight: 16, fontFamily: FONTS.regular },
   statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACE.xs, paddingHorizontal: SPACE.lg, paddingTop: SPACE.md },
   counter: {
     minWidth: '46%',

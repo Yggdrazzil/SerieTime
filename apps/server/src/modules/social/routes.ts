@@ -363,6 +363,81 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
     };
   });
 
+  // --- Bibliothèque intégrale d'un utilisateur -----------------------------
+  // Tout ce qu'il suit/a vu pour UN type de média (show|movie|game), paginé
+  // par curseur. Mêmes règles de visibilité que GET /api/users/:id, avec un
+  // cran de plus : la bibliothèque COMPLÈTE est plus sensible que l'aperçu du
+  // profil, donc si le profil consulté M'A bloqué → 404 (même réponse qu'un id
+  // inconnu, pas de fuite d'information).
+  app.get('/api/users/:id/library', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const parsed = z
+      .object({
+        type: z.enum(['show', 'movie', 'game']),
+        cursor: z.string().optional(),
+        take: z.coerce.number().int().min(1).max(60).default(30),
+      })
+      .safeParse(request.query ?? {});
+    if (!parsed.success) return reply.code(400).send({ error: 'invalid_query' });
+    const { type, cursor, take } = parsed.data;
+
+    const user = await prisma.user.findUnique({ where: { id } });
+    if (!user) return reply.code(404).send({ error: 'not_found' });
+    const isSelf = id === request.userId;
+    if (!isSelf) {
+      const blockedByTarget = await prisma.block.findUnique({
+        where: { blockerId_blockedId: { blockerId: id, blockedId: request.userId } },
+      });
+      if (blockedByTarget) return reply.code(404).send({ error: 'not_found' });
+    }
+    const isFollowing =
+      !isSelf &&
+      !!(await prisma.follow.findUnique({
+        where: { followerId_followingId: { followerId: request.userId, followingId: id } },
+      }));
+    // Profil privé non suivi : refus explicite (le client affiche l'invitation
+    // à s'abonner) — cohérent avec `restricted` du profil public.
+    if (user.isPrivate && !isSelf && !isFollowing) return reply.code(403).send({ error: 'restricted' });
+
+    const lang = await getUserLang(request.userId);
+    const where = { userId: id, isHidden: false, media: { type } };
+    // Tri stable pour le curseur : dernier visionnage d'abord (nulls en fin),
+    // puis dernière mise à jour, et id en départage.
+    const orderBy = [
+      { lastWatchedAt: { sort: 'desc' as const, nulls: 'last' as const } },
+      { updatedAt: 'desc' as const },
+      { id: 'desc' as const },
+    ];
+    // take+1 : la ligne excédentaire signale seulement qu'une page suit.
+    const [rows, total] = await Promise.all([
+      prisma.userMediaStatus.findMany({
+        where,
+        include: { media: true },
+        orderBy,
+        take: take + 1,
+        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      }),
+      prisma.userMediaStatus.count({ where }),
+    ]);
+    const page = rows.slice(0, take);
+    return {
+      items: page.map((s) => ({
+        media: {
+          id: s.media.id,
+          title: mediaTitle(s.media, lang),
+          posterPath: s.media.posterPath,
+          type: s.media.type,
+          year: s.media.year,
+        },
+        status: s.status,
+        rating: s.rating,
+        isFavorite: s.isFavorite,
+      })),
+      nextCursor: rows.length > take ? (page[page.length - 1]?.id ?? null) : null,
+      total,
+    };
+  });
+
   // --- Fil d'activité des abonnements --------------------------------------
   app.get('/api/social/feed', async (request) => {
     const lang = await getUserLang(request.userId);

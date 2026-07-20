@@ -6,7 +6,7 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
-Dernière mise à jour : **2026-07-21** — ligne de suivi compacte sur toutes les fiches + tab bar mini (Claude/Benjamin) ; Accueil scindé en sous-onglets Séries / Films (à voir) / Jeux (voulus) et Glass affiné — menus flottants opaques, pilule plus transparente (Claude/Étienne)
+Dernière mise à jour : **2026-07-21** — bibliothèque intégrale d'un ami (endpoint paginé + écran Séries/Films/Jeux) (Claude/Benjamin) ; ligne de suivi compacte sur toutes les fiches + tab bar mini (Claude/Benjamin) ; Accueil scindé en sous-onglets Séries / Films (à voir) / Jeux (voulus) et Glass affiné — menus flottants opaques, pilule plus transparente (Claude/Étienne)
 
 ---
 
@@ -42,7 +42,7 @@ la migration visuelle doit encore être exécutée sans modifier la logique mét
 | Recherche (design TV Time) | ✅ Fait | Onglets SÉRIES ET FILMS / JEUX / UTILISATEURS, « Annuler », `+` jaunes, debounce |
 | Social : abonnements, fil d'activité | ✅ Fait | Follow/unfollow, fil des visionnages/commentaires des personnes suivies ; QG agrégé anti-spam (`/api/social/overview` + `/api/social/discussions`, serveur prêt) |
 | Social : commentaires, réponses, réactions | ✅ Fait | Fils de discussion, réactions multi-emoji (❤️👍😂😮😢) |
-| Profil public + confidentialité | ✅ Fait | Écran `/user/[id]` : pastille niveau + titre + streak, section Trophées (badges débloqués), compteurs Séries/Films/Épisodes/Jeux, favoris séries/films/jeux, séries récentes. Gamification (réputation) visible même sur un profil privé ; stats/récents/favoris masqués aux non-abonnés |
+| Profil public + confidentialité | ✅ Fait | Écran `/user/[id]` : pastille niveau + titre + streak, section Trophées (badges débloqués), compteurs Séries/Films/Épisodes/Jeux, favoris séries/films/jeux, séries récentes. Gamification (réputation) visible même sur un profil privé ; stats/récents/favoris masqués aux non-abonnés. Bibliothèque intégrale d'un ami : `GET /api/users/:id/library` paginé + écran `/user-library` (Séries/Films/Jeux, grille infinie) |
 | Notifications in-app | ✅ Fait | Cloche + badge ; ami qui commente/favorise, réponse ou réaction à un commentaire |
 | Notifications push (OS) | ⏸ Non commencé | Nécessite dev build Expo + tokens Expo Push (la génération d'événements existe déjà) |
 | Import ZIP TV Time | ✅ Fait (v. initiale) | Analyse, matching, résolution manuelle, application |
@@ -90,6 +90,25 @@ la migration visuelle doit encore être exécutée sans modifier la logique mét
 6. Publication native optionnelle (EAS Build APK, puis stores).
 
 ## Journal des modifications
+
+### 2026-07-21 — Claude/Benjamin : bibliothèque intégrale d'un ami (séries/films/jeux)
+- **Serveur** : `GET /api/users/:id/library` (module social) — liste paginée par
+  curseur (`type=show|movie|game`, `take` ≤ 60, tri `lastWatchedAt` desc puis
+  `updatedAt` desc, `isHidden` exclu) renvoyant `{ items: [{ media {id, title,
+  posterPath, type, year}, status, rating, isFavorite }], nextCursor, total }`.
+  Visibilité alignée sur `GET /api/users/:id` : privé non suivi → 403
+  `restricted`, soi-même toujours autorisé ; et un cran de plus, bloqué PAR le
+  profil consulté → 404 (même réponse qu'un id inconnu). Tests
+  `src/__tests__/user-library.test.ts` (9 cas : tri/contenu, filtres par type,
+  pagination, isHidden, privé non suivi/suivi/soi-même, blocage, 404/400).
+- **Mobile** : nouvel écran `app/user-library.tsx` (route plate `?id=&name=&type=`
+  car `app/user/[id].tsx` est un fichier plat) — ScreenHeader « Bibliothèque de
+  {nom} », SegmentedFilter Séries/Films/Jeux, grille 3 colonnes en FlatList +
+  `useInfiniteQuery` (pagination infinie), cœur sur les favoris + badge de
+  statut discret, états Loading/LoadError/vide et carte « Profil privé » sur 403.
+  Portes d'entrée : rangée « Voir toute sa bibliothèque » sur le profil public
+  (`app/user/[id].tsx`) et lien « SA BIBLIOTHÈQUE » dans l'aperçu
+  (`UserPreviewSheet`). Route déclarée dans `app/_layout.tsx`.
 
 ### 2026-07-21 — Claude/Benjamin : ligne de suivi compacte sur toutes les fiches
 - **Nouveau composant partagé `mobile/components/StatusLine.tsx`** : les statuts
