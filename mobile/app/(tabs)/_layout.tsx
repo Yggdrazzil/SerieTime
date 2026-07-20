@@ -18,7 +18,7 @@ export default function TabsLayout() {
         <Tabs.Screen name="movies" options={{ title: 'Films', href: null }} />
         <Tabs.Screen name="games" options={{ title: 'Jeux', href: null }} />
         <Tabs.Screen name="explore" options={{ title: 'Explorer' }} />
-        <Tabs.Screen name="library" options={{ title: 'Bibliothèque' }} />
+        <Tabs.Screen name="community" options={{ title: 'Communauté' }} />
         <Tabs.Screen name="profile" options={{ title: 'Profil' }} />
       </Tabs>
       {/* Migration douce vers SSO (spec 2026-07-16) : monté une fois ici pour

@@ -206,7 +206,8 @@ function Tab({
   );
 }
 
-function FeedTab() {
+// Exporté : réutilisé par l'onglet Communauté ((tabs)/community.tsx).
+export function FeedTab() {
   const router = useRouter();
   const { data, isLoading, isError, refetch, isRefetching } = useQuery({
     queryKey: ['social', 'feed'],
@@ -363,7 +364,8 @@ function FeedTab() {
   }
 }
 
-function FriendsTab() {
+// Exporté : réutilisé par l'onglet Communauté ((tabs)/community.tsx).
+export function FriendsTab() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [q, setQ] = useState('');

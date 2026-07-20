@@ -10,14 +10,15 @@ import { ScreenShell, ScreenHeader, SegmentedFilter, PrismeCard, IconAction } fr
 import { Loading, LoadError, EmptyState } from '@/components/ui';
 import { AppearItem } from '@/components/anim';
 
-type Entry = {
+export type LeaderboardEntry = {
   userId: string;
   displayName: string;
   avatarUrl: string | null;
   minutes: number;
   isMe: boolean;
 };
-type Leaderboard = { series: Entry[]; movies: Entry[] };
+type Entry = LeaderboardEntry;
+export type Leaderboard = { series: Entry[]; movies: Entry[] };
 type Tab = 'series' | 'movies';
 
 const TAB_OPTIONS = [
@@ -37,6 +38,44 @@ function fmt(minutes: number): string {
 
 // Médaille des trois premiers rangs (or / argent / bronze).
 const MEDAL: Record<number, string> = { 1: '#D4A017', 2: '#9AA2AA', 3: '#CD7F32' };
+
+// Tableau de classement seul (carte + rangées) : partagé entre cet écran et
+// l'onglet Communauté ((tabs)/community.tsx).
+export function LeaderboardBoard({ entries }: { entries: LeaderboardEntry[] }) {
+  return (
+    <PrismeCard elevated>
+      <View style={styles.head}>
+        <Text style={styles.headText}>CLASSEMENT</Text>
+        <Text style={styles.headText}>TEMPS PASSÉ</Text>
+      </View>
+      {entries.map((e, i) => {
+        const rank = i + 1;
+        const medal = MEDAL[rank];
+        return (
+          <AppearItem key={e.userId} index={i}>
+            <View style={[styles.row, e.isMe && styles.rowMe]}>
+              <View style={[styles.rankWrap, medal ? { backgroundColor: medal } : null]}>
+                <Text style={[styles.rank, medal ? styles.rankMedal : null]}>{rank}</Text>
+              </View>
+              {e.avatarUrl ? (
+                <Image source={{ uri: tmdbImage(e.avatarUrl, 'w185') ?? e.avatarUrl }} style={styles.avatar} />
+              ) : (
+                <View style={[styles.avatar, styles.avatarEmpty]}>
+                  <Text style={styles.avatarInit}>{e.displayName.slice(0, 1).toUpperCase()}</Text>
+                </View>
+              )}
+              <View style={{ flex: 1 }}>
+                <Text style={styles.name} numberOfLines={1}>{e.displayName}</Text>
+                {e.isMe ? <Text style={styles.me}>vous</Text> : null}
+              </View>
+              <Text style={styles.time}>{fmt(e.minutes)}</Text>
+            </View>
+          </AppearItem>
+        );
+      })}
+    </PrismeCard>
+  );
+}
 
 // Classement entre amis (moi + mes abonnements) par temps de visionnage.
 export default function LeaderboardScreen() {
@@ -73,37 +112,7 @@ export default function LeaderboardScreen() {
         />
       ) : (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-          <PrismeCard elevated>
-            <View style={styles.head}>
-              <Text style={styles.headText}>CLASSEMENT</Text>
-              <Text style={styles.headText}>TEMPS PASSÉ</Text>
-            </View>
-            {entries.map((e, i) => {
-              const rank = i + 1;
-              const medal = MEDAL[rank];
-              return (
-                <AppearItem key={e.userId} index={i}>
-                  <View style={[styles.row, e.isMe && styles.rowMe]}>
-                    <View style={[styles.rankWrap, medal ? { backgroundColor: medal } : null]}>
-                      <Text style={[styles.rank, medal ? styles.rankMedal : null]}>{rank}</Text>
-                    </View>
-                    {e.avatarUrl ? (
-                      <Image source={{ uri: tmdbImage(e.avatarUrl, 'w185') ?? e.avatarUrl }} style={styles.avatar} />
-                    ) : (
-                      <View style={[styles.avatar, styles.avatarEmpty]}>
-                        <Text style={styles.avatarInit}>{e.displayName.slice(0, 1).toUpperCase()}</Text>
-                      </View>
-                    )}
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.name} numberOfLines={1}>{e.displayName}</Text>
-                      {e.isMe ? <Text style={styles.me}>vous</Text> : null}
-                    </View>
-                    <Text style={styles.time}>{fmt(e.minutes)}</Text>
-                  </View>
-                </AppearItem>
-              );
-            })}
-          </PrismeCard>
+          <LeaderboardBoard entries={entries} />
         </ScrollView>
       )}
     </ScreenShell>

@@ -10,19 +10,19 @@ import { useReduceMotion } from '@/lib/useReduceMotion';
 
 const NATIVE = Platform.OS !== 'web';
 
-const VISIBLE_ROUTES = new Set(['index', 'agenda', 'explore', 'library', 'profile']);
+const VISIBLE_ROUTES = new Set(['index', 'agenda', 'explore', 'community', 'profile']);
 const ICONS: Record<string, keyof typeof Feather.glyphMap> = {
   index: 'home',
   agenda: 'calendar',
   explore: 'search',
-  library: 'book-open',
+  community: 'users',
   profile: 'user',
 };
 const LABELS: Record<string, string> = {
   index: 'Accueil',
   agenda: 'Agenda',
   explore: 'Explorer',
-  library: 'Bibliothèque',
+  community: 'Communauté',
   profile: 'Profil',
 };
 
@@ -40,7 +40,8 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
           const actuallyFocused = activeRouteName === route.name;
           const focused =
             actuallyFocused ||
-            (route.name === 'library' && (activeRouteName === 'movies' || activeRouteName === 'games'));
+            // Films/Jeux (onglets masqués) vivent dans les collections du Profil.
+            (route.name === 'profile' && (activeRouteName === 'movies' || activeRouteName === 'games'));
           const onPress = () => {
             const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
             if (!actuallyFocused && !event.defaultPrevented) {
