@@ -308,26 +308,6 @@ export function ProgressBar({
   );
 }
 
-export type MediaType = 'series' | 'anime' | 'movie' | 'game' | 'episode';
-
-const MEDIA_TYPES: Record<MediaType, { label: string; icon: FeatherName; color: string }> = {
-  series: { label: 'S\u00e9rie', icon: 'tv', color: COLORS.primary },
-  anime: { label: 'Anim\u00e9', icon: 'zap', color: COLORS.primary },
-  movie: { label: 'Film', icon: 'film', color: COLORS.info },
-  game: { label: 'Jeu', icon: 'play-circle', color: COLORS.info },
-  episode: { label: '\u00c9pisode', icon: 'play', color: COLORS.primary },
-};
-
-export function MediaTypeChip({ type, label, style }: { type: MediaType; label?: string; style?: StyleProp<ViewStyle> }) {
-  const media = MEDIA_TYPES[type];
-  return (
-    <View style={[styles.mediaChip, { borderColor: media.color }, style]}>
-      <Feather name={media.icon} size={13} color={media.color} />
-      <Text style={[styles.mediaChipText, { color: media.color }]}>{label ?? media.label}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   shell: { flex: 1, backgroundColor: COLORS.bg },
   scroll: { flex: 1 },
@@ -434,16 +414,4 @@ const styles = StyleSheet.create({
   progressValue: { color: COLORS.text, fontFamily: FONTS.bold, fontSize: 12 },
   progressTrack: { width: '100%', borderRadius: RADIUS.pill, overflow: 'hidden' },
   progressFill: { height: '100%', borderRadius: RADIUS.pill },
-  mediaChip: {
-    minHeight: 28,
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: SPACE.xs,
-    borderRadius: RADIUS.pill,
-    borderWidth: 1,
-    backgroundColor: COLORS.surface,
-  },
-  mediaChipText: { fontFamily: FONTS.bold, fontSize: 11, letterSpacing: 0.2 },
 });

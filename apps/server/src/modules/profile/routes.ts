@@ -5,14 +5,16 @@ import { prisma } from '../../db/client.js';
 import { requireAuth } from '../auth/routes.js';
 import { serializeMedia } from '../media/serialize.js';
 import { getUserLang } from '../media/userLang.js';
+import { EP_FALLBACK_MIN, MOVIE_FALLBACK_MIN } from '../../lib/runtimeFallbacks.js';
 
 async function computeStats(userId: string): Promise<ProfileStatsDto> {
   // Temps de visionnage agrégé EN SQL : l'ancienne version chargeait TOUTES
   // les lignes d'épisodes vus (jointure à 3 niveaux, 20 000+ lignes sur une
   // vraie bibliothèque) juste pour sommer des durées — c'était la cause des
-  // rafraîchissements longs du profil. Mêmes règles que packages/core
-  // (`episodesWatchTimeMinutes` : runtime épisode > 0, sinon runtime série,
-  // sinon 40 min ; films : runtime > 0, sinon 110 min).
+  // rafraîchissements longs du profil. Fallbacks centralisés dans
+  // lib/runtimeFallbacks.ts (mêmes valeurs que les classements/défi hebdo) :
+  // runtime épisode > 0, sinon runtime série, sinon EP_FALLBACK_MIN ;
+  // films : runtime > 0, sinon MOVIE_FALLBACK_MIN.
   const [showsCount, moviesCount, ratingsCount, epAgg, movieAgg, gamesCount, gamesPlayed, gamesPlaying, gamesCompleted] = await Promise.all([
     prisma.userMediaStatus.count({ where: { userId, media: { type: 'show' } } }),
     prisma.userMediaStatus.count({ where: { userId, media: { type: 'movie' } } }),
@@ -24,7 +26,7 @@ async function computeStats(userId: string): Promise<ProfileStatsDto> {
       SELECT COUNT(*) AS n,
              COALESCE(SUM(CASE WHEN e.runtime > 0 THEN e.runtime
                                WHEN m.runtime > 0 THEN m.runtime
-                               ELSE 40 END), 0) AS minutes
+                               ELSE ${EP_FALLBACK_MIN} END), 0) AS minutes
       FROM UserEpisodeStatus ues
       JOIN Episode e ON e.id = ues.episodeId
       JOIN Show s ON s.id = e.showId
@@ -32,7 +34,7 @@ async function computeStats(userId: string): Promise<ProfileStatsDto> {
       WHERE ues.userId = ${userId} AND ues.status = 'watched'`,
     prisma.$queryRaw<[{ n: bigint; minutes: bigint }]>`
       SELECT COUNT(*) AS n,
-             COALESCE(SUM(CASE WHEN m.runtime > 0 THEN m.runtime ELSE 110 END), 0) AS minutes
+             COALESCE(SUM(CASE WHEN m.runtime > 0 THEN m.runtime ELSE ${MOVIE_FALLBACK_MIN} END), 0) AS minutes
       FROM UserMediaStatus ums
       JOIN Media m ON m.id = ums.mediaId
       WHERE ums.userId = ${userId} AND ums.status = 'completed' AND m.type = 'movie'`,
@@ -88,7 +90,7 @@ export async function profileRoutes(app: FastifyInstance): Promise<void> {
         take: 12,
       }),
       prisma.userMediaStatus.findMany({
-        where: { userId: request.userId, media: { type: 'show' }, isFavorite: true },
+        where: { userId: request.userId, media: { type: 'show' }, isFavorite: true, isHidden: false },
         include: { media: true },
         orderBy: [{ favoriteOrder: { sort: 'asc', nulls: 'last' } }, { favoritedAt: 'asc' }],
         take: 12,
@@ -100,7 +102,7 @@ export async function profileRoutes(app: FastifyInstance): Promise<void> {
         take: 12,
       }),
       prisma.userMediaStatus.findMany({
-        where: { userId: request.userId, media: { type: 'movie' }, isFavorite: true },
+        where: { userId: request.userId, media: { type: 'movie' }, isFavorite: true, isHidden: false },
         include: { media: true },
         orderBy: [{ favoriteOrder: { sort: 'asc', nulls: 'last' } }, { favoritedAt: 'asc' }],
         take: 12,
@@ -114,7 +116,7 @@ export async function profileRoutes(app: FastifyInstance): Promise<void> {
         take: 12,
       }),
       prisma.userMediaStatus.findMany({
-        where: { userId: request.userId, media: { type: 'game' }, isFavorite: true },
+        where: { userId: request.userId, media: { type: 'game' }, isFavorite: true, isHidden: false },
         include: { media: true },
         orderBy: [{ favoriteOrder: { sort: 'asc', nulls: 'last' } }, { favoritedAt: 'asc' }],
         take: 12,
@@ -161,7 +163,7 @@ export async function profileRoutes(app: FastifyInstance): Promise<void> {
         avatarUrl: z.string().max(800_000).nullable().optional(),
         coverUrl: z.string().max(800_000).nullable().optional(),
         birthYear: z.number().int().min(1900).max(2100).nullable().optional(),
-        gender: z.string().nullable().optional(),
+        gender: z.string().max(120).nullable().optional(),
         countryCode: z.string().length(2).optional(),
         // Vie privée (Paramètres, façon TV Time) : profil visible des seuls abonnés.
         isPrivate: z.boolean().optional(),

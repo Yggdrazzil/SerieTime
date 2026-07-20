@@ -40,8 +40,8 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
           const actuallyFocused = activeRouteName === route.name;
           const focused =
             actuallyFocused ||
-            // Films/Jeux (onglets masqués) vivent dans les collections du Profil.
-            (route.name === 'profile' && (activeRouteName === 'movies' || activeRouteName === 'games'));
+            // Jeux (onglet masqué) vit dans les collections du Profil.
+            (route.name === 'profile' && activeRouteName === 'games');
           const onPress = () => {
             const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
             if (!actuallyFocused && !event.defaultPrevented) {

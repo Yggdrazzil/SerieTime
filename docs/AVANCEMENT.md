@@ -125,6 +125,36 @@ la migration visuelle doit encore être exécutée sans modifier la logique mét
   première exécution intégrale depuis le début du chantier (le moteur Prisma
   la bloquait sous Windows ; elle tourne sous Linux, session cloud) ; export
   Expo Web complet (42 pages).
+### 2026-07-20 (soirée) — Claude : session d'audit complète (bugs, sécurité, perf, archi) + correctifs
+- **4 audits parallèles** sur tout le repo, puis correctifs appliqués et testés :
+- **Sécurité** : rate limiting global (300/min, routes auth plus strictes conservées) ;
+  notifications filtrées par blocage ; cible des réactions du fil contrôlée
+  (plus d'oracle d'IDs) ; OAuth fail-closed (`provider_not_configured` si
+  credentials absents — Google/Facebook/Discord/Apple) ; bornes zod ; blocklist
+  appliquée au défi hebdo et au leaderboard stats.
+- **Bugs** : toggle réaction idempotent (plus de 500 en double-tap) ; likes de
+  commentaires unifiés sur CommentReaction (fil ↔ écran commentaires
+  synchronisés) ; réponses exclues du fil ; parentId non-racine rejeté ;
+  episodeId vérifié contre le média ; favoris masqués (`isHidden`) exclus des
+  profils ; réactions orphelines purgées à la suppression d'un commentaire ;
+  stats hebdo en Europe/Paris partout ; fallbacks minutes unifiés (42/115).
+- **Perf** : profil public lit UserProgress/UserBadge persistés (plus de scan
+  20k épisodes par visite) ; index `Rating[userId,episodeId]` +
+  `ActivityReaction[userId]` (migration `audit_indexes`) ; clubs sans clause IN
+  géante ; cartes du fil mémoïsées (plus de remontage à chaque ❤️) ; nginx :
+  cache immutable sur les assets hashés (gzip déjà actif, 2,4 Mo → 667 Ko).
+- **Archi/qualité** : CI activée (`.github/workflows/ci.yml`, existait sans
+  être branchée) ; code mort supprimé (MediaTypeChip, onglet movies
+  inatteignable, export styles) ; pull-to-refresh sur le Classement ;
+  invalidations follow → classements. 17 nouveaux tests serveur (216 au total).
+- **Corrigé en prod au passage** : URLs de dossier `/prisme/xxx/` qui
+  renvoyaient 403 (fallback SPA nginx via `error_page 403`).
+- **Chantiers restants notés (non faits)** : follows en attente pour les
+  comptes privés (contournement du mode privé en un clic — produit à
+  designer) ; pagination du fil et des commentaires ; migration des 3 écrans
+  PageHeader restants ; partage des types mobile/serveur via
+  `@serietime/types` ; virtualisation accueil/agenda ; tests mobile ;
+  découpage de `social/routes.ts` et `show|game/[id].tsx`.
 
 ### 2026-07-20 — Claude : 5 fonctionnalités communautaires (côté mobile)
 - **Réactions sur le fil** (`app/social.tsx`) : cœur ❤️ + compteur en pied de

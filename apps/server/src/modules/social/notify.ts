@@ -27,9 +27,16 @@ function meta(actorId: string, p: NotifPayload, mediaType?: NotificationMediaTyp
   return JSON.stringify({ actorId, mediaId: p.mediaId, mediaType, commentId: p.commentId });
 }
 
-// Notifie un utilisateur précis (jamais soi-même).
+// Notifie un utilisateur précis (jamais soi-même, jamais quelqu'un qui a
+// bloqué l'acteur — le blocage doit couper TOUT signal du bloqué, sinon il
+// suffit de réagir/répondre pour continuer à pinger la personne).
 export async function notifyUser(recipientId: string, actorId: string, p: NotifPayload): Promise<void> {
   if (recipientId === actorId) return;
+  const blocked = await prisma.block.findUnique({
+    where: { blockerId_blockedId: { blockerId: recipientId, blockedId: actorId } },
+    select: { id: true },
+  });
+  if (blocked) return;
   await prisma.notification.create({
     data: {
       userId: recipientId,

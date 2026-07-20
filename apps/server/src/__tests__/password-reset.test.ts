@@ -14,6 +14,9 @@ process.env.NODE_ENV = 'test';
 process.env.TMDB_API_KEY = '';
 process.env.TVMAZE_ENABLED = 'false';
 process.env.TVDB_ENABLED = 'false';
+// OAuth fail closed : sans DISCORD_CLIENT_ID le provider serait refusé
+// (provider_not_configured) — on configure l'app Discord mockée.
+process.env.DISCORD_CLIENT_ID = 'our-discord-app';
 
 let app: FastifyInstance;
 let prismaClient: (typeof import('../db/client.js'))['prisma'];
@@ -37,6 +40,10 @@ beforeAll(async () => {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: unknown) => {
+      if (String(url).startsWith('https://discord.com/api/oauth2/@me')) {
+        // Contrôle d'audience : le jeton mocké appartient bien à NOTRE app.
+        return new Response(JSON.stringify({ application: { id: 'our-discord-app' } }), { status: 200 });
+      }
       if (String(url).startsWith('https://discord.com/api/users/@me')) {
         return new Response(JSON.stringify(discordProfile), { status: 200 });
       }

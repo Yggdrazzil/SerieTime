@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { usePullRefresh } from '@/lib/usePullRefresh';
 import { COLORS, SIZES, SPACE } from '@/lib/theme';
 import { SegmentedFilter, TabHeader } from '@/components/prisme';
 import { EmptyState, Loading, LoadError } from '@/components/ui';
@@ -59,6 +60,7 @@ export default function CommunityScreen() {
 // Classement entre amis (temps séries / films) — même tableau que l'écran
 // Stats, embarqué directement dans l'onglet.
 function RankingSection() {
+  const queryClient = useQueryClient();
   const [kind, setKind] = useState<'series' | 'movies'>('series');
   const { data, isLoading, isError, refetch, isRefetching } = useQuery({
     queryKey: ['stats', 'leaderboard'],
@@ -66,9 +68,26 @@ function RankingSection() {
     staleTime: 5 * 60_000,
   });
   const entries = kind === 'movies' ? data?.movies : data?.series;
+  // Tirer pour rafraîchir : leaderboard + défi hebdo (requête interne à
+  // WeeklyChallengeCard, relancée via son queryKey).
+  const { refreshing, onRefresh } = usePullRefresh([
+    refetch,
+    () => queryClient.refetchQueries({ queryKey: ['social', 'challenge', 'weekly'] }),
+  ]);
 
   return (
-    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.rankingContent}>
+    <ScrollView
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={styles.rankingContent}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor={COLORS.primary}
+          colors={[COLORS.primary]}
+        />
+      }
+    >
       <WeeklyChallengeCard />
       <SegmentedFilter
         options={[

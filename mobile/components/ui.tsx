@@ -219,7 +219,7 @@ export function TopTabs({
 }
 
 // Composants partagés : rayons, espacements et cibles suivent le socle Prisme.
-export const styles = StyleSheet.create({
+const styles = StyleSheet.create({
   pillHdr: { alignItems: 'center', paddingVertical: SPACE.sm },
   pillText: {
     overflow: 'hidden',

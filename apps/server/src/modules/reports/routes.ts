@@ -19,7 +19,7 @@ export async function reportsRoutes(app: FastifyInstance): Promise<void> {
         igdbId: z.string().optional(),
         commentId: z.string().optional(),
         title: z.string().max(300),
-        reason: z.string().default('adult'),
+        reason: z.string().max(500).default('adult'),
         note: z.string().max(500).optional(),
       })
       .parse(request.body);

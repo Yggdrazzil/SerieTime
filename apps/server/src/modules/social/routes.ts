@@ -7,9 +7,9 @@ import { mediaTitle, serializeMedia } from '../media/serialize.js';
 import { getUserLang } from '../media/userLang.js';
 import { notifyFollowers, notifyUser } from './notify.js';
 import { blockedIdSet } from './blocks.js';
-import { BADGES, findBlockedTerm } from '@serietime/core';
-import { meView, scheduleRecompute } from '../gamification/service.js';
-import { EP_FALLBACK_MIN, MOVIE_FALLBACK_MIN } from '../stats/routes.js';
+import { BADGES, findBlockedTerm, levelTitle, nextLevelXp } from '@serietime/core';
+import { scheduleRecompute } from '../gamification/service.js';
+import { EP_FALLBACK_MIN, MOVIE_FALLBACK_MIN } from '../../lib/runtimeFallbacks.js';
 
 // Ordre favoris (drag & drop) partagé avec /api/profile : positionnés d'abord,
 // puis les plus anciennement ajoutés.
@@ -20,23 +20,40 @@ const FAVORITE_ORDER = [
 
 // Sous-ensemble PUBLIC de la gamification (réputation, visible même sur un
 // profil restreint) : niveau, titre, streak et badges DÉBLOQUÉS uniquement.
-// Les défis (personnels) ne sont jamais exposés. Réutilise meView (lecture
-// pure, aucune écriture ni notification). Null si l'utilisateur a disparu.
+// Les défis (personnels) ne sont jamais exposés. On lit l'état PERSISTÉ
+// (UserProgress + UserBadge, maintenus par le recompute débouncé) : l'ancien
+// collect() live rescannait toute la bibliothèque (20k lignes) à CHAQUE
+// GET /api/users/:id — le collect live reste réservé à /api/gamification/me.
 async function publicGamification(userId: string) {
-  const view = await meView(userId);
-  if (!view) return null;
-  const badges = view.badges
-    .filter((b) => b.tier > 0)
+  const [progress, badgeRows] = await Promise.all([
+    prisma.userProgress.findUnique({ where: { userId } }),
+    prisma.userBadge.findMany({ where: { userId }, select: { badgeId: true, tier: true, unlockedAt: true } }),
+  ]);
+  // Pas encore de UserProgress (compte tout neuf, recompute pas encore passé) :
+  // valeurs par défaut plutôt que null — la réputation publique reste affichable.
+  const level = progress?.level ?? 1;
+  // Plus haut palier persisté par badge (+ date de déblocage correspondante).
+  const topByBadge = new Map<string, { tier: number; unlockedAt: Date }>();
+  for (const row of badgeRows) {
+    const cur = topByBadge.get(row.badgeId);
+    if (!cur || row.tier > cur.tier) topByBadge.set(row.badgeId, { tier: row.tier, unlockedAt: row.unlockedAt });
+  }
+  const badges = [...topByBadge.entries()]
+    .flatMap(([badgeId, b]) => {
+      const def = BADGES.find((d) => d.id === badgeId);
+      if (!def || b.tier <= 0) return [];
+      return [{ id: badgeId, label: def.label, icon: def.icon, tier: b.tier, tierCount: def.thresholds.length, unlockedAt: b.unlockedAt }];
+    })
     // Palier décroissant, puis déblocage le plus récent d'abord.
-    .sort((a, b) => b.tier - a.tier || (b.unlockedAt ?? '').localeCompare(a.unlockedAt ?? ''))
-    .map((b) => ({ id: b.id, label: b.label, icon: b.icon, tier: b.tier, tierCount: b.tierCount }));
+    .sort((a, b) => b.tier - a.tier || b.unlockedAt.getTime() - a.unlockedAt.getTime())
+    .map(({ unlockedAt: _unlockedAt, ...b }) => b);
   return {
-    level: view.level,
-    levelTitle: view.levelTitle,
-    xp: view.xp,
-    nextLevelXp: view.nextLevelXp,
-    currentStreak: view.currentStreak,
-    bestStreak: view.bestStreak,
+    level,
+    levelTitle: levelTitle(level),
+    xp: progress?.xp ?? 0,
+    nextLevelXp: nextLevelXp(level),
+    currentStreak: progress?.currentStreak ?? 0,
+    bestStreak: progress?.bestStreak ?? 0,
     badges,
   };
 }
@@ -316,19 +333,19 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
           take: 12,
         }),
         prisma.userMediaStatus.findMany({
-          where: { userId: id, media: { type: 'show' }, isFavorite: true },
+          where: { userId: id, media: { type: 'show' }, isFavorite: true, isHidden: false },
           include: { media: true },
           orderBy: FAVORITE_ORDER,
           take: 12,
         }),
         prisma.userMediaStatus.findMany({
-          where: { userId: id, media: { type: 'movie' }, isFavorite: true },
+          where: { userId: id, media: { type: 'movie' }, isFavorite: true, isHidden: false },
           include: { media: true },
           orderBy: FAVORITE_ORDER,
           take: 12,
         }),
         prisma.userMediaStatus.findMany({
-          where: { userId: id, media: { type: 'game' }, isFavorite: true },
+          where: { userId: id, media: { type: 'game' }, isFavorite: true, isHidden: false },
           include: { media: true },
           orderBy: FAVORITE_ORDER,
           take: 12,
@@ -364,8 +381,10 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
         orderBy: { eventDate: 'desc' },
         take: 40,
       }),
+      // Seuls les commentaires RACINES alimentent le fil : une réponse hors de
+      // son fil de discussion serait incompréhensible (et dupliquerait l'info).
       prisma.comment.findMany({
-        where: { userId: { in: ids } },
+        where: { userId: { in: ids }, parentId: null },
         include: { user: true, media: true, episode: true },
         orderBy: { createdAt: 'desc' },
         take: 40,
@@ -390,26 +409,36 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
       streak: progressById.get(u.id)?.currentStreak ?? 0,
     });
 
-    // Réactions de TOUS les items en UNE requête ActivityReaction (pas de N+1).
-    const reactionRows = await prisma.activityReaction.findMany({
-      where: {
-        OR: [
-          { kind: 'watch', refId: { in: events.map((e) => e.id) } },
-          { kind: 'comment', refId: { in: comments.map((c) => c.id) } },
-          { kind: 'badge', refId: { in: badges.map((b) => b.id) } },
-        ],
-      },
-      select: { kind: true, refId: true, userId: true, emoji: true },
-    });
+    // Réactions de TOUS les items en DEUX requêtes (pas de N+1) : les likes de
+    // commentaires vivent dans CommentReaction (même store que l'écran
+    // commentaires — un like posé depuis le feed y est visible et vice versa) ;
+    // on agrège AUSSI les vieilles ActivityReaction 'comment' (données legacy).
+    const [reactionRows, commentReactionRows] = await Promise.all([
+      prisma.activityReaction.findMany({
+        where: {
+          OR: [
+            { kind: 'watch', refId: { in: events.map((e) => e.id) } },
+            { kind: 'comment', refId: { in: comments.map((c) => c.id) } },
+            { kind: 'badge', refId: { in: badges.map((b) => b.id) } },
+          ],
+        },
+        select: { kind: true, refId: true, userId: true, emoji: true },
+      }),
+      prisma.commentReaction.findMany({
+        where: { commentId: { in: comments.map((c) => c.id) } },
+        select: { commentId: true, userId: true, emoji: true },
+      }),
+    ]);
     const reactionsByTarget = new Map<string, FeedReactions>();
-    for (const r of reactionRows) {
-      const key = `${r.kind}:${r.refId}`;
+    const addReaction = (key: string, userId: string, emoji: string) => {
       const agg = reactionsByTarget.get(key) ?? { total: 0, mine: [], counts: {} };
       agg.total += 1;
-      agg.counts[r.emoji] = (agg.counts[r.emoji] ?? 0) + 1;
-      if (r.userId === request.userId) agg.mine.push(r.emoji);
+      agg.counts[emoji] = (agg.counts[emoji] ?? 0) + 1;
+      if (userId === request.userId && !agg.mine.includes(emoji)) agg.mine.push(emoji);
       reactionsByTarget.set(key, agg);
-    }
+    };
+    for (const r of reactionRows) addReaction(`${r.kind}:${r.refId}`, r.userId, r.emoji);
+    for (const r of commentReactionRows) addReaction(`comment:${r.commentId}`, r.userId, r.emoji);
     const reactionsFor = (kind: ReactionKind, refId: string): FeedReactions =>
       reactionsByTarget.get(`${kind}:${refId}`) ?? { total: 0, mine: [], counts: {} };
 
@@ -482,19 +511,76 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
     // La cible doit exister (WatchEvent/Comment/UserBadge selon le kind).
     const target =
       kind === 'watch'
-        ? await prisma.watchEvent.findUnique({ where: { id: refId }, select: { id: true } })
+        ? await prisma.watchEvent.findUnique({ where: { id: refId }, select: { id: true, userId: true } })
         : kind === 'comment'
-          ? await prisma.comment.findUnique({ where: { id: refId }, select: { id: true } })
-          : await prisma.userBadge.findUnique({ where: { id: refId }, select: { id: true } });
+          ? await prisma.comment.findUnique({ where: { id: refId }, select: { id: true, userId: true } })
+          : await prisma.userBadge.findUnique({ where: { id: refId }, select: { id: true, userId: true } });
     if (!target) return reply.code(404).send({ error: 'not_found' });
-    const existing = await prisma.activityReaction.findUnique({
-      where: { kind_refId_userId_emoji: { kind, refId, userId: request.userId, emoji } },
-    });
-    if (existing) await prisma.activityReaction.delete({ where: { id: existing.id } });
-    else await prisma.activityReaction.create({ data: { kind, refId, userId: request.userId, emoji } });
-    // Total toutes emojis confondues sur la cible.
-    const count = await prisma.activityReaction.count({ where: { kind, refId } });
-    return { reacted: !existing, count };
+    // Contrôle d'accès : on ne réagit qu'aux items de SON fil (soi-même ou un
+    // compte suivi). Sans ce contrôle, l'endpoint servait d'oracle d'existence
+    // d'ids et permettait de « pinger » n'importe quel compte. 404 UNIFORME
+    // (même réponse que cible inexistante : ne révèle pas que l'id existe).
+    if (target.userId !== request.userId) {
+      const followingIds = await followingIdSet(request.userId);
+      if (!followingIds.has(target.userId)) return reply.code(404).send({ error: 'not_found' });
+    }
+
+    // Toggle idempotent sous double-tap : deux requêtes simultanées passaient
+    // toutes deux le findUnique (rien trouvé) puis create → P2002 → 500. On
+    // traite le P2002 comme « déjà présent » → suppression (résultat net d'un
+    // double toggle), et on supprime via deleteMany (jamais de P2025 en course).
+    const toggle = async (): Promise<boolean> => {
+      if (kind === 'comment') {
+        // Les likes de commentaires vivent dans CommentReaction : même store
+        // que POST /api/comments/:id/react, pour que l'écran commentaires et
+        // le feed voient les mêmes réactions.
+        const where = { commentId: refId, userId: request.userId, emoji };
+        const existing = await prisma.commentReaction.findUnique({
+          where: { commentId_userId_emoji: where },
+        });
+        if (existing) {
+          await prisma.commentReaction.deleteMany({ where });
+          return false;
+        }
+        try {
+          await prisma.commentReaction.create({ data: where });
+          return true;
+        } catch (err) {
+          if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+            await prisma.commentReaction.deleteMany({ where });
+            return false;
+          }
+          throw err;
+        }
+      }
+      const where = { kind, refId, userId: request.userId, emoji };
+      const existing = await prisma.activityReaction.findUnique({
+        where: { kind_refId_userId_emoji: where },
+      });
+      if (existing) {
+        await prisma.activityReaction.deleteMany({ where });
+        return false;
+      }
+      try {
+        await prisma.activityReaction.create({ data: where });
+        return true;
+      } catch (err) {
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+          await prisma.activityReaction.deleteMany({ where });
+          return false;
+        }
+        throw err;
+      }
+    };
+    const reacted = await toggle();
+    // Total toutes emojis confondues sur la cible (kind 'comment' : store
+    // CommentReaction + éventuelles ActivityReaction legacy, comme le feed).
+    const count =
+      kind === 'comment'
+        ? (await prisma.commentReaction.count({ where: { commentId: refId } })) +
+          (await prisma.activityReaction.count({ where: { kind, refId } }))
+        : await prisma.activityReaction.count({ where: { kind, refId } });
+    return { reacted, count };
   });
 
   // --- « Tes amis ont adoré » ---------------------------------------------
@@ -579,14 +665,23 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
   // 'watched' joints à Episode→Show→Media, films via le runtime du média.
   app.get('/api/social/challenge/weekly', async (request) => {
     const weekStart = mondayStartParis();
-    const followingIds = await followingIdSet(request.userId);
-    const ids = [request.userId, ...followingIds];
+    // Blocage : les comptes que j'ai bloqués sortent de MON défi hebdo (même
+    // règle que gamification/routes.ts — un vieux follow peut subsister).
+    const [followingIds, blockedIds] = await Promise.all([
+      followingIdSet(request.userId),
+      blockedIdSet(request.userId),
+    ]);
+    const ids = [request.userId, ...[...followingIds].filter((id) => !blockedIds.has(id))];
     const [rows, users] = await Promise.all([
       prisma.$queryRaw<{ userId: string; minutes: bigint | number | null }[]>`
         SELECT we.userId AS userId,
                SUM(CASE
-                     WHEN we.episodeId IS NOT NULL THEN COALESCE(e.runtime, sm.runtime, ${EP_FALLBACK_MIN})
-                     WHEN med.type = 'movie' THEN COALESCE(med.runtime, ${MOVIE_FALLBACK_MIN})
+                     WHEN we.episodeId IS NOT NULL THEN
+                       CASE WHEN e.runtime > 0 THEN e.runtime
+                            WHEN sm.runtime > 0 THEN sm.runtime
+                            ELSE ${EP_FALLBACK_MIN} END
+                     WHEN med.type = 'movie' THEN
+                       CASE WHEN med.runtime > 0 THEN med.runtime ELSE ${MOVIE_FALLBACK_MIN} END
                      ELSE 0
                    END) AS minutes
         FROM "WatchEvent" we
@@ -687,13 +782,23 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
     const media = await prisma.media.findUnique({ where: { id } });
     if (!media) return reply.code(404).send({ error: 'not_found' });
     if (body.episodeId) {
-      const ep = await prisma.episode.findUnique({ where: { id: body.episodeId } });
+      const ep = await prisma.episode.findUnique({
+        where: { id: body.episodeId },
+        select: { id: true, show: { select: { mediaId: true } } },
+      });
       if (!ep) return reply.code(404).send({ error: 'episode_not_found' });
+      // L'épisode doit appartenir au média de l'URL : sinon le commentaire
+      // serait rattaché à une fiche mais affiché sous l'épisode d'une autre.
+      if (ep.show.mediaId !== id) return reply.code(400).send({ error: 'episode_not_in_media' });
     }
     let parent: { id: string; userId: string } | null = null;
     if (body.parentId) {
       const p = await prisma.comment.findUnique({ where: { id: body.parentId } });
       if (!p || p.mediaId !== id) return reply.code(404).send({ error: 'parent_not_found' });
+      // Un seul niveau de fil : on ne répond qu'à un commentaire RACINE.
+      // (Une réponse à une réponse serait invisible — l'écran ne descend
+      // qu'un niveau et le feed ne liste que les racines.)
+      if (p.parentId) return reply.code(400).send({ error: 'parent_not_root' });
       parent = { id: p.id, userId: p.userId };
     }
     const comment = await prisma.comment.create({
@@ -736,7 +841,16 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
     const comment = await prisma.comment.findUnique({ where: { id } });
     if (!comment) return reply.code(404).send({ error: 'not_found' });
     if (comment.userId !== request.userId) return reply.code(403).send({ error: 'forbidden' });
-    await prisma.comment.delete({ where: { id } }); // supprime aussi les réponses (cascade)
+    // Les ActivityReaction pointent la cible par refId SANS FK (cible
+    // polymorphe) : la cascade ne les supprime pas — purge explicite pour le
+    // commentaire ET ses réponses, sinon elles resteraient orphelines.
+    const replies = await prisma.comment.findMany({ where: { parentId: id }, select: { id: true } });
+    await prisma.$transaction([
+      prisma.activityReaction.deleteMany({
+        where: { kind: 'comment', refId: { in: [id, ...replies.map((r) => r.id)] } },
+      }),
+      prisma.comment.delete({ where: { id } }), // supprime aussi les réponses (cascade)
+    ]);
     return { ok: true };
   });
 
@@ -746,14 +860,25 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
     const { emoji } = z.object({ emoji: z.string().min(1).max(8) }).parse(request.body);
     const comment = await prisma.comment.findUnique({ where: { id } });
     if (!comment) return reply.code(404).send({ error: 'not_found' });
+    // Toggle idempotent sous double-tap (voir feed/react) : un P2002 en course
+    // est traité comme « déjà présent » → suppression, jamais de 500.
+    const where = { commentId: id, userId: request.userId, emoji };
     const existing = await prisma.commentReaction.findUnique({
-      where: { commentId_userId_emoji: { commentId: id, userId: request.userId, emoji } },
+      where: { commentId_userId_emoji: where },
     });
     if (existing) {
-      await prisma.commentReaction.delete({ where: { id: existing.id } });
+      await prisma.commentReaction.deleteMany({ where });
       return { ok: true, reacted: false };
     }
-    await prisma.commentReaction.create({ data: { commentId: id, userId: request.userId, emoji } });
+    try {
+      await prisma.commentReaction.create({ data: where });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        await prisma.commentReaction.deleteMany({ where });
+        return { ok: true, reacted: false };
+      }
+      throw err;
+    }
     const me = await prisma.user.findUnique({ where: { id: request.userId } });
     await notifyUser(comment.userId, request.userId, {
       type: 'comment_reaction',

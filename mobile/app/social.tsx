@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -232,7 +232,6 @@ function Tab({
 // Exporté : réutilisé par l'onglet Communauté ((tabs)/community.tsx), qui
 // peut injecter un en-tête de liste (carrousel « Tes amis ont adoré »).
 export function FeedTab({ header }: { header?: React.ReactElement }) {
-  const router = useRouter();
   const queryClient = useQueryClient();
   const { data, isLoading, isError, refetch, isRefetching } = useQuery({
     queryKey: FEED_KEY,
@@ -268,6 +267,11 @@ export function FeedTab({ header }: { header?: React.ReactElement }) {
     },
   });
 
+  // Référence stable passée aux cartes mémoïsées : évite de re-rendre les
+  // ~50 cartes du fil à chaque toggle optimiste (`mutate` est stable en v5).
+  const { mutate } = react;
+  const onToggle = useCallback((target: FeedItem) => mutate(target), [mutate]);
+
   if (isLoading) return <Loading />;
   if (isError && !data) {
     return <LoadError onRetry={() => void refetch()} busy={isRefetching} />;
@@ -286,9 +290,9 @@ export function FeedTab({ header }: { header?: React.ReactElement }) {
       renderItem={({ item, index }) => (
         <AppearItem index={index}>
           {item.kind === 'badge' && item.badge ? (
-            <BadgeFeedCard item={item} />
+            <BadgeFeedCard item={item} onToggle={onToggle} />
           ) : item.media ? (
-            <MediaFeedCard item={item} />
+            <MediaFeedCard item={item} onToggle={onToggle} />
           ) : null}
         </AppearItem>
       )}
@@ -313,123 +317,130 @@ export function FeedTab({ header }: { header?: React.ReactElement }) {
       windowSize={7}
     />
   );
+}
 
-  function BadgeFeedCard({ item }: { item: FeedItem }) {
-    const tierLabel =
-      TIER_LABELS[item.badge?.tier ?? 0] ??
-      'palier ' + String(item.badge?.tier ?? '');
-    return (
-      <View style={styles.feedCard}>
-        <View style={styles.feedCardMain}>
-          <UserAvatar
-            user={item.user}
-            onPress={() => router.push(('/user/' + item.user.id) as Href)}
-          />
-          <View style={styles.feedCopy}>
-            <Text style={styles.feedText}>
-              <Text style={styles.feedName}>{item.user.displayName}</Text>
-              {item.user.streak ? (
-                <Text style={styles.streakInline}>{' 🔥 ' + item.user.streak}</Text>
-              ) : null}
-              {' a débloqué '}
-              <Text style={styles.feedMedia}>{item.badge?.label}</Text>
-            </Text>
-            <View style={styles.metaRow}>
-              <View style={[styles.kindBadge, styles.kindBadgeTrophy]}>
-                <Feather name="award" size={12} color={COLORS.warning} />
-                <Text style={styles.kindBadgeText}>PALIER {tierLabel.toUpperCase()}</Text>
-              </View>
-              <Text style={styles.dateText}>{dateLabel(item.date)}</Text>
-            </View>
-          </View>
-          <View style={styles.trophyOrb} accessible={false}>
-            <Feather name="award" size={23} color={COLORS.onAccent} />
-          </View>
-        </View>
-        <ReactionBar item={item} onToggle={(target) => react.mutate(target)} />
-      </View>
-    );
-  }
+// Cartes du fil : définies au niveau module + React.memo pour que le toggle
+// optimiste d'un ❤️ ne remonte pas toutes les cartes (identité de composant
+// stable ; seul l'item modifié change de référence dans le cache).
+type FeedCardProps = { item: FeedItem; onToggle: (item: FeedItem) => void };
 
-  function MediaFeedCard({ item }: { item: FeedItem }) {
-    const media = item.media!;
-    const poster = tmdbImage(media.posterPath, 'w185');
-    return (
-      <View style={styles.feedCard}>
-        <View style={styles.feedCardMain}>
+const BadgeFeedCard = React.memo(function BadgeFeedCard({ item, onToggle }: FeedCardProps) {
+  const router = useRouter();
+  const tierLabel =
+    TIER_LABELS[item.badge?.tier ?? 0] ??
+    'palier ' + String(item.badge?.tier ?? '');
+  return (
+    <View style={styles.feedCard}>
+      <View style={styles.feedCardMain}>
         <UserAvatar
           user={item.user}
           onPress={() => router.push(('/user/' + item.user.id) as Href)}
         />
-        <PressableScale
-          style={styles.feedMainTap}
-          scaleTo={0.985}
-          onPress={() => router.push(mediaHref(media))}
-          accessibilityRole="button"
-          accessibilityLabel={item.user.displayName + ' ' + actionText(item) + ' ' + media.title}
-          accessibilityHint="Ouvre la fiche du média"
-        >
         <View style={styles.feedCopy}>
           <Text style={styles.feedText}>
             <Text style={styles.feedName}>{item.user.displayName}</Text>
             {item.user.streak ? (
               <Text style={styles.streakInline}>{' 🔥 ' + item.user.streak}</Text>
             ) : null}
-            {' ' + actionText(item) + ' '}
-            <Text style={styles.feedMedia}>{media.title}</Text>
+            {' a débloqué '}
+            <Text style={styles.feedMedia}>{item.badge?.label}</Text>
           </Text>
-          {item.kind === 'comment' && item.body ? (
-            <Text style={styles.feedComment} numberOfLines={3}>
-              « {item.body} »
-            </Text>
-          ) : item.episode ? (
-            <Text style={styles.feedSub} numberOfLines={1}>
-              {item.episode.title}
-            </Text>
-          ) : null}
           <View style={styles.metaRow}>
-            <View style={styles.kindBadge}>
-              <Feather
-                name={
-                  media.type === 'game'
-                    ? 'hexagon'
-                    : media.type === 'movie'
-                      ? 'film'
-                      : 'tv'
-                }
-                size={12}
-                color={COLORS.primary}
-              />
-              <Text style={styles.kindBadgeText}>
-                {media.type === 'game'
-                  ? 'JEU'
-                  : media.type === 'movie'
-                    ? 'FILM'
-                    : 'SÉRIE'}
-              </Text>
+            <View style={[styles.kindBadge, styles.kindBadgeTrophy]}>
+              <Feather name="award" size={12} color={COLORS.warning} />
+              <Text style={styles.kindBadgeText}>PALIER {tierLabel.toUpperCase()}</Text>
             </View>
             <Text style={styles.dateText}>{dateLabel(item.date)}</Text>
           </View>
         </View>
-        <View style={styles.poster}>
-          {poster ? (
-            <Image
-              source={{ uri: poster }}
-              style={StyleSheet.absoluteFill}
-              resizeMode="cover"
-              accessible={false}
-            />
-          ) : (
-            <Feather name="image" size={18} color={COLORS.textSoft} />
-          )}
+        <View style={styles.trophyOrb} accessible={false}>
+          <Feather name="award" size={23} color={COLORS.onAccent} />
         </View>
-        </PressableScale>
-        </View>
-        <ReactionBar item={item} onToggle={(target) => react.mutate(target)} />
       </View>
-    );
-  }
-}
+      <ReactionBar item={item} onToggle={onToggle} />
+    </View>
+  );
+});
+
+const MediaFeedCard = React.memo(function MediaFeedCard({ item, onToggle }: FeedCardProps) {
+  const router = useRouter();
+  const media = item.media!;
+  const poster = tmdbImage(media.posterPath, 'w185');
+  return (
+    <View style={styles.feedCard}>
+      <View style={styles.feedCardMain}>
+      <UserAvatar
+        user={item.user}
+        onPress={() => router.push(('/user/' + item.user.id) as Href)}
+      />
+      <PressableScale
+        style={styles.feedMainTap}
+        scaleTo={0.985}
+        onPress={() => router.push(mediaHref(media))}
+        accessibilityRole="button"
+        accessibilityLabel={item.user.displayName + ' ' + actionText(item) + ' ' + media.title}
+        accessibilityHint="Ouvre la fiche du média"
+      >
+      <View style={styles.feedCopy}>
+        <Text style={styles.feedText}>
+          <Text style={styles.feedName}>{item.user.displayName}</Text>
+          {item.user.streak ? (
+            <Text style={styles.streakInline}>{' 🔥 ' + item.user.streak}</Text>
+          ) : null}
+          {' ' + actionText(item) + ' '}
+          <Text style={styles.feedMedia}>{media.title}</Text>
+        </Text>
+        {item.kind === 'comment' && item.body ? (
+          <Text style={styles.feedComment} numberOfLines={3}>
+            « {item.body} »
+          </Text>
+        ) : item.episode ? (
+          <Text style={styles.feedSub} numberOfLines={1}>
+            {item.episode.title}
+          </Text>
+        ) : null}
+        <View style={styles.metaRow}>
+          <View style={styles.kindBadge}>
+            <Feather
+              name={
+                media.type === 'game'
+                  ? 'hexagon'
+                  : media.type === 'movie'
+                    ? 'film'
+                    : 'tv'
+              }
+              size={12}
+              color={COLORS.primary}
+            />
+            <Text style={styles.kindBadgeText}>
+              {media.type === 'game'
+                ? 'JEU'
+                : media.type === 'movie'
+                  ? 'FILM'
+                  : 'SÉRIE'}
+            </Text>
+          </View>
+          <Text style={styles.dateText}>{dateLabel(item.date)}</Text>
+        </View>
+      </View>
+      <View style={styles.poster}>
+        {poster ? (
+          <Image
+            source={{ uri: poster }}
+            style={StyleSheet.absoluteFill}
+            resizeMode="cover"
+            accessible={false}
+          />
+        ) : (
+          <Feather name="image" size={18} color={COLORS.textSoft} />
+        )}
+      </View>
+      </PressableScale>
+      </View>
+      <ReactionBar item={item} onToggle={onToggle} />
+    </View>
+  );
+});
 
 // Pied de carte du fil : cœur (outline → plein teinté primaire quand j'ai
 // réagi) + total des réactions.
@@ -503,6 +514,11 @@ export function FriendsTab() {
       void queryClient.invalidateQueries({ queryKey: ['social'] });
       void queryClient.invalidateQueries({ queryKey: ['profile'] });
       void queryClient.invalidateQueries({ queryKey: ['user', user.id] });
+      // Les classements dépendent de la liste d'abonnements : leaderboard
+      // Stats/Communauté + trophées/XP. Le défi hebdo (['social','challenge',
+      // 'weekly']) est déjà couvert par l'invalidation du préfixe ['social'].
+      void queryClient.invalidateQueries({ queryKey: ['stats', 'leaderboard'] });
+      void queryClient.invalidateQueries({ queryKey: ['gamification'] });
     } catch {
       setOverrides((current) => ({ ...current, [user.id]: currently }));
       setMutationError(

@@ -2,26 +2,38 @@ import type { FastifyInstance } from 'fastify';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../db/client.js';
 import { requireAuth } from '../auth/routes.js';
+import { blockedIdSet } from '../social/blocks.js';
+import {
+  EP_FALLBACK_MIN,
+  MOVIE_FALLBACK_MIN,
+  episodeRuntimeMin,
+  movieRuntimeMin,
+} from '../../lib/runtimeFallbacks.js';
+import { dayKeyParis, weekStartParis } from '../../lib/parisTime.js';
 
-// Runtimes de repli quand la donnée manque (mêmes hypothèses que le calcul du
-// profil). Exportés : réutilisés par le défi hebdo (social/routes.ts).
-export const EP_FALLBACK_MIN = 42;
-export const MOVIE_FALLBACK_MIN = 115;
+// Runtimes de repli centralisés dans lib/runtimeFallbacks.ts (mêmes valeurs et
+// même sémantique `runtime > 0` que le profil). Ré-exportés pour les
+// consommateurs historiques (défi hebdo de social/routes.ts).
+export { EP_FALLBACK_MIN, MOVIE_FALLBACK_MIN };
 
 const DAY = 86_400_000;
 const WEEKS = 12;
 
-// Clé de semaine (lundi) pour regrouper les visionnages.
+// Clé de semaine : lundi 00:00 EUROPE/PARIS (jamais l'heure locale du serveur
+// — un VPS en UTC décalerait les jours/semaines). Logique partagée avec la
+// gamification (lib/parisTime.ts).
 function weekStart(d: Date): number {
-  const t = new Date(d);
-  t.setHours(0, 0, 0, 0);
-  const day = (t.getDay() + 6) % 7; // lundi = 0
-  return t.getTime() - day * DAY;
+  return weekStartParis(d).getTime();
 }
 function dayKey(d: Date): string {
-  const t = new Date(d);
-  return `${t.getFullYear()}-${t.getMonth() + 1}-${t.getDate()}`;
+  return dayKeyParis(d);
 }
+// Libellé "j/m" d'un début de semaine, exprimé en Europe/Paris.
+const PARIS_LABEL = new Intl.DateTimeFormat('fr-FR', {
+  timeZone: 'Europe/Paris',
+  day: 'numeric',
+  month: 'numeric',
+});
 function topCounts(items: string[], limit: number): { name: string; count: number }[] {
   const m = new Map<string, number>();
   for (const it of items) {
@@ -84,7 +96,7 @@ export async function statsRoutes(app: FastifyInstance): Promise<void> {
     let epLast7d = 0;
     let showMinutesTotal = 0;
     for (const e of watchedEps) {
-      const min = e.episode.runtime ?? e.episode.show.media.runtime ?? EP_FALLBACK_MIN;
+      const min = episodeRuntimeMin(e.episode.runtime, e.episode.show.media.runtime);
       showMinutesTotal += min;
       const w = e.watchedAt as Date;
       if (now.getTime() - w.getTime() < 7 * DAY) epLast7d += 1;
@@ -122,7 +134,7 @@ export async function statsRoutes(app: FastifyInstance): Promise<void> {
     let mvLast7d = 0;
     let movieMinutesTotal = 0;
     for (const m of watchedMovies) {
-      const min = m.media.runtime ?? MOVIE_FALLBACK_MIN;
+      const min = movieRuntimeMin(m.media.runtime);
       movieMinutesTotal += min;
       const w = (m.completedAt ?? m.lastWatchedAt) as Date | null;
       if (!w) continue;
@@ -137,13 +149,15 @@ export async function statsRoutes(app: FastifyInstance): Promise<void> {
     }
 
     // Séries de semaines continues (même vides) pour un graphique régulier.
+    // On recule de lundi parisien en lundi parisien (pas de -7×24 h brut : une
+    // bascule DST décalerait les clés d'une heure et casserait les buckets).
     const weeks: number[] = [];
-    const base = weekStart(now);
-    for (let i = WEEKS - 1; i >= 0; i--) weeks.push(base - i * 7 * DAY);
-    const label = (ts: number) => {
-      const d = new Date(ts);
-      return `${d.getDate()}/${d.getMonth() + 1}`;
-    };
+    let cursor = weekStartParis(now);
+    for (let i = 0; i < WEEKS; i++) {
+      weeks.unshift(cursor.getTime());
+      cursor = weekStartParis(new Date(cursor.getTime() - DAY));
+    }
+    const label = (ts: number) => PARIS_LABEL.format(new Date(ts));
 
     return {
       series: {
@@ -173,16 +187,24 @@ export async function statsRoutes(app: FastifyInstance): Promise<void> {
   // indispensable pour rester rapide avec des bibliothèques à 20k épisodes.
   app.get('/api/stats/leaderboard', async (request) => {
     const userId = request.userId;
-    const following = await prisma.follow.findMany({
-      where: { followerId: userId },
-      select: { followingId: true },
-    });
-    const ids = [userId, ...following.map((f) => f.followingId)];
+    const [following, blockedIds] = await Promise.all([
+      prisma.follow.findMany({
+        where: { followerId: userId },
+        select: { followingId: true },
+      }),
+      // Blocage : les comptes que j'ai bloqués sortent de MON classement
+      // (même règle que gamification/routes.ts — ceinture-bretelles, bloquer
+      // désabonne déjà mais un vieux follow peut subsister).
+      blockedIdSet(userId),
+    ]);
+    const ids = [userId, ...following.map((f) => f.followingId).filter((id) => !blockedIds.has(id))];
 
     const [epRows, mvRows, users] = await Promise.all([
       prisma.$queryRaw<{ userId: string; minutes: bigint | number; count: bigint | number }[]>`
         SELECT ues.userId AS userId,
-               SUM(COALESCE(e.runtime, m.runtime, ${EP_FALLBACK_MIN})) AS minutes,
+               SUM(CASE WHEN e.runtime > 0 THEN e.runtime
+                        WHEN m.runtime > 0 THEN m.runtime
+                        ELSE ${EP_FALLBACK_MIN} END) AS minutes,
                COUNT(*) AS count
         FROM "UserEpisodeStatus" ues
         JOIN "Episode" e ON e.id = ues.episodeId
@@ -192,7 +214,7 @@ export async function statsRoutes(app: FastifyInstance): Promise<void> {
         GROUP BY ues.userId`,
       prisma.$queryRaw<{ userId: string; minutes: bigint | number; count: bigint | number }[]>`
         SELECT ums.userId AS userId,
-               SUM(COALESCE(m.runtime, ${MOVIE_FALLBACK_MIN})) AS minutes,
+               SUM(CASE WHEN m.runtime > 0 THEN m.runtime ELSE ${MOVIE_FALLBACK_MIN} END) AS minutes,
                COUNT(*) AS count
         FROM "UserMediaStatus" ums
         JOIN "Media" m ON m.id = ums.mediaId
@@ -253,7 +275,9 @@ export async function statsRoutes(app: FastifyInstance): Promise<void> {
       prisma.follow.count({ where: { followingId: userId } }),
       prisma.import.count({ where: { userId } }),
       prisma.$queryRaw<{ minutes: bigint | number | null }[]>`
-        SELECT SUM(COALESCE(e.runtime, m.runtime, ${EP_FALLBACK_MIN})) AS minutes
+        SELECT SUM(CASE WHEN e.runtime > 0 THEN e.runtime
+                        WHEN m.runtime > 0 THEN m.runtime
+                        ELSE ${EP_FALLBACK_MIN} END) AS minutes
         FROM "UserEpisodeStatus" ues
         JOIN "Episode" e ON e.id = ues.episodeId
         JOIN "Show" s ON s.id = e.showId

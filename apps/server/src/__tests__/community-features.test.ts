@@ -270,6 +270,10 @@ describe('Feature 2 — « Tes amis ont adoré »', () => {
 
 describe('Feature 3 — défi hebdo', () => {
   it('minutes depuis lundi 00:00 Europe/Paris, tri décroissant, zéros inclus', async () => {
+    // Le test précédent a laissé Dave BLOQUÉ par Alice — or le défi hebdo
+    // exclut désormais les comptes bloqués (cf. audit-social-fixes.test.ts).
+    // On lève le blocage pour retrouver le scénario nominal (Dave suivi, 0 min).
+    await db.block.deleteMany({ where: { blockerId: uid('Alice') } });
     // Alice regarde l'épisode (runtime 50) cette semaine.
     await db.watchEvent.create({
       data: {
