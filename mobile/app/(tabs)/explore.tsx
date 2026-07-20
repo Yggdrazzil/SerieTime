@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, TextInput, ScrollView, StyleSheet, Pressable, Image, ActivityIndicator, Keyboard, Platform } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import type { Href } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -48,6 +48,19 @@ export default function ExploreScreen() {
 
 function ExploreScreenInner() {
   const insets = useSafeAreaInsets();
+  const qc = useQueryClient();
+  // Retour sur l'Explorer (fiche fermée, retour arrière…) : les résultats de
+  // recherche affichés sont RE-TIRÉS — sans ça, les caches ['search'] /
+  // ['games','search'] gardaient l'`inLibrary` d'avant et un film ajouté/coché
+  // depuis sa fiche revenait sans sa coche (impression de non-sauvegarde).
+  // `invalidateQueries` refait partir immédiatement les requêtes actives.
+  useFocusEffect(
+    useCallback(() => {
+      qc.invalidateQueries({ queryKey: ['search'] });
+      qc.invalidateQueries({ queryKey: ['games', 'search'] });
+      qc.invalidateQueries({ queryKey: ['users', 'search'] });
+    }, [qc]),
+  );
   const [query, setQuery] = useState('');
   const [focused, setFocused] = useState(false);
   const [tab, setTab] = useState<'media' | 'users' | 'games'>('media');

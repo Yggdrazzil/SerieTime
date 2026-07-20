@@ -6,7 +6,7 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
-Dernière mise à jour : **2026-07-17** (Claude) — Icône maskable aérée (fond bleu visible comme au multitâche), fiches série/film fluides au défilement (en-tête en surimpression), correctif racine du flash de l'historique sur l'onglet Séries
+Dernière mise à jour : **2026-07-17** (Claude) — Recherche Explorer synchronisée en temps réel au retour d'une fiche (coche « ajouté » à jour pour séries, films et jeux)
 
 ---
 
@@ -79,6 +79,21 @@ app mobile **React Native + Expo** (`mobile/`, npm) + serveur **Fastify + Prisma
 6. Publication native optionnelle (EAS Build APK, puis stores).
 
 ## Journal des modifications
+
+### 2026-07-17 — Claude : recherche Explorer synchronisée au retour de la fiche
+- **Bug** : après une recherche, ouvrir une fiche (film/série/jeu), l'ajouter
+  et la cocher « Vu », puis revenir → le résultat de recherche ne montrait pas
+  la coche « ajouté » (impression de non-sauvegarde). Cause : les caches
+  React Query `['search', q]` / `['games','search', q]` n'étaient jamais
+  invalidés par les actions faites sur la fiche — l'`inLibrary` affiché était
+  celui d'avant.
+- **Correctif** : au retour du focus sur l'Explorer (`useFocusEffect`), les
+  caches de recherche (médias, jeux, utilisateurs) sont invalidés — les
+  requêtes actives repartent immédiatement et la liste affichée se met à jour
+  en ~une demi-seconde, dans les deux sens (ajout comme retrait).
+- Banc Playwright 3/3 sur le parcours exact du bug : recherche « Alien » →
+  fiche → « AJOUTER LE FILM » → coche « Vu » → retour → le + a laissé place
+  à la coche, sans manipulation.
 
 ### 2026-07-17 — Claude : thème Sombre — TOUT le jaune unifié sur le jaune du logo
 - Suite de la demande pastilles : plusieurs jaunes cohabitaient en Sombre
