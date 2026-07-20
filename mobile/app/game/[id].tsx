@@ -12,6 +12,7 @@ import { Loading, LoadError } from '@/components/ui';
 import { Pop, PressableScale, SlideUpBar } from '@/components/anim';
 import { shareMedia } from '@/lib/share';
 import { FicheSkeleton } from '@/components/FicheSkeleton';
+import { StatusLine } from '@/components/StatusLine';
 import { ReportModal } from '@/components/ReportModal';
 import { shortDateFr } from '@/lib/format';
 import { useReduceMotion } from '@/lib/useReduceMotion';
@@ -388,42 +389,19 @@ export default function GameDetail() {
         </View>
 
         {/* Suivi REMONTÉ juste sous la jaquette/titre (avant le trailer) :
-            l'utilisateur coche son statut sans scroller. */}
+            bloc COMPACT (demande produit 2026-07-20) — petit titre discret et
+            les 4 statuts sur UNE ligne (StatusLine partagée avec show/[id]). */}
         <View style={[styles.section, styles.trackingCard]}>
-          <View style={styles.sectionHeading}>
-            <View style={styles.sectionIcon}>
-              <Feather name="activity" size={18} color={COLORS.primary} />
-            </View>
-            <View style={styles.sectionHeadingCopy}>
-              <Text style={styles.sectionTitle}>Suivi</Text>
-              <Text style={styles.sectionSubtitle}>Où en es-tu dans cette aventure ?</Text>
-            </View>
-          </View>
-          <View style={styles.statusRow}>
-            {GAME_STATUSES.map((s) => (
-              <Pressable
-                key={s}
-                style={({ pressed }) => [
-                  styles.statusChip,
-                  game.userStatus === s && styles.statusChipSel,
-                  pressed && styles.statusChipPressed,
-                  trackingBusy && styles.controlDisabled,
-                ]}
-                // Re-taper le statut actif le DÉSÉLECTIONNE (retrait du suivi).
-                onPress={() => (game.userStatus === s ? removeFromTracking() : changeStatus(s))}
-                disabled={trackingBusy}
-                accessibilityRole="button"
-                accessibilityLabel={game.userStatus === s ? 'Retirer le statut ' + STATUS_LABELS[s] : 'Choisir le statut ' + STATUS_LABELS[s]}
-                accessibilityHint={game.userStatus === s ? 'Retire ce jeu de ton suivi' : undefined}
-                accessibilityState={{ selected: game.userStatus === s, disabled: trackingBusy, busy: trackingBusy }}
-              >
-                {game.userStatus === s ? <Feather name="check" size={15} color={COLORS.onPrimary} /> : null}
-                <Text style={[styles.statusChipText, game.userStatus === s && styles.statusChipTextSel]}>
-                  {STATUS_LABELS[s]}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
+          <Text style={styles.trackingTitle}>Suivi</Text>
+          <StatusLine
+            options={GAME_STATUSES.map((s) => ({ value: s, label: STATUS_LABELS[s] }))}
+            value={game.userStatus}
+            // Re-taper le statut actif le DÉSÉLECTIONNE (retrait du suivi).
+            onChange={(v) => (v === null ? removeFromTracking() : changeStatus(v as GameStatus))}
+            accessibilityLabel="Statut de suivi du jeu"
+            disabled={trackingBusy}
+            allowDeselect
+          />
           {/* « Je possède » : interrupteur INDÉPENDANT du statut (Game Pass,
               collection…) — même style que les toggles des Paramètres. */}
           <OwnedToggle
@@ -636,13 +614,7 @@ function OwnedToggle({ on, disabled, onToggle }: { on: boolean; disabled?: boole
 
   return (
     <View style={[styles.ownedRow, disabled && styles.controlDisabled]}>
-      <View style={styles.ownedIcon}>
-        <Feather name="archive" size={19} color={COLORS.primary} />
-      </View>
-      <View style={styles.ownedCopy}>
-        <Text style={styles.ownedLabel}>Je possède</Text>
-        <Text style={styles.ownedHint}>Indépendant de ton statut de suivi</Text>
-      </View>
+      <Text style={styles.ownedLabel}>Je possède</Text>
       <Pressable
         style={styles.toggleTarget}
         onPress={() => onToggle(!on)}
@@ -1686,75 +1658,34 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     lineHeight: 17,
   },
-  statusRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: SPACE.xs,
-  },
-  statusChip: {
-    minHeight: SIZES.touch,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: SPACE.xxs,
-    paddingHorizontal: SPACE.sm,
-    paddingVertical: SPACE.xs,
-    borderRadius: RADIUS.pill,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.surfaceMuted,
-  },
-  statusChipSel: {
-    borderColor: COLORS.primary,
-    backgroundColor: COLORS.primary,
-  },
-  statusChipPressed: {
-    opacity: 0.78,
-  },
-  statusChipText: {
-    color: COLORS.text,
+  // Petit titre discret du bloc suivi compact.
+  trackingTitle: {
+    color: COLORS.textMuted,
     fontFamily: FONTS.bold,
-    fontSize: 13.5,
-  },
-  statusChipTextSel: {
-    color: COLORS.onPrimary,
+    fontSize: 13,
+    lineHeight: 17,
+    marginBottom: SPACE.xs,
   },
   controlDisabled: {
     opacity: 0.48,
   },
+  // « Je possède » compact : une seule ligne label + interrupteur.
   ownedRow: {
-    minHeight: 64,
-    marginTop: SPACE.md,
-    paddingTop: SPACE.md,
+    minHeight: SIZES.touch,
+    marginTop: SPACE.sm,
+    paddingTop: SPACE.sm,
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACE.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: COLORS.borderLight,
   },
-  ownedIcon: {
-    width: SIZES.touch,
-    height: SIZES.touch,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: RADIUS.control,
-    backgroundColor: COLORS.primarySoft,
-  },
-  ownedCopy: {
+  ownedLabel: {
     flex: 1,
     minWidth: 0,
-  },
-  ownedLabel: {
     color: COLORS.text,
     fontFamily: FONTS.bold,
     fontSize: 14,
-  },
-  ownedHint: {
-    marginTop: 2,
-    color: COLORS.textMuted,
-    fontFamily: FONTS.regular,
-    fontSize: 11.5,
-    lineHeight: 15,
   },
   toggleTarget: {
     width: 60,

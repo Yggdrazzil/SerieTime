@@ -8,7 +8,7 @@ import { goBack } from '@/lib/nav';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, tmdbImage } from '@/lib/api';
-import type { EpisodeDto, MediaDto } from '@/lib/types';
+import type { EpisodeDto, MediaDto, UserMediaState } from '@/lib/types';
 import { episodeCode } from '@/lib/format';
 import { COLORS, RADIUS, SHADOW, FONTS, STATUS_BAR, YELLOW_TRACK, SIZES, SPACE } from '@/lib/theme';
 import { TopTabs, CheckCircle, Loading, LoadError, EmptyState } from '@/components/ui';
@@ -19,13 +19,28 @@ import { EpisodeSheet, type EpisodeSheetTarget } from '@/components/EpisodeSheet
 import { genresFr, statusFr, airDayFr, compactCount } from '@/lib/frMedia';
 import { FicheSkeleton } from '@/components/FicheSkeleton';
 import { ReportModal } from '@/components/ReportModal';
+import { StatusLine } from '@/components/StatusLine';
 import { useReduceMotion } from '@/lib/useReduceMotion';
 
 const INTEREST = ['LES ACTEURS', 'LA PRÉMISSE', 'LES CRÉATEURS', 'LA CHAÎNE/LA PLATEFORME', "LA FRANCHISE OU L'UNIVERS", 'AUTRE'];
 const STATUS_LABELS: Record<string, string> = {
-  watching: 'En cours', completed: 'Terminée', watchlist: 'Regarder plus tard',
+  watching: 'En cours', completed: 'Terminée', watchlist: 'À voir',
   paused: 'En pause', abandoned: 'Arrêtée', not_started: 'Pas commencée',
 };
+// Ligne de suivi (StatusLine) : statuts proposés par type de fiche —
+// valeurs EXACTES acceptées par le serveur (shows/routes.ts : POST /status
+// accepte watching|completed|watchlist|paused|abandoned|not_started ;
+// movies/routes.ts : /watched → completed, /unwatched et /watchlist → watchlist).
+const SHOW_STATUS_OPTIONS = [
+  { value: 'watchlist', label: 'À voir' },
+  { value: 'watching', label: 'En cours' },
+  { value: 'completed', label: 'Terminée' },
+  { value: 'abandoned', label: 'Arrêtée' },
+];
+const MOVIE_STATUS_OPTIONS = [
+  { value: 'watchlist', label: 'À voir' },
+  { value: 'completed', label: 'Vu' },
+];
 
 export default function ShowDetail() {
   const { id, type } = useLocalSearchParams<{ id: string; type?: string }>();
@@ -129,7 +144,7 @@ export default function ShowDetail() {
   const watchLater = useMutation({
     mutationFn: () => api.post(isMovie ? '/api/movies/' + id + '/watchlist' : '/api/shows/' + id + '/watchlater'),
     onMutate: () => patchMedia({ userStatus: 'watchlist' }),
-    onSuccess: () => showToast('Regarder plus tard'),
+    onSuccess: () => showToast('À voir'),
     onError: (_e, _v, ctx) => { rollback(ctx); showToast('Modification impossible. Réessaie.'); },
     onSettled: refresh,
   });
@@ -151,7 +166,31 @@ export default function ShowDetail() {
     onError: (_e, _v, ctx) => { rollback(ctx); showToast('Suppression impossible. Réessaie.'); },
     onSettled: refresh,
   });
-  const trackingBusy = favorite.isPending || markMovie.isPending || follow.isPending || watchLater.isPending || abandon.isPending || removeTracking.isPending;
+  // Statut libre d'une SÉRIE (ligne de suivi) : POST /api/shows/:id/status
+  // pour « En cours » / « Terminée » ; « À voir » et « Arrêtée » passent par
+  // les mutations dédiées (watchLater/abandon) qui créent l'événement social.
+  const setShowStatus = useMutation({
+    mutationFn: (status: UserMediaState) => api.post('/api/shows/' + id + '/status', { status }),
+    onMutate: (status: UserMediaState) => patchMedia({ userStatus: status }),
+    onError: (_e, _v, ctx) => { rollback(ctx); showToast('Modification impossible. Réessaie.'); },
+    onSettled: refresh,
+  });
+  const trackingBusy = favorite.isPending || markMovie.isPending || follow.isPending || watchLater.isPending || abandon.isPending || removeTracking.isPending || setShowStatus.isPending;
+  // Ligne de suivi (composant partagé avec la fiche jeu) :
+  // — série/animé : pas de désélection (DELETE /tracking efface aussi
+  //   l'historique d'épisodes → réservé à « Supprimer la série » du menu) ;
+  // — film : re-taper le statut actif retire le film (même effet que
+  //   « Supprimer le film » du menu, sans perte d'historique).
+  const changeStatus = (value: string | null) => {
+    if (isMovie) {
+      if (value === null) removeTracking.mutate();
+      else markMovie.mutate(value === 'completed');
+      return;
+    }
+    if (value === 'watchlist') watchLater.mutate();
+    else if (value === 'abandoned') abandon.mutate();
+    else if (value === 'watching' || value === 'completed') setShowStatus.mutate(value);
+  };
   const share = () => {
     const message = `Regarde « ${detail.data?.media?.title} » — suivi avec PlotTime 📺`;
     const url = typeof window !== 'undefined' ? window.location.href : undefined;
@@ -238,6 +277,22 @@ export default function ShowDetail() {
     return { pct: kind === 'completed' ? 100 : Math.min(100, (watched / aired) * 100), ...STATUS_BAR[kind] };
   })();
 
+  // Ligne de suivi (même présentation que la fiche jeu) : première carte du
+  // corps de la fiche, juste sous la bannière — le statut se règle sans scroller.
+  const trackingLine = (
+    <View style={styles.section}>
+      <Text style={styles.trackingTitle}>Suivi</Text>
+      <StatusLine
+        options={isMovie ? MOVIE_STATUS_OPTIONS : SHOW_STATUS_OPTIONS}
+        value={media.userStatus ?? null}
+        onChange={changeStatus}
+        accessibilityLabel={isMovie ? 'Statut de suivi du film' : 'Statut de suivi de la série'}
+        disabled={trackingBusy}
+        allowDeselect={isMovie}
+      />
+    </View>
+  );
+
   return (
     <Pop style={styles.screen}>
       <View style={styles.canvas}>
@@ -248,15 +303,14 @@ export default function ShowDetail() {
           media={media}
           detail={detail.data}
           mediaId={String(id)}
-          onToggle={trackingBusy ? undefined : () => markMovie.mutate(media.userStatus !== 'completed')}
-          disabled={trackingBusy}
+          tracking={trackingLine}
           onScroll={onScroll}
           topPad={topPad}
         />
       ) : (
         <FadeSwitch trigger={tab}>
           {tab === 'À PROPOS' ? (
-            <AboutTab media={media} detail={detail.data} mediaId={String(id)} interest={interest} setInterest={setInterest} onScroll={onScroll} topPad={topPad} />
+            <AboutTab media={media} detail={detail.data} mediaId={String(id)} tracking={trackingLine} interest={interest} setInterest={setInterest} onScroll={onScroll} topPad={topPad} />
           ) : (
             <EpisodesTab showId={String(id)} title={media.title} posterPath={media.posterPath} onChange={refresh} onScroll={onScroll} topPad={topPad} />
           )}
@@ -404,15 +458,9 @@ export default function ShowDetail() {
             disabled={trackingBusy}
           />
           <SheetItem icon="plus-square" label="Ajouter à une liste" onPress={() => { setMenu(false); setListsOpen(true); }} />
-          {!isMovie ? (
-            <SheetItem icon="clock" label="Regarder plus tard" onPress={() => { setMenu(false); watchLater.mutate(); }} disabled={trackingBusy} />
-          ) : null}
-          {/* « Terminée » incluse : une série finie dont une nouvelle saison sort
-              revient dans « À voir » — on doit pouvoir l'arrêter sans la
-              supprimer (l'historique de visionnage est conservé). */}
-          {!isMovie && (media.userStatus === 'watching' || media.userStatus === 'paused' || media.userStatus === 'completed') ? (
-            <SheetItem icon="x-circle" label="Arrêter de regarder" onPress={() => { setMenu(false); abandon.mutate(); }} disabled={trackingBusy} />
-          ) : null}
+          {/* « Regarder plus tard » et « Arrêter de regarder » ont quitté le
+              menu : la ligne de suivi (À voir / Arrêtée) fait strictement la
+              même chose, directement sur la fiche. */}
           {isFollowed ? (
             <SheetItem
               icon="minus-square"
@@ -1250,9 +1298,10 @@ function yearRange(media: MediaDto, endYear?: number | null) {
 // Onglet « À propos » — ordre des sections calqué sur la fiche TV Time :
 // où regarder, question d'intérêt, similaire à, informations (méta + étoiles +
 // synopsis + rangées), distribution, également regardé, notes, commentaires.
-function AboutTab({ media, detail, mediaId, interest, setInterest, onScroll, topPad }: any) {
+function AboutTab({ media, detail, mediaId, tracking, interest, setInterest, onScroll, topPad }: any) {
   return (
     <ScrollView onScroll={onScroll} scrollEventThrottle={16} contentContainerStyle={{ paddingTop: topPad, paddingBottom: 90 }}>
+      {tracking}
       <WhereToWatch providers={detail.providers ?? []} />
 
       <View style={styles.section}>
@@ -1293,18 +1342,12 @@ function AboutTab({ media, detail, mediaId, interest, setInterest, onScroll, top
   );
 }
 
-function MovieBody({ media, detail, mediaId, onToggle, disabled, onScroll, topPad }: any) {
-  const seen = media.userStatus === 'completed';
+function MovieBody({ media, detail, mediaId, tracking, onScroll, topPad }: any) {
+  // La ligne de suivi (À voir / Vu) remplace l'ancienne rangée « Vu / Pas vu »
+  // à coche : même mutation (watched/unwatched), présentation harmonisée.
   return (
     <ScrollView onScroll={onScroll} scrollEventThrottle={16} contentContainerStyle={{ paddingTop: topPad, paddingBottom: 90 }}>
-      <View style={[styles.section, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Feather name="eye" size={18} color={COLORS.black} />
-          <Text style={{ color: COLORS.text, fontFamily: FONTS.regular, fontSize: 14 }}>{seen ? 'Vu' : 'Pas vu'}</Text>
-        </View>
-        <CheckCircle size={44} checked={seen} onPress={disabled ? undefined : onToggle} />
-      </View>
-
+      {tracking}
       <WhereToWatch providers={detail.providers ?? []} />
 
       {detail.recommendations?.length ? <SimilarTo item={detail.recommendations[0]} isMovie /> : null}
@@ -1841,6 +1884,14 @@ const styles = StyleSheet.create({
     marginBottom: SPACE.sm,
   },
   sectionHeadRowTight: { minHeight: 32, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  // Petit titre discret de la ligne de suivi (même recette que la fiche jeu).
+  trackingTitle: {
+    color: COLORS.textMuted,
+    fontFamily: FONTS.bold,
+    fontSize: 13,
+    lineHeight: 17,
+    marginBottom: SPACE.xs,
+  },
   sectionTitle: { color: COLORS.text, fontSize: 17, lineHeight: 22, fontFamily: FONTS.extraBold },
   muted: { color: COLORS.textMuted, fontFamily: FONTS.regular, fontSize: 13.5, lineHeight: 20, marginTop: SPACE.xs },
   overview: { color: COLORS.text, fontFamily: FONTS.regular, fontSize: 14, lineHeight: 21, marginTop: SPACE.sm },

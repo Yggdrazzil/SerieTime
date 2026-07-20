@@ -91,6 +91,33 @@ la migration visuelle doit encore être exécutée sans modifier la logique mét
 
 ## Journal des modifications
 
+### 2026-07-21 — Claude/Benjamin : ligne de suivi compacte sur toutes les fiches
+- **Nouveau composant partagé `mobile/components/StatusLine.tsx`** : les statuts
+  de suivi tiennent sur UNE seule ligne de petites pilules (hauteur 34,
+  `RADIUS.pill`, fond `surfaceMuted`, sélection `primary`/`onPrimary`,
+  `FONTS.semiBold`) ; ScrollView horizontale sans indicateur si l'écran est
+  étroit ; a11y `radiogroup`/`radio` + état `checked`, hitSlop vertical pour
+  garder une cible ~44.
+- **Fiche jeu (`app/game/[id].tsx`)** : le gros bloc « Suivi » (titre +
+  sous-titre + 4 grosses pilules sur 2 lignes) est remplacé par un petit titre
+  discret + StatusLine ; « Je possède » devient une seule ligne label +
+  interrupteur (sans icône ni sous-titre). Comportements inchangés
+  (désélection = retrait du suivi, feuille temps de jeu, verrou anti double-tap).
+- **Fiches série/film/animé (`app/show/[id].tsx`)** : même ligne de suivi en
+  PREMIÈRE carte du corps (haut de « À propos » côté série, haut de la fiche
+  côté film). Série/animé : À voir (`POST /watchlater`) / En cours
+  (`POST /status watching`) / Terminée (`POST /status completed`) / Arrêtée
+  (`POST /abandon`) — pas de désélection par re-tap (le DELETE `/tracking`
+  effacerait aussi l'historique d'épisodes ; « Supprimer la série » reste dans
+  le menu). Film : À voir (`POST /unwatched`) / Vu (`POST /watched`),
+  re-taper le statut actif retire le film (`DELETE /tracking`). Mises à jour
+  optimistes + invalidations existantes (`shows`, `movies`, `profile`,
+  `gamification`, `search`).
+- **Doublons retirés** : rangée « Vu / Pas vu » à coche de la fiche film
+  (remplacée par la ligne) ; entrées de menu « Regarder plus tard » et
+  « Arrêter de regarder » (strictement identiques aux pilules À voir/Arrêtée).
+  Libellé `watchlist` harmonisé : « À voir » (menu + toast).
+
 ### 2026-07-20 — Claude/Étienne : Glass web VRAIMENT réparé (superposition + pilule opaque)
 - **Cause racine identifiée** (reproduction locale Chromium/Playwright sur
   l'export web) : sur web, react-native-screens est **désactivé par défaut**
