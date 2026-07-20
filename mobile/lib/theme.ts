@@ -1,5 +1,6 @@
-// Socle visuel PlotTime — identité Prisme et thèmes Clair / Sombre / Sunset / Nuit.
-import { Appearance, Platform } from 'react-native';
+// Socle visuel PlotTime — identité Prisme et thèmes Clair / Sombre / Sunset /
+// Nuit / Glass.
+import { Appearance, Platform, type ViewStyle } from 'react-native';
 
 // Police unique de l'app (native + web) : Mulish — sans-serif humaniste,
 // choisie pour rester lisible dans les interfaces denses comme dans les grands
@@ -23,8 +24,8 @@ export const FONTS = {
 // Tout style qui utilise COLORS.* devient donc thémable sans être réécrit.
 // ---------------------------------------------------------------------------
 
-export type ThemePreference = 'system' | 'light' | 'dark' | 'sunset' | 'midnight';
-export type ThemeName = 'light' | 'dark' | 'sunset' | 'midnight';
+export type ThemePreference = 'system' | 'light' | 'dark' | 'sunset' | 'midnight' | 'glass';
+export type ThemeName = 'light' | 'dark' | 'sunset' | 'midnight' | 'glass';
 
 const LIGHT = {
   bg: '#F7F5FA',
@@ -217,9 +218,63 @@ const MIDNIGHT: Palette = {
   imagePlaceholder: '#221B8A',
 };
 
+// Glass : matériau « verre liquide » (translucidité, reflets, flou d'arrière-
+// plan) inspiré du langage Liquid Glass d'Apple (WWDC 2025), transposé à
+// l'identité PlotTime — accents violet/jaune inchangés, AUCUNE réplique
+// d'écran Apple. Les surfaces sont des blancs translucides posés sur le
+// dégradé pastel peint par `app/+html.tsx` (web) ; le flou vient de
+// GLASS_BLUR ci-dessous. Les textes/accents restent opaques pour la
+// lisibilité (le verre, c'est les surfaces, pas le contenu).
+const GLASS: Palette = {
+  // Voiles givrés : plusieurs écrans repeignent bg/white PAR-DESSUS le dégradé
+  // du document, et ces couches S'EMPILENT (contentStyle du Stack + fond
+  // d'écran) — les alphas sont calibrés pour qu'après empilement le dégradé
+  // reste nettement visible (≈ 0,65 de voile cumulé au maximum).
+  bg: 'rgba(246,248,253,0.35)',
+  pageMuted: 'rgba(238,242,250,0.30)',
+  surface: 'rgba(255,255,255,0.55)',
+  surfaceMuted: 'rgba(255,255,255,0.34)',
+  text: '#1F1D2B',
+  textMuted: 'rgba(31,29,43,0.64)',
+  textSoft: 'rgba(31,29,43,0.45)',
+  // Arête spéculaire : bord blanc lumineux, signature du verre.
+  border: 'rgba(255,255,255,0.78)',
+  borderLight: 'rgba(255,255,255,0.55)',
+  primary: '#6D4ED1',
+  onPrimary: '#FFFFFF',
+  primarySoft: 'rgba(109,78,209,0.14)',
+  secondary: '#E14A9B',
+  tertiary: '#D9A22B',
+  success: '#27824F',
+  warning: '#9C5C0C',
+  danger: '#C0365C',
+  info: '#2A66A8',
+  focus: '#6D4ED1',
+  yellow: '#F3C54F',
+  yellowSoft: 'rgba(243,197,79,0.30)',
+  black: '#1F1D2B',
+  white: 'rgba(255,255,255,0.45)',
+  pillGrey: 'rgba(31,29,43,0.55)',
+  chipGrey: 'rgba(255,255,255,0.32)',
+  chipSelected: 'rgba(255,255,255,0.70)',
+  blue: '#2A66A8',
+  red: '#C0365C',
+  green: '#27824F',
+  checkBg: 'rgba(255,255,255,0.40)',
+  overlay: 'rgba(25,22,40,0.35)',
+  provider: '#6D4ED1',
+  onAccent: '#000000',
+  pillBg: '#6D4ED1',
+  pillFg: '#FFFFFF',
+  notif: '#E14A9B',
+  plusCount: '#E14A9B',
+  navActive: '#6D4ED1',
+  imagePlaceholder: 'rgba(255,255,255,0.45)',
+};
+
 // NB : si un `bg` change ici, reporter la valeur dans le script pré-peinture
 // de `app/+html.tsx` (barres système Android teintées avant le premier rendu).
-const PALETTES: Record<ThemeName, Palette> = { light: LIGHT, dark: DARK, sunset: SUNSET, midnight: MIDNIGHT };
+const PALETTES: Record<ThemeName, Palette> = { light: LIGHT, dark: DARK, sunset: SUNSET, midnight: MIDNIGHT, glass: GLASS };
 
 const STORAGE_KEY = 'serietime-theme';
 
@@ -231,7 +286,7 @@ const STORAGE_KEY = 'serietime-theme';
 export function getThemePreference(): ThemePreference {
   if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
     const v = localStorage.getItem(STORAGE_KEY);
-    if (v === 'light' || v === 'dark' || v === 'sunset' || v === 'midnight' || v === 'system') return v;
+    if (v === 'light' || v === 'dark' || v === 'sunset' || v === 'midnight' || v === 'glass' || v === 'system') return v;
   }
   return 'system';
 }
@@ -255,6 +310,19 @@ export const IS_DARK = THEME === 'dark' || THEME === 'midnight';
 
 export const COLORS: Palette = { ...PALETTES[THEME] };
 
+// Thème Glass : flou d'arrière-plan des surfaces (backdrop-filter, web
+// uniquement — react-native-web ≥ 0.21 le supporte et le préfixe pour Safari).
+// À étaler dans les styles des cartes, barres et feuilles : objet VIDE pour
+// les autres thèmes et sur natif, donc strictement sans effet ailleurs.
+export const GLASS_BLUR = (THEME === 'glass' && Platform.OS === 'web'
+  ? { backdropFilter: 'blur(18px) saturate(1.6)' }
+  : {}) as unknown as ViewStyle;
+
+// Couleur SOLIDE pour les metas theme-color (les barres système n'acceptent
+// pas d'alpha) : Glass a des fonds translucides, on publie le rendu voilé du
+// haut de son dégradé (aligné sur le script pré-peinture de `app/+html.tsx`).
+export const THEME_COLOR_META = THEME === 'glass' ? '#DCE4F8' : PALETTES[THEME].bg;
+
 // Web : applique une couleur à TOUS les metas theme-color. Il y en a trois
 // (un sans `media` + un par variante `prefers-color-scheme`) : en PWA
 // installée, Chrome/Android choisit la barre système via le meta dont le
@@ -266,8 +334,8 @@ export function setThemeColorMeta(color: string): void {
   document.querySelectorAll('meta[name="theme-color"]').forEach((m) => m.setAttribute('content', color));
 }
 export function currentThemeColorMeta(): string {
-  if (typeof document === 'undefined') return PALETTES[THEME].bg;
-  return document.querySelector('meta[name="theme-color"]')?.getAttribute('content') ?? PALETTES[THEME].bg;
+  if (typeof document === 'undefined') return THEME_COLOR_META;
+  return document.querySelector('meta[name="theme-color"]')?.getAttribute('content') ?? THEME_COLOR_META;
 }
 
 // Enregistre la préférence puis recharge la web app pour appliquer la palette

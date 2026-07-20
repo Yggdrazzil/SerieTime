@@ -1,16 +1,18 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Modal, TextInput, ActivityIndicator, Animated, Easing, Platform, Linking, Alert, Share } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Pressable, Modal, TextInput, ActivityIndicator, Animated, Easing, Platform, Linking, Alert, Share } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '@/lib/api';
 import { useAppStore } from '@/lib/store';
-import { COLORS, FONTS, RADIUS, SHADOW, SIZES, SPACE, applyThemePreference, getThemePreference, type ThemePreference } from '@/lib/theme';
+import { COLORS, FONTS, GLASS_BLUR, RADIUS, SHADOW, SIZES, SPACE, applyThemePreference, getThemePreference, type ThemePreference } from '@/lib/theme';
 import { ScreenShell, ScreenHeader, SectionHeader, SegmentedFilter, PrismeCard, IconAction } from '@/components/prisme';
 import { goBack } from '@/lib/nav';
 import { FadeSwitch, PopIn } from '@/components/anim';
 import { useReduceMotion } from '@/lib/useReduceMotion';
 import { ssoWebAvailable, initGoogleButton, discordLogin } from '@/lib/sso';
+import { COUNTRIES, countryName } from '@/lib/countries';
 
 const NATIVE = Platform.OS !== 'web';
 
@@ -34,10 +36,9 @@ export default function Settings() {
   const [tab, setTab] = useState<Tab>('compte');
   return (
     <ScreenShell scroll contentContainerStyle={styles.content}>
+      {/* En-tête volontairement sobre (retour Étienne 2026-07-20) : titre seul. */}
       <ScreenHeader
-        eyebrow="Réglages"
         title="Paramètres"
-        subtitle="Compte, affichage et données personnelles."
         leading={<IconAction icon="chevron-left" label="Retour" onPress={() => goBack('/profile')} />}
       />
       <SegmentedFilter options={TAB_OPTIONS} value={tab} onChange={setTab} accessibilityLabel="Filtrer les paramètres" />
@@ -54,15 +55,18 @@ function AccountTab() {
   const { user, logout } = useAppStore();
   const [pwOpen, setPwOpen] = useState(false);
   const [delOpen, setDelOpen] = useState(false);
+  const [nameOpen, setNameOpen] = useState(false);
+  const [countryOpen, setCountryOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   // Nom d'utilisateur = nom d'affichage COURANT (source : profil serveur).
   // Le store local est figé à la connexion : après « Modifier le profil »,
   // il affichait encore l'ancien nom.
   const profileQ = useQuery({
     queryKey: ['profile'],
-    queryFn: () => api.get<{ user: { displayName?: string } }>('/api/profile'),
+    queryFn: () => api.get<{ user: { displayName?: string; countryCode?: string } }>('/api/profile'),
   });
   const displayName = profileQ.data?.user?.displayName ?? user?.displayName ?? '';
+  const countryCode = profileQ.data?.user?.countryCode ?? 'FR';
 
   // Exporter : télécharge un JSON de toutes ses données (web) / partage (natif).
   const exportData = async () => {
@@ -101,6 +105,10 @@ function AccountTab() {
         <Field label="Nom d'utilisateur" value={displayName} accent />
         <Field label="Adresse e-mail" value={user?.email || '—'} accent />
         <Field label="Identifiant utilisateur" value={user?.id ?? ''} />
+        {/* Nom d'affichage et pays édités ICI (déplacés depuis « Modifier le
+            profil », demande produit 2026-07-20). */}
+        <Row label="Modifier le nom d'affichage" onPress={() => setNameOpen(true)} />
+        <RowWithValue label="Pays" value={countryName(countryCode) ?? countryCode} onPress={() => setCountryOpen(true)} />
         <Row label="Modifier le mot de passe" onPress={() => setPwOpen(true)} />
       </Section>
 
@@ -135,8 +143,130 @@ function AccountTab() {
       </PrismeCard>
 
       {pwOpen ? <PasswordModal onClose={() => setPwOpen(false)} /> : null}
+      {nameOpen ? <DisplayNameModal current={displayName} onClose={() => setNameOpen(false)} /> : null}
+      {countryOpen ? <CountryModal current={countryCode} onClose={() => setCountryOpen(false)} /> : null}
       {delOpen ? <DeleteAccountModal onClose={() => setDelOpen(false)} onDeleted={logout} /> : null}
     </>
+  );
+}
+
+// Changement du nom d'affichage : le pseudo doit être DISPONIBLE (unique,
+// vérifié côté serveur — 409 display_name_taken sinon). Chiffres et
+// caractères spéciaux autorisés.
+function DisplayNameModal({ current, onClose }: { current: string; onClose: () => void }) {
+  const qc = useQueryClient();
+  const [name, setName] = useState(current);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+  const mut = useMutation({
+    mutationFn: (displayName: string) => api.post<{ user: { displayName: string } }>('/api/profile', { displayName }),
+    onSuccess: (res) => {
+      // Le store local (en-têtes, Paramètres…) suit le nouveau nom immédiatement.
+      useAppStore.setState((st) => ({ user: st.user ? { ...st.user, displayName: res.user.displayName } : st.user }));
+      qc.invalidateQueries({ queryKey: ['profile'] });
+      setDone(true);
+      setTimeout(onClose, 1200);
+    },
+    onError: (e: unknown) =>
+      setError(
+        e instanceof ApiError && e.code === 'display_name_taken'
+          ? 'Ce nom est déjà utilisé par quelqu’un d’autre.'
+          : e instanceof ApiError && e.code === 'validation_error'
+            ? 'Le nom doit faire entre 1 et 80 caractères.'
+            : 'Impossible de modifier le nom. Réessaie.',
+      ),
+  });
+  const trimmed = name.trim();
+  const canSubmit = trimmed.length > 0 && trimmed !== current && !mut.isPending;
+  return (
+    <Sheet title="Modifier le nom d'affichage" onClose={onClose}>
+      {done ? (
+        <Text style={styles.okMsg}>Nom d’affichage modifié ✓</Text>
+      ) : (
+        <>
+          <Text style={styles.hint}>
+            Chiffres et caractères spéciaux autorisés. Le nom doit être disponible (non utilisé par un autre compte).
+          </Text>
+          <TextInput
+            style={styles.input}
+            value={name}
+            onChangeText={(v) => {
+              setName(v);
+              setError(null);
+            }}
+            placeholder="Votre nouveau nom"
+            placeholderTextColor={COLORS.textSoft}
+            autoFocus
+            maxLength={80}
+            accessibilityLabel="Nouveau nom d'affichage"
+          />
+          {error ? <Text style={styles.errMsg}>{error}</Text> : null}
+          <Pressable
+            style={({ pressed }) => [styles.actionBtn, !canSubmit && styles.actionBtnDisabled, pressed && canSubmit && styles.btnPressed]}
+            disabled={!canSubmit}
+            onPress={() => {
+              setError(null);
+              mut.mutate(trimmed);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Enregistrer le nom d'affichage"
+          >
+            {mut.isPending ? <ActivityIndicator color={COLORS.onAccent} /> : <Text style={styles.actionBtnText}>ENREGISTRER</Text>}
+          </Pressable>
+        </>
+      )}
+    </Sheet>
+  );
+}
+
+// Choix du pays (déplacé depuis « Modifier le profil ») : liste complète,
+// noms en toutes lettres, coche sur le pays courant.
+function CountryModal({ current, onClose }: { current: string; onClose: () => void }) {
+  const insets = useSafeAreaInsets();
+  const qc = useQueryClient();
+  const [error, setError] = useState(false);
+  const mut = useMutation({
+    mutationFn: (countryCode: string) => api.post('/api/profile', { countryCode }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['profile'] });
+      onClose();
+    },
+    onError: () => setError(true),
+  });
+  return (
+    <Modal visible animationType="slide" onRequestClose={onClose}>
+      <View style={[styles.countryScreen, { paddingTop: insets.top }]}>
+        <View style={styles.countryHeader}>
+          <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button" accessibilityLabel="Fermer" style={styles.countryBack}>
+            <Feather name="chevron-left" size={26} color={COLORS.text} />
+          </Pressable>
+          <Text style={styles.countryTitle}>Pays</Text>
+          <View style={{ width: SIZES.touch }} />
+        </View>
+        {error ? <Text style={[styles.errMsg, { textAlign: 'center' }]}>Impossible d’enregistrer le pays. Réessaie.</Text> : null}
+        <ScrollView>
+          <View style={styles.countryCanvas}>
+            {COUNTRIES.map((c) => (
+              <Pressable
+                key={c.code}
+                style={({ pressed }) => [styles.countryRow, pressed && styles.rowPressed]}
+                onPress={() => {
+                  setError(false);
+                  mut.mutate(c.code);
+                }}
+                disabled={mut.isPending}
+                accessibilityRole="button"
+                accessibilityLabel={c.name}
+                accessibilityState={{ selected: current === c.code, disabled: mut.isPending }}
+              >
+                <Text style={[styles.countryName, current === c.code && styles.countrySelected]}>{c.name}</Text>
+                {current === c.code ? <Feather name="check" size={22} color={COLORS.primary} /> : null}
+              </Pressable>
+            ))}
+          </View>
+        </ScrollView>
+      </View>
+    </Modal>
   );
 }
 
@@ -584,6 +714,7 @@ function AppTab() {
             ['dark', 'Thème sombre'],
             ['sunset', 'Thème Sunset'],
             ['midnight', 'Thème Nuit — les couleurs PlotTime'],
+            ['glass', 'Thème Glass — verre liquide translucide'],
           ] as [ThemePreference, string][]
         ).map(([v, l]) => (
           <RadioRow key={v} label={l} on={themePref === v} onPress={() => pickTheme(v)} />
@@ -602,10 +733,10 @@ function AppTab() {
         {langMsg ? <Text style={styles.note}>{langMsg}</Text> : null}
       </Section>
 
-      {/* iOS : interrupteur 18+ MASQUÉ sur les builds App Store (guideline 1.1.4,
-          Apple refuse le contenu sexuellement explicite même opt-in — cf.
-          docs/STORES.md A7). Reste disponible sur web et Android. */}
-      {Platform.OS !== 'ios' ? (
+      {/* Interrupteur 18+ MASQUÉ sur iOS ET Android (demande produit
+          2026-07-20 — conformité stores, cf. docs/STORES.md A7). Reste
+          disponible sur la web app uniquement. */}
+      {Platform.OS === 'web' ? (
         <Section title="Suggestions" eyebrow="Contenu">
           <ToggleRow
             label="Contenu 18+"
@@ -667,6 +798,23 @@ function Row({ label, onPress, external }: { label: string; onPress?: () => void
     <Pressable style={({ pressed }) => [styles.row, pressed && onPress && styles.rowPressed]} onPress={onPress} accessibilityRole="button" accessibilityLabel={label}>
       <Text style={styles.rowLabel}>{label}</Text>
       <Feather name={external ? 'external-link' : 'chevron-right'} size={19} color={COLORS.textMuted} />
+    </Pressable>
+  );
+}
+// Rangée avec valeur courante à droite (ex. Pays : France ›).
+function RowWithValue({ label, value, onPress }: { label: string; value: string; onPress: () => void }) {
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${label} : ${value}`}
+    >
+      <Text style={styles.rowLabel}>{label}</Text>
+      <Text style={styles.rowValue} numberOfLines={1}>
+        {value}
+      </Text>
+      <Feather name="chevron-right" size={19} color={COLORS.textMuted} />
     </Pressable>
   );
 }
@@ -732,6 +880,25 @@ const styles = StyleSheet.create({
   row: { minHeight: SIZES.touch, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: SPACE.sm, paddingVertical: SPACE.sm, borderTopWidth: 1, borderTopColor: COLORS.borderLight },
   rowPressed: { opacity: 0.6 },
   rowLabel: { flex: 1, color: COLORS.text, fontFamily: FONTS.regular, fontSize: 15 },
+  rowValue: { flexShrink: 1, maxWidth: '50%', color: COLORS.primary, fontFamily: FONTS.semiBold, fontSize: 14 },
+  // Sélecteur de pays plein écran.
+  countryScreen: { flex: 1, backgroundColor: COLORS.bg },
+  countryHeader: {
+    minHeight: SIZES.header,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACE.md,
+    backgroundColor: COLORS.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderLight,
+  },
+  countryBack: { width: SIZES.touch, height: SIZES.touch, alignItems: 'flex-start', justifyContent: 'center' },
+  countryTitle: { flex: 1, textAlign: 'center', color: COLORS.text, fontSize: 17, fontFamily: FONTS.extraBold },
+  countryCanvas: { width: '100%', maxWidth: SIZES.contentMax, alignSelf: 'center', paddingBottom: SPACE.xl },
+  countryRow: { minHeight: SIZES.touch, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACE.lg, paddingVertical: SPACE.sm, borderBottomWidth: 1, borderBottomColor: COLORS.borderLight },
+  countryName: { color: COLORS.text, fontFamily: FONTS.regular, fontSize: 16 },
+  countrySelected: { color: COLORS.primary, fontFamily: FONTS.bold },
   rowSub: { fontFamily: FONTS.regular, fontSize: 12.5, color: COLORS.textMuted, lineHeight: 17, marginTop: 2 },
   toggleRow: { minHeight: SIZES.touch, flexDirection: 'row', alignItems: 'center', paddingVertical: SPACE.sm, gap: SPACE.md, borderTopWidth: 1, borderTopColor: COLORS.borderLight },
   toggle: { width: 52, height: 30, borderRadius: 15, padding: 3 },
@@ -750,7 +917,7 @@ const styles = StyleSheet.create({
   deleteText: { fontSize: 13, fontFamily: FONTS.extraBold, letterSpacing: 0.6, color: COLORS.danger, textAlign: 'center' },
   btnPressed: { opacity: 0.86, transform: [{ scale: 0.99 }] },
   overlay: { flex: 1, backgroundColor: COLORS.overlay, justifyContent: 'center', alignItems: 'center', paddingHorizontal: SPACE.lg },
-  sheet: { backgroundColor: COLORS.surface, borderRadius: RADIUS.sheet, padding: SPACE.lg, ...SHADOW.card },
+  sheet: { backgroundColor: COLORS.surface, borderRadius: RADIUS.sheet, padding: SPACE.lg, ...SHADOW.card, ...GLASS_BLUR },
   sheetHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: SPACE.sm },
   sheetTitle: { color: COLORS.text, fontSize: 17, fontFamily: FONTS.extraBold },
   hint: { fontSize: 14, fontFamily: FONTS.regular, color: COLORS.textMuted, lineHeight: 19, marginBottom: SPACE.sm },

@@ -6,7 +6,7 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
-Dernière mise à jour : **2026-07-20** (Claude/Étienne) — Accueil et Profil rapprochés des maquettes Prisme : héro « À regarder maintenant », barres de progression de série (nouvel exposé serveur), bannière profil en carte, tuiles de stats all-time (dont jeux en cours / terminés)
+Dernière mise à jour : **2026-07-20** (Claude/Étienne) — refonte des Statistiques (3 univers dont Jeux, composition originale), temps de jeu déclaratif, tuiles de temps du profil, médailles SVG des Trophées/Badges
 
 ---
 
@@ -90,6 +90,65 @@ la migration visuelle doit encore être exécutée sans modifier la logique mét
 6. Publication native optionnelle (EAS Build APK, puis stores).
 
 ## Journal des modifications
+
+### 2026-07-20 — Claude/Étienne : stats refondues, temps de jeu déclaratif, médailles
+- **Statistiques (`/stats`) — composition PlotTime originale** (rupture avec la
+  présentation TV Time) : segments **Séries / Films / Jeux** en pilule Prisme,
+  **carte héro « temps » en dégradé** avec durée décomposée mois·j·h,
+  tuiles duo, **graphique hebdo à barres arrondies dégradé rose→violet**
+  (semaine courante mise en avant), **genres en barres proportionnelles**
+  (fini le tableau deux colonnes), chaînes en **chips comptées**, marathons
+  médaillés or/argent/bronze, bouton « Comparer avec mes abonnements » en
+  pilule pleine, accès Badges avec progression.
+- **Nouvel univers Jeux dans les stats** : héro « temps de jeu déclaré »
+  (dégradé or), tuiles en cours / terminés / abandonnés / possédés / voulus /
+  suivis, **« Tes plus grosses sessions »** (top jeux par temps déclaré, tap →
+  fiche pour corriger), genres. Serveur : bloc `games` ajouté à
+  `/api/stats/detailed` (état vide propre tant que la prod n'est pas redéployée).
+- **Temps de jeu déclaratif** : nouvel endpoint `POST /api/games/:id/playtime`
+  (heures → minutes, `null` efface ; écrase la valeur Steam). Sur la fiche jeu,
+  passer un jeu **En cours / Terminé / Abandonné** ouvre une **feuille non
+  bloquante** « Combien d'heures as-tu passé sur … ? » (« Plus tard » possible),
+  et la ligne **Temps de jeu** des Informations devient **éditable** à tout
+  moment (point d'édition unique, accessible depuis le Profil → Jeux → fiche et
+  Stats → Jeux → top). Test serveur `game-playtime.test.ts` (3 cas).
+- **Profil — tuiles de temps** : « X mois Y j Z h devant les séries et films »
+  et « X j Y h de jeu (déclaré) » en tuiles pleine largeur
+  (`ProfileStatsDto.gamePlaytimeMinutes`), en plus des compteurs scindés jeux
+  en cours / jeux terminés (repli inchangé si serveur non redéployé).
+- **Trophées & Badges — médailles** : nouveau composant `components/medals.tsx`
+  (SVG) — **jetons métalliques** avec dégradés par palier (bronze/argent/or/
+  platine), arête en relief, **reflet spéculaire**, **anneau de progression
+  circulaire** vers le prochain palier (dégradé Prisme), verrouillé = étain +
+  cadenas ; **médaillon de niveau** avec anneau d'XP. Trophées : héro nuit
+  violette avec formes Prisme, flamme streak sur dégradé chaud, défis sur
+  ProgressBar, modale de badge redessinée (chip de palier). Page Badges :
+  mêmes médailles (or = débloqué), synthèse avec progression.
+- **Validation** : typecheck mobile + serveur verts ; tests serveur ciblés
+  verts (playtime 3/3, stats) ; export Expo Web complet.
+
+### 2026-07-20 — Claude/Étienne : retours UX (en-têtes, 18+, édition profil scindée, pseudo unique)
+- **Accueil** : le raccourci Profil (avatar) disparaît de l'en-tête ; seule la
+  **cloche de notifications** reste, en haut à droite de « À voir » — et elle
+  n'existe que sur l'onglet Accueil.
+- **Profil** : plus de cloche dans l'en-tête ; le bouton **Réglages** occupe
+  seul le coin droit.
+- **Paramètres** : en-tête allégé (titre « Paramètres » seul, sans eyebrow ni
+  sous-titre) ; la section **Contenu 18+ est masquée sur iOS ET Android**
+  (conformité stores — elle reste disponible sur la web app).
+- **« Modifier le profil » réduit aux photos** : avatar + bannière uniquement.
+  Le **nom d'affichage** et le **pays** s'éditent désormais dans Paramètres →
+  Compte → Identification (année de naissance et sexe retirés de l'interface,
+  demande produit — les champs restent en base et côté API).
+- **Nom d'affichage unique** : `POST /api/profile` refuse (409
+  `display_name_taken`, insensible à la casse) un pseudo déjà porté par un
+  autre compte ; chiffres et caractères spéciaux autorisés (longueur 1–80,
+  espaces de bord retirés). Modale dédiée dans Paramètres avec erreur claire
+  « Ce nom est déjà utilisé » ; sélecteur de pays plein écran conservé.
+  **Nouveau test serveur** `display-name-unique.test.ts` (3 cas : refus 409,
+  caractères spéciaux acceptés, reprise de son propre pseudo).
+- **Validation** : typecheck mobile + serveur verts ; tests ciblés verts
+  (3 nouveaux + 25 api) ; export Expo Web complet.
 
 ### 2026-07-20 — Claude/Étienne : Accueil & Profil rapprochés des maquettes Prisme
 - **Serveur** — `GET /api/shows/queue` expose désormais `progress {watched,total}`
@@ -205,6 +264,25 @@ la migration visuelle doit encore être exécutée sans modifier la logique mét
   (segments Séries / Films / Jeux affichant directement les collections,
   favoris épinglés en tête) et retirer les écrans intermédiaires ; sinon le
   supprimer et promouvoir Films/Jeux dans la tab bar. À valider par Étienne.
+
+### 2026-07-20 — Claude : nouveau thème « Glass » (verre liquide)
+- **Cinquième thème « Glass »** inspiré du langage Liquid Glass d'Apple
+  (WWDC 2025), transposé à l'identité PlotTime (accents violet/jaune conservés,
+  aucune réplique d'écran Apple) : surfaces en blancs translucides (rgba) avec
+  arête spéculaire blanche, posées sur un dégradé pastel bleu/lavande/rose
+  peint avant le premier rendu par `app/+html.tsx`.
+- **Flou d'arrière-plan réel** via `GLASS_BLUR` (`lib/theme.ts`) :
+  `backdrop-filter: blur + saturate` (web uniquement, react-native-web ≥ 0.21,
+  objet vide dans les autres thèmes et sur natif) étalé sur `PrismeCard`,
+  `SegmentedFilter`, la barre d'onglets flottante et les feuilles des réglages.
+- Metas `theme-color` : nouvelle constante `THEME_COLOR_META` (couleur solide —
+  les barres système n'acceptent pas d'alpha, or `bg` Glass est un voile rgba).
+- `ui.tsx` : texte des badges « black » et coche de `CheckCircle` passés de
+  `COLORS.white` à `COLORS.onPrimary` (valeurs quasi identiques dans les 4
+  thèmes existants ; en Glass, `white` translucide est inutilisable en texte).
+- Serveur : enum `theme` de `/api/settings` étendu à `midnight` (correction —
+  la copie serveur du thème Nuit échouait silencieusement depuis son ajout) et
+  `glass`. Comme Sunset/Nuit, Glass ne s'applique que sur la web app.
 
 ### 2026-07-20 (soir) — Claude : lots 12-14 → version full-Prisme (arbitrage inversé)
 - À la demande d'Étienne, la **base des lots 12-14 est désormais la version

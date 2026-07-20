@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Image } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { ThemeProvider, DefaultTheme, DarkTheme } from '@react-navigation/native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -13,7 +14,7 @@ import {
   Mulish_700Bold,
   Mulish_800ExtraBold,
 } from '@expo-google-fonts/mulish';
-import { COLORS, IS_DARK, setThemeColorMeta } from '@/lib/theme';
+import { COLORS, IS_DARK, THEME, THEME_COLOR_META, setThemeColorMeta } from '@/lib/theme';
 import { GamificationToastHost } from '@/lib/useGamificationToasts';
 
 // Web : le fond du document et la couleur des barres du navigateur suivent le
@@ -23,12 +24,24 @@ import { GamificationToastHost } from '@/lib/useGamificationToasts';
 if (typeof document !== 'undefined') {
   document.body.style.backgroundColor = COLORS.bg;
   document.documentElement.style.colorScheme = IS_DARK ? 'dark' : 'light';
-  setThemeColorMeta(COLORS.bg);
+  // Metas theme-color : couleur solide dédiée (en Glass, `bg` est un voile
+  // translucide — les barres système n'acceptent pas d'alpha).
+  setThemeColorMeta(THEME_COLOR_META);
 }
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 60_000, retry: 1 } },
 });
+
+// Glass : le conteneur React Navigation peint par défaut un gris OPAQUE
+// (DefaultTheme, rgb(242,242,242)) qui masquerait le dégradé du document —
+// on le rend transparent. Les autres thèmes gardent le thème par défaut
+// (leurs écrans peignent des fonds opaques par-dessus).
+const baseNavTheme = IS_DARK ? DarkTheme : DefaultTheme;
+const navTheme =
+  THEME === 'glass'
+    ? { ...baseNavTheme, colors: { ...baseNavTheme.colors, background: 'transparent' } }
+    : baseNavTheme;
 
 export default function RootLayout() {
   // Police de l'app (voir FONTS dans lib/theme.ts) — chargée avant tout rendu.
@@ -57,6 +70,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <QueryClientProvider client={queryClient}>
+          <ThemeProvider value={navTheme}>
           <StatusBar style={IS_DARK ? 'light' : 'dark'} />
           {/* Transitions natives (iOS/Android) : glissement fluide entre écrans.
               Sur le web, ces options sont ignorées → l'animation « Pop » au montage
@@ -83,6 +97,7 @@ export default function RootLayout() {
           {/* Toast global de déblocage (niveau/badge) — monté une fois, visible
               quel que soit l'écran (spec 2026-07-16 §10). */}
           <GamificationToastHost />
+          </ThemeProvider>
         </QueryClientProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

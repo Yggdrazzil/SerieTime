@@ -185,13 +185,37 @@ export default function GameDetail() {
     onSettled: refresh,
   });
 
+  // Temps de jeu DÉCLARATIF (demande produit 2026-07-20) : posé à la bascule
+  // de statut (feuille non bloquante) ou corrigé à tout moment depuis la ligne
+  // « Temps de jeu » des Informations. `null` efface la déclaration.
+  const [playtimeOpen, setPlaytimeOpen] = useState(false);
+  const setPlaytime = useMutation({
+    mutationFn: (hours: number | null) => api.post('/api/games/' + id + '/playtime', { hours }),
+    onMutate: (hours: number | null) => patch({ playtimeMinutes: hours === null ? null : Math.round(hours * 60) }),
+    onError: (_error, _hours, context) => {
+      rollback(context);
+      showToast('Le temps de jeu n’a pas pu être enregistré. Réessaie.');
+    },
+    onSettled: () => {
+      refresh();
+      qc.invalidateQueries({ queryKey: ['stats'] });
+    },
+  });
+
   const releaseTrackingLock = () => {
     trackingLock.current = false;
   };
   const changeStatus = (status: GameStatus) => {
     if (trackingLock.current) return false;
     trackingLock.current = true;
-    setStatus.mutate(status, { onSettled: releaseTrackingLock });
+    setStatus.mutate(status, {
+      onSettled: releaseTrackingLock,
+      // En cours / Terminé / Abandonné : on propose (sans jamais l'imposer)
+      // de déclarer ses heures de jeu.
+      onSuccess: (_data, s) => {
+        if (s === 'playing' || s === 'completed' || s === 'abandoned') setPlaytimeOpen(true);
+      },
+    });
     return true;
   };
   const changeOwned = (owned: boolean) => {
@@ -414,7 +438,7 @@ export default function GameDetail() {
         {/* Fiche d'identité complète (Genre/Sortie/Note presse vivent à côté de
             la jaquette) : Plateformes / Développeur / Éditeur / Modes / Temps
             de jeu — l'ancienne section « Informations » est fusionnée ici. */}
-        {game.platforms || game.developer || game.publisher || game.gameModes || game.playtimeMinutes ? (
+        {game.platforms || game.developer || game.publisher || game.gameModes || game.playtimeMinutes || game.userStatus ? (
           <View style={[styles.section, styles.factList]}>
             <View style={styles.sectionHeading}>
               <View style={styles.sectionIcon}>
@@ -436,7 +460,32 @@ export default function GameDetail() {
             {game.gameModes ? (
               <FactRow icon="users" label="Modes" value={game.gameModes} />
             ) : null}
-            {game.playtimeMinutes ? (
+            {game.userStatus ? (
+              // Jeu suivi : le temps de jeu est déclaratif et ÉDITABLE ici.
+              <Pressable
+                style={({ pressed }) => pressed && { opacity: 0.7 }}
+                onPress={() => setPlaytimeOpen(true)}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  game.playtimeMinutes
+                    ? `Temps de jeu : ${formatPlaytime(game.playtimeMinutes)} — modifier`
+                    : 'Déclarer ton temps de jeu'
+                }
+              >
+                <View style={styles.factRow}>
+                  <View style={styles.factIcon}>
+                    <Feather name="clock" size={17} color={COLORS.primary} />
+                  </View>
+                  <View style={styles.factCopy}>
+                    <Text style={styles.factLabel}>Temps de jeu</Text>
+                    <Text style={styles.fact}>
+                      {game.playtimeMinutes ? formatPlaytime(game.playtimeMinutes) : 'Ajouter mes heures'}
+                    </Text>
+                  </View>
+                  <Feather name="edit-3" size={16} color={COLORS.textMuted} />
+                </View>
+              </Pressable>
+            ) : game.playtimeMinutes ? (
               <FactRow icon="clock" label="Temps de jeu" value={formatPlaytime(game.playtimeMinutes)} />
             ) : null}
           </View>
@@ -512,6 +561,16 @@ export default function GameDetail() {
       </Modal>
 
       <ReportModal visible={reportOpen} onClose={() => setReportOpen(false)} onConfirm={submitReport} />
+      <PlaytimeSheet
+        visible={playtimeOpen}
+        title={game.title}
+        currentMinutes={game.playtimeMinutes ?? null}
+        onSave={(hours) => {
+          setPlaytime.mutate(hours);
+          setPlaytimeOpen(false);
+        }}
+        onClose={() => setPlaytimeOpen(false)}
+      />
 
       <PersonalizeMenu
         visible={persoMenu}
@@ -617,6 +676,125 @@ function FactRow({
     </View>
   );
 }
+// Feuille « Temps de jeu » (déclaratif) : proposée à la bascule de statut,
+// JAMAIS bloquante (« Plus tard »), rouvrable depuis la ligne Informations.
+function PlaytimeSheet({
+  visible,
+  title,
+  currentMinutes,
+  onSave,
+  onClose,
+}: {
+  visible: boolean;
+  title: string;
+  currentMinutes: number | null;
+  onSave: (hours: number | null) => void;
+  onClose: () => void;
+}) {
+  const [value, setValue] = useState('');
+  // Pré-remplit avec la valeur connue à chaque ouverture.
+  useEffect(() => {
+    if (visible) setValue(currentMinutes ? String(Math.round((currentMinutes / 60) * 10) / 10) : '');
+  }, [visible, currentMinutes]);
+  const parsed = Number.parseFloat(value.replace(',', '.'));
+  const valid = value.trim().length > 0 && Number.isFinite(parsed) && parsed >= 0 && parsed <= 100_000;
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={ptStyles.overlay} onPress={onClose}>
+        <Pressable style={ptStyles.card} onPress={(e) => e.stopPropagation()}>
+          <View style={ptStyles.iconWrap}>
+            <Feather name="clock" size={20} color={COLORS.onAccent} />
+          </View>
+          <Text style={ptStyles.title}>Temps de jeu</Text>
+          <Text style={ptStyles.sub} numberOfLines={3}>
+            Combien d’heures as-tu passé sur « {title} » ? C’est déclaratif — tu pourras le corriger à tout moment ici.
+          </Text>
+          <View style={ptStyles.inputRow}>
+            <TextInput
+              style={ptStyles.input}
+              value={value}
+              onChangeText={setValue}
+              keyboardType="decimal-pad"
+              placeholder="Ex. 25"
+              placeholderTextColor={COLORS.textSoft}
+              autoFocus
+              accessibilityLabel="Nombre d'heures de jeu"
+            />
+            <Text style={ptStyles.unit}>heures</Text>
+          </View>
+          <Pressable
+            style={({ pressed }) => [ptStyles.saveBtn, !valid && ptStyles.saveBtnDisabled, pressed && valid && ptStyles.pressed]}
+            disabled={!valid}
+            onPress={() => onSave(parsed)}
+            accessibilityRole="button"
+            accessibilityLabel="Enregistrer le temps de jeu"
+          >
+            <Text style={ptStyles.saveText}>ENREGISTRER</Text>
+          </Pressable>
+          <Pressable onPress={onClose} hitSlop={8} accessibilityRole="button" accessibilityLabel="Plus tard">
+            <Text style={ptStyles.laterText}>Plus tard</Text>
+          </Pressable>
+          {currentMinutes ? (
+            <Pressable
+              onPress={() => onSave(null)}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Effacer le temps déclaré"
+            >
+              <Text style={ptStyles.clearText}>Effacer le temps déclaré</Text>
+            </Pressable>
+          ) : null}
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+const ptStyles = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: COLORS.overlay, alignItems: 'center', justifyContent: 'center', padding: SPACE.lg },
+  card: {
+    width: '100%',
+    maxWidth: 360,
+    alignItems: 'center',
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.sheet,
+    padding: SPACE.lg,
+    ...SHADOW.card,
+  },
+  iconWrap: { width: 46, height: 46, borderRadius: RADIUS.control, backgroundColor: COLORS.yellow, alignItems: 'center', justifyContent: 'center' },
+  title: { color: COLORS.text, fontSize: 19, fontFamily: FONTS.extraBold, marginTop: SPACE.sm },
+  sub: { color: COLORS.textMuted, fontSize: 13.5, lineHeight: 19, fontFamily: FONTS.regular, textAlign: 'center', marginTop: SPACE.xs },
+  inputRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.sm, marginTop: SPACE.md, alignSelf: 'stretch' },
+  input: {
+    flex: 1,
+    color: COLORS.text,
+    backgroundColor: COLORS.surfaceMuted,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    borderRadius: RADIUS.control,
+    fontSize: 18,
+    fontFamily: FONTS.bold,
+    paddingHorizontal: SPACE.sm,
+    paddingVertical: 11,
+    textAlign: 'center',
+  },
+  unit: { color: COLORS.textMuted, fontSize: 15, fontFamily: FONTS.semiBold },
+  saveBtn: {
+    alignSelf: 'stretch',
+    minHeight: SIZES.touchComfortable,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.primary,
+    borderRadius: RADIUS.pill,
+    marginTop: SPACE.md,
+  },
+  saveBtnDisabled: { opacity: 0.4 },
+  saveText: { color: COLORS.onPrimary, fontSize: 14, fontFamily: FONTS.extraBold, letterSpacing: 0.5 },
+  pressed: { opacity: 0.86, transform: [{ scale: 0.99 }] },
+  laterText: { color: COLORS.textMuted, fontSize: 14, fontFamily: FONTS.bold, marginTop: SPACE.md },
+  clearText: { color: COLORS.danger, fontSize: 13, fontFamily: FONTS.bold, marginTop: SPACE.sm },
+});
+
 // Aperçu bande-annonce (16:9) : miniature YouTube + bouton lecture centré. Sur
 // web, tap = iframe intégré autoplay ; sur natif, tap = ouverture YouTube
 // (pas de nouvelle dépendance native).

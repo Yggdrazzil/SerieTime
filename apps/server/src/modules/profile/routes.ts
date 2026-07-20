@@ -15,7 +15,7 @@ async function computeStats(userId: string): Promise<ProfileStatsDto> {
   // lib/runtimeFallbacks.ts (mêmes valeurs que les classements/défi hebdo) :
   // runtime épisode > 0, sinon runtime série, sinon EP_FALLBACK_MIN ;
   // films : runtime > 0, sinon MOVIE_FALLBACK_MIN.
-  const [showsCount, moviesCount, ratingsCount, epAgg, movieAgg, gamesCount, gamesPlayed, gamesPlaying, gamesCompleted] = await Promise.all([
+  const [showsCount, moviesCount, ratingsCount, epAgg, movieAgg, gamesCount, gamesPlayed, gamesPlaying, gamesCompleted, gamePlaytime] = await Promise.all([
     prisma.userMediaStatus.count({ where: { userId, media: { type: 'show' } } }),
     prisma.userMediaStatus.count({ where: { userId, media: { type: 'movie' } } }),
     prisma.userEpisodeStatus.count({ where: { userId, rating: { not: null } } }).then(async (episodeRatings) => {
@@ -50,6 +50,11 @@ async function computeStats(userId: string): Promise<ProfileStatsDto> {
     prisma.userMediaStatus.count({
       where: { userId, media: { type: 'game' }, isHidden: false, status: 'completed' },
     }),
+    // Temps de jeu total (déclaratif + import Steam) pour la tuile du profil.
+    prisma.userMediaStatus.aggregate({
+      where: { userId, media: { type: 'game' }, isHidden: false },
+      _sum: { playtimeMinutes: true },
+    }),
   ]);
   return {
     showsCount,
@@ -63,6 +68,7 @@ async function computeStats(userId: string): Promise<ProfileStatsDto> {
     gamesPlayed,
     gamesPlaying,
     gamesCompleted,
+    gamePlaytimeMinutes: gamePlaytime._sum.playtimeMinutes ?? 0,
   };
 }
 
@@ -155,10 +161,12 @@ export async function profileRoutes(app: FastifyInstance): Promise<void> {
     };
   });
 
-  app.post('/api/profile', async (request) => {
+  app.post('/api/profile', async (request, reply) => {
     const body = z
       .object({
-        displayName: z.string().min(1).max(80).optional(),
+        // Chiffres et caractères spéciaux autorisés : aucune restriction de
+        // contenu, seulement une longueur bornée (espaces de bord retirés).
+        displayName: z.string().trim().min(1).max(80).optional(),
         email: z.string().email().nullable().optional(),
         avatarUrl: z.string().max(800_000).nullable().optional(),
         coverUrl: z.string().max(800_000).nullable().optional(),
@@ -169,6 +177,16 @@ export async function profileRoutes(app: FastifyInstance): Promise<void> {
         isPrivate: z.boolean().optional(),
       })
       .parse(request.body);
+    // Nom d'affichage UNIQUE (demande produit 2026-07-20) : un pseudo déjà
+    // porté par un autre compte est refusé, insensible à la casse (SQLite ne
+    // supporte pas `mode: 'insensitive'` via Prisma → comparaison en SQL).
+    if (body.displayName !== undefined) {
+      const clashes = await prisma.$queryRaw<{ id: string }[]>`
+        SELECT id FROM User
+        WHERE lower(displayName) = lower(${body.displayName}) AND id != ${request.userId}
+        LIMIT 1`;
+      if (clashes.length > 0) return reply.code(409).send({ error: 'display_name_taken' });
+    }
     const user = await prisma.user.update({ where: { id: request.userId }, data: body });
     return { user: { id: user.id, displayName: user.displayName } };
   });

@@ -10,7 +10,7 @@ import type { GamificationMeDto, MediaDto, ProfileStatsDto } from '@/lib/types';
 import { watchTime } from '@/lib/format';
 import { COLORS, FONTS, RADIUS, SHADOW, SIZES, SPACE } from '@/lib/theme';
 import { Loading, LoadError, Poster } from '@/components/ui';
-import { AppearItem, PopIn } from '@/components/anim';
+import { AppearItem } from '@/components/anim';
 import { TabHeader } from '@/components/prisme';
 import { useTabResetSeq } from '@/lib/tabReset';
 import { usePullRefresh } from '@/lib/usePullRefresh';
@@ -274,56 +274,52 @@ function ProfileScreenInner() {
   );
 }
 
-// Raccourcis d'en-tête : notifications + réglages.
+// Raccourci d'en-tête : les réglages, seuls en haut à droite (la cloche de
+// notifications vit sur l'Accueil).
 function HeaderActions() {
   const router = useRouter();
-  const { data: unreadData } = useQuery({
-    queryKey: ['notifications', 'unread'],
-    queryFn: () => api.get<{ unreadCount: number }>('/api/notifications/unread-count'),
-    refetchInterval: 30_000,
-  });
-  const unread = unreadData?.unreadCount ?? 0;
   return (
-    <View style={styles.headerActions}>
-      <Pressable
-        style={({ pressed }) => [styles.headerBtn, pressed && styles.headerBtnPressed]}
-        onPress={() => router.push('/notifications')}
-        accessibilityRole="button"
-        accessibilityLabel={unread > 0 ? `Notifications, ${unread} non lue${unread > 1 ? 's' : ''}` : 'Notifications'}
-        accessibilityHint="Ouvre le centre de notifications"
-      >
-        <Feather name="bell" size={19} color={COLORS.text} />
-        {unread > 0 ? (
-          <PopIn style={styles.headerBadge}>
-            <Text style={styles.headerBadgeText}>{unread > 9 ? '9+' : unread}</Text>
-          </PopIn>
-        ) : null}
-      </Pressable>
-      <Pressable
-        style={({ pressed }) => [styles.headerBtn, pressed && styles.headerBtnPressed]}
-        onPress={() => router.push('/settings')}
-        accessibilityRole="button"
-        accessibilityLabel="Paramètres"
-        accessibilityHint={'Ouvre les paramètres du compte et de l’application'}
-      >
-        <Feather name="settings" size={19} color={COLORS.text} />
-      </Pressable>
-    </View>
+    <Pressable
+      style={({ pressed }) => [styles.headerBtn, pressed && styles.headerBtnPressed]}
+      onPress={() => router.push('/settings')}
+      accessibilityRole="button"
+      accessibilityLabel="Paramètres"
+      accessibilityHint={'Ouvre les paramètres du compte et de l’application'}
+    >
+      <Feather name="settings" size={19} color={COLORS.text} />
+    </Pressable>
   );
 }
 
-// Tuiles de statistiques all-time (maquette « Votre année », étendue à tout
-// l'historique à la demande d'Étienne). Repli : tant que le serveur de prod
-// n'expose pas le détail jeux (en cours / terminés), une seule tuile « joués ».
+// « 15 mois 10 j 21 h » — zéros de tête omis, heures toujours affichées.
+function fmtDuration(minutes: number): string {
+  const t = watchTime(minutes);
+  const parts: string[] = [];
+  if (t.months) parts.push(`${t.months} mois`);
+  if (t.days || t.months) parts.push(`${t.days} j`);
+  parts.push(`${t.hours} h`);
+  return parts.join(' ');
+}
+
+// Tuiles de statistiques all-time. Les deux tuiles « temps » (visionnage et
+// jeu) occupent toute la largeur : mois / jours / heures, comme demandé.
+// Repli : tant que le serveur de prod n'expose pas le détail jeux, une seule
+// tuile « joués » et pas de temps de jeu.
 function StatTiles({ stats }: { stats: ProfileStatsDto }) {
-  const t = watchTime(stats.showMinutes + stats.movieMinutes);
-  const timeValue = t.months > 0 ? `${t.months} mois` : t.days > 0 ? `${t.days} j` : `${t.hours} h`;
-  const tiles: { key: string; value: string; label: string }[] = [
+  const tiles: { key: string; value: string; label: string; wide?: boolean }[] = [
     { key: 'episodes', value: stats.episodesWatched.toLocaleString('fr-FR'), label: 'épisodes vus' },
     { key: 'movies', value: stats.moviesWatched.toLocaleString('fr-FR'), label: 'films vus' },
-    { key: 'time', value: timeValue, label: 'de visionnage' },
-    { key: 'shows', value: stats.showsCount.toLocaleString('fr-FR'), label: 'séries suivies' },
+    { key: 'time', value: fmtDuration(stats.showMinutes + stats.movieMinutes), label: 'devant les séries et films', wide: true },
   ];
+  if (typeof stats.gamePlaytimeMinutes === 'number') {
+    tiles.push({
+      key: 'gtime',
+      value: stats.gamePlaytimeMinutes > 0 ? fmtDuration(stats.gamePlaytimeMinutes) : '0 h',
+      label: 'de jeu (temps déclaré sur tes fiches jeux)',
+      wide: true,
+    });
+  }
+  tiles.push({ key: 'shows', value: stats.showsCount.toLocaleString('fr-FR'), label: 'séries suivies' });
   if (typeof stats.gamesPlaying === 'number' && typeof stats.gamesCompleted === 'number') {
     tiles.push({ key: 'gplaying', value: stats.gamesPlaying.toLocaleString('fr-FR'), label: 'jeux en cours' });
     tiles.push({ key: 'gcompleted', value: stats.gamesCompleted.toLocaleString('fr-FR'), label: 'jeux terminés' });
@@ -333,12 +329,12 @@ function StatTiles({ stats }: { stats: ProfileStatsDto }) {
   return (
     <View style={styles.tilesGrid}>
       {tiles.map((tile, i) => (
-        <AppearItem key={tile.key} index={i} style={styles.tileWrap}>
+        <AppearItem key={tile.key} index={i} style={[styles.tileWrap, tile.wide && styles.tileWrapWide]}>
           <View style={styles.tile} accessible accessibilityLabel={`${tile.value} ${tile.label}`}>
-            <Text style={styles.tileValue} numberOfLines={1}>
+            <Text style={styles.tileValue} numberOfLines={1} adjustsFontSizeToFit>
               {tile.value}
             </Text>
-            <Text style={styles.tileLabel} numberOfLines={1}>
+            <Text style={styles.tileLabel} numberOfLines={2}>
               {tile.label}
             </Text>
           </View>
@@ -461,7 +457,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: COLORS.borderLight,
   },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: SPACE.xs },
   headerBtn: {
     width: SIZES.touch,
     height: SIZES.touch,
@@ -473,21 +468,6 @@ const styles = StyleSheet.create({
     borderColor: COLORS.borderLight,
   },
   headerBtnPressed: { opacity: 0.72, transform: [{ scale: 0.96 }] },
-  headerBadge: {
-    position: 'absolute',
-    top: -3,
-    right: -3,
-    minWidth: 18,
-    height: 18,
-    borderRadius: RADIUS.pill,
-    borderWidth: 2,
-    borderColor: COLORS.white,
-    backgroundColor: COLORS.notif,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 3,
-  },
-  headerBadgeText: { color: '#FFFFFF', fontSize: 9, fontFamily: FONTS.extraBold },
   screenContent: { flexGrow: 1, paddingBottom: SPACE.xl },
   canvas: { width: '100%', maxWidth: SIZES.contentMax, alignSelf: 'center' },
   body: { paddingHorizontal: SPACE.md, paddingTop: SPACE.xs },
@@ -557,6 +537,7 @@ const styles = StyleSheet.create({
   // Tuiles de statistiques (grille 2 colonnes, maquette).
   tilesGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACE.sm },
   tileWrap: { flexBasis: '47%', flexGrow: 1 },
+  tileWrapWide: { flexBasis: '100%' },
   tile: {
     minHeight: 84,
     justifyContent: 'center',

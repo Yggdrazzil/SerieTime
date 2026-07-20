@@ -75,6 +75,9 @@ export type ProfileStatsDto = {
   // serveur n'est pas redéployé — repli sur `gamesPlayed` côté client.
   gamesPlaying?: number;
   gamesCompleted?: number;
+  // Temps de jeu total en minutes (déclaratif + Steam). Optionnel : absent
+  // tant que le serveur n'est pas redéployé.
+  gamePlaytimeMinutes?: number;
 };
 
 // Gamification (spec 2026-07-16 §9/§10) — miroir de GET /api/gamification/me.

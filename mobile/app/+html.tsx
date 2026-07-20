@@ -47,11 +47,19 @@ export default function Root({ children }: PropsWithChildren) {
               (function () {
                 try {
                   var pref = localStorage.getItem('serietime-theme');
-                  var theme = (pref === 'light' || pref === 'dark' || pref === 'sunset' || pref === 'midnight')
+                  var theme = (pref === 'light' || pref === 'dark' || pref === 'sunset' || pref === 'midnight' || pref === 'glass')
                     ? pref
                     : (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-                  var bg = theme === 'dark' ? '#121217' : theme === 'midnight' ? '#0B075A' : theme === 'sunset' ? '#FAF5EE' : '#FFFFFF';
+                  var bg = theme === 'dark' ? '#121217' : theme === 'midnight' ? '#0B075A' : theme === 'sunset' ? '#FAF5EE' : theme === 'glass' ? '#DCE4F8' : '#FFFFFF';
                   document.documentElement.style.backgroundColor = bg;
+                  if (theme === 'glass') {
+                    // Fond du thème Glass : dégradé pastel que les surfaces en
+                    // verre (voiles rgba + backdrop-filter) laissent transparaître.
+                    // La page ne scrolle pas (conteneurs React Native Web), le
+                    // dégradé reste donc naturellement fixe.
+                    document.documentElement.style.backgroundImage =
+                      'linear-gradient(155deg, #5E8FE8 0%, #8F7BE0 32%, #E387BD 62%, #6FB2E6 100%)';
+                  }
                   document.documentElement.style.colorScheme = (theme === 'dark' || theme === 'midnight') ? 'dark' : 'light';
                   var metas = document.querySelectorAll('meta[name="theme-color"]');
                   for (var i = 0; i < metas.length; i++) metas[i].setAttribute('content', bg);

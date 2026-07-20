@@ -13,7 +13,6 @@ import { PillHeader, EmptyState, LoadError, ShowPill, Badge, CheckCircle } from 
 import { EpisodeQueueCard, SeriesProgressBar } from '@/components/EpisodeQueueCard';
 import { EpisodeSheet, type EpisodeSheetTarget } from '@/components/EpisodeSheet';
 import { useTabResetSeq } from '@/lib/tabReset';
-import { useAppStore } from '@/lib/store';
 import { AppearItem, PopIn } from '@/components/anim';
 import { useFloatingSection, FloatingSectionPill } from '@/components/FloatingSection';
 import { TabHeader } from '@/components/prisme';
@@ -34,48 +33,31 @@ export default function ShowsScreen() {
   );
 }
 
-// Raccourcis d'en-tête (disposition maquette) : notifications + profil.
+// Raccourci d'en-tête (Accueil uniquement) : la cloche de notifications, en
+// haut à droite — disposition classique. Le Profil s'ouvre via sa tab.
 function HomeHeaderActions() {
   const router = useRouter();
-  const user = useAppStore((s) => s.user);
   const { data: unreadData } = useQuery({
     queryKey: ['notifications', 'unread'],
     queryFn: () => api.get<{ unreadCount: number }>('/api/notifications/unread-count'),
     refetchInterval: 30_000,
   });
   const unread = unreadData?.unreadCount ?? 0;
-  const avatar = tmdbImage(user?.avatarUrl, 'w185') ?? user?.avatarUrl ?? null;
   return (
-    <View style={styles.headerActions}>
-      <Pressable
-        style={({ pressed }) => [styles.headerBtn, pressed && styles.headerBtnPressed]}
-        onPress={() => router.push('/notifications')}
-        accessibilityRole="button"
-        accessibilityLabel={unread > 0 ? `Notifications, ${unread} non lue${unread > 1 ? 's' : ''}` : 'Notifications'}
-        accessibilityHint="Ouvre le centre de notifications"
-      >
-        <Feather name="bell" size={19} color={COLORS.text} />
-        {unread > 0 ? (
-          <PopIn style={styles.headerBadge}>
-            <Text style={styles.headerBadgeText}>{unread > 9 ? '9+' : unread}</Text>
-          </PopIn>
-        ) : null}
-      </Pressable>
-      <Pressable
-        style={({ pressed }) => [styles.headerAvatarBtn, pressed && styles.headerBtnPressed]}
-        onPress={() => router.push('/profile' as Href)}
-        accessibilityRole="button"
-        accessibilityLabel="Ouvrir mon profil"
-      >
-        {avatar ? (
-          <Image source={{ uri: avatar }} style={styles.headerAvatar} />
-        ) : (
-          <View style={[styles.headerAvatar, styles.headerAvatarEmpty]}>
-            <Text style={styles.headerAvatarInit}>{(user?.displayName ?? '?').slice(0, 1).toUpperCase()}</Text>
-          </View>
-        )}
-      </Pressable>
-    </View>
+    <Pressable
+      style={({ pressed }) => [styles.headerBtn, pressed && styles.headerBtnPressed]}
+      onPress={() => router.push('/notifications')}
+      accessibilityRole="button"
+      accessibilityLabel={unread > 0 ? `Notifications, ${unread} non lue${unread > 1 ? 's' : ''}` : 'Notifications'}
+      accessibilityHint="Ouvre le centre de notifications"
+    >
+      <Feather name="bell" size={19} color={COLORS.text} />
+      {unread > 0 ? (
+        <PopIn style={styles.headerBadge}>
+          <Text style={styles.headerBadgeText}>{unread > 9 ? '9+' : unread}</Text>
+        </PopIn>
+      ) : null}
+    </Pressable>
   );
 }
 
@@ -636,7 +618,6 @@ const styles = StyleSheet.create({
   badgeRow: { flexDirection: 'row', marginTop: 2 },
   multi: { color: COLORS.secondary, fontFamily: FONTS.bold, fontSize: 12, lineHeight: 16, marginTop: SPACE.xxs },
   // Raccourcis d'en-tête Accueil (cloche + avatar, disposition maquette).
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: SPACE.xs },
   headerBtn: {
     width: SIZES.touch,
     height: SIZES.touch,
@@ -663,10 +644,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 3,
   },
   headerBadgeText: { color: '#FFFFFF', fontSize: 9, fontFamily: FONTS.extraBold },
-  headerAvatarBtn: { width: SIZES.touch, height: SIZES.touch, alignItems: 'center', justifyContent: 'center' },
-  headerAvatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.primarySoft },
-  headerAvatarEmpty: { alignItems: 'center', justifyContent: 'center' },
-  headerAvatarInit: { color: COLORS.primary, fontSize: 15, fontFamily: FONTS.extraBold },
   // En-têtes de section de la file (libellé + compteur, façon « Ensuite »).
   groupHead: {
     minHeight: SIZES.touch,

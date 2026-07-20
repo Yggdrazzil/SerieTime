@@ -4,8 +4,9 @@ import { Feather } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { goBack } from '@/lib/nav';
-import { COLORS, FONTS, RADIUS, SIZES, SPACE } from '@/lib/theme';
+import { COLORS, FONTS, RADIUS, SPACE } from '@/lib/theme';
 import { ScreenShell, ScreenHeader, SectionHeader, PrismeCard, ProgressBar, IconAction } from '@/components/prisme';
+import { MedalBadge } from '@/components/medals';
 import { Loading, LoadError } from '@/components/ui';
 import { AppearItem } from '@/components/anim';
 
@@ -20,8 +21,8 @@ type Badge = {
 };
 type BadgesResponse = { earned: number; total: number; sections: { title: string; badges: Badge[] }[] };
 
-// Badges / succès (icônes maison Prisme). Débloqué = pastille colorée (couleur
-// propre au badge, fournie par l'API) ; verrouillé = grisé avec progression.
+// Succès (badges binaires) : médailles PlotTime — débloqué = médaille OR,
+// verrouillé = étain + anneau de progression vers le déblocage.
 export default function BadgesScreen() {
   const { data, isLoading, isError, refetch, isRefetching } = useQuery({
     queryKey: ['stats', 'badges'],
@@ -30,7 +31,7 @@ export default function BadgesScreen() {
   });
 
   return (
-    <ScreenShell scroll>
+    <ScreenShell scroll contentContainerStyle={styles.content}>
       <ScreenHeader
         title="Badges"
         leading={<IconAction icon="chevron-left" label="Retour" onPress={() => goBack('/stats')} />}
@@ -43,53 +44,54 @@ export default function BadgesScreen() {
         <View style={styles.list}>
           <AppearItem index={0}>
             <PrismeCard elevated style={styles.summaryCard}>
-              <View style={styles.summaryIcon}>
-                <Feather name="award" size={22} color={COLORS.onAccent} />
-              </View>
+              <MedalBadge tier={data.earned > 0 ? 3 : 0} icon="award" progress={data.total > 0 ? data.earned / data.total : 0} size={56} />
               <View style={{ flex: 1 }}>
                 <Text style={styles.summaryN}>
                   {data.earned}
                   <Text style={styles.summaryTotal}> / {data.total}</Text>
                 </Text>
-                <Text style={styles.summaryLabel}>badge{data.earned > 1 ? 's' : ''} débloqué{data.earned > 1 ? 's' : ''}</Text>
+                <Text style={styles.summaryLabel}>
+                  badge{data.earned > 1 ? 's' : ''} débloqué{data.earned > 1 ? 's' : ''}
+                </Text>
+              </View>
+              <View style={{ width: 120 }}>
+                <ProgressBar value={data.total > 0 ? (data.earned / data.total) * 100 : 0} label="Badges débloqués" />
               </View>
             </PrismeCard>
           </AppearItem>
           {data.sections.map((s, si) => (
             <AppearItem key={s.title} index={si + 1}>
-              <PrismeCard elevated>
-                <SectionHeader
-                  title={s.title}
-                  eyebrow={`${s.badges.filter((b) => b.earned).length} / ${s.badges.length} débloqués`}
-                  style={styles.cardSectionHeader}
-                />
-                <View style={styles.grid}>
-                  {s.badges.map((b) => (
-                    <View key={b.id} style={styles.badge}>
-                      <View style={[styles.circle, b.earned ? { backgroundColor: b.color } : styles.circleLocked]}>
-                        <Feather name={b.icon} size={26} color={b.earned ? '#fff' : COLORS.textSoft} />
-                      </View>
-                      <Text style={[styles.badgeTitle, !b.earned && styles.lockedText]} numberOfLines={2}>
-                        {b.title}
-                      </Text>
-                      <Text style={styles.badgeDesc} numberOfLines={2}>{b.description}</Text>
-                      {!b.earned ? (
-                        <View style={styles.progressWrap}>
-                          <ProgressBar
-                            value={b.progress.current}
-                            max={Math.max(1, b.progress.target)}
-                            label={`${b.title} — progression`}
-                            height={5}
-                          />
-                          <Text style={styles.progress}>
-                            {b.progress.current.toLocaleString('fr-FR')} / {b.progress.target.toLocaleString('fr-FR')}
+              <View>
+                <SectionHeader title={s.title} eyebrow={`${s.badges.filter((b) => b.earned).length} / ${s.badges.length} débloqués`} />
+                <PrismeCard elevated>
+                  <View style={styles.grid}>
+                    {s.badges.map((b) => {
+                      const pct = b.earned ? 1 : b.progress.target > 0 ? Math.min(1, b.progress.current / b.progress.target) : 0;
+                      return (
+                        <View
+                          key={b.id}
+                          style={styles.badge}
+                          accessible
+                          accessibilityLabel={`${b.title}, ${b.earned ? 'débloqué' : `progression ${b.progress.current} sur ${b.progress.target}`}`}
+                        >
+                          <MedalBadge tier={b.earned ? 3 : 0} icon={b.icon} progress={pct} size={62} />
+                          <Text style={[styles.badgeTitle, !b.earned && styles.lockedText]} numberOfLines={2}>
+                            {b.title}
                           </Text>
+                          <Text style={styles.badgeDesc} numberOfLines={2}>
+                            {b.description}
+                          </Text>
+                          {!b.earned ? (
+                            <Text style={styles.progress}>
+                              {b.progress.current.toLocaleString('fr-FR')} / {b.progress.target.toLocaleString('fr-FR')}
+                            </Text>
+                          ) : null}
                         </View>
-                      ) : null}
-                    </View>
-                  ))}
-                </View>
-              </PrismeCard>
+                      );
+                    })}
+                  </View>
+                </PrismeCard>
+              </View>
             </AppearItem>
           ))}
         </View>
@@ -99,23 +101,16 @@ export default function BadgesScreen() {
 }
 
 const styles = StyleSheet.create({
-  list: { gap: SPACE.sm, paddingBottom: SPACE.xl },
-  cardSectionHeader: { marginTop: 0, marginBottom: SPACE.sm },
+  content: { paddingBottom: SPACE.xl },
+  list: { gap: SPACE.sm, paddingTop: SPACE.xs },
   summaryCard: { flexDirection: 'row', alignItems: 'center', gap: SPACE.md },
-  summaryIcon: {
-    width: SIZES.touch, height: SIZES.touch, borderRadius: RADIUS.control,
-    backgroundColor: COLORS.yellow, alignItems: 'center', justifyContent: 'center',
-  },
-  summaryN: { color: COLORS.text, fontSize: 30, lineHeight: 34, fontFamily: FONTS.extraBold },
-  summaryTotal: { color: COLORS.textMuted, fontSize: 20, fontFamily: FONTS.bold },
-  summaryLabel: { color: COLORS.textMuted, fontSize: 14, fontFamily: FONTS.regular, marginTop: 2 },
+  summaryN: { color: COLORS.text, fontSize: 28, lineHeight: 33, fontFamily: FONTS.extraBold },
+  summaryTotal: { color: COLORS.textMuted, fontSize: 19, fontFamily: FONTS.bold },
+  summaryLabel: { color: COLORS.textMuted, fontSize: 13, fontFamily: FONTS.regular, marginTop: 2 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', rowGap: SPACE.lg },
-  badge: { width: '25%', alignItems: 'center', paddingHorizontal: 4 },
-  circle: { width: 58, height: 58, borderRadius: 29, alignItems: 'center', justifyContent: 'center' },
-  circleLocked: { backgroundColor: COLORS.surfaceMuted, borderWidth: 1, borderColor: COLORS.borderLight },
-  badgeTitle: { color: COLORS.text, fontSize: 12, fontFamily: FONTS.bold, textAlign: 'center', marginTop: 6 },
+  badge: { width: '33.333%', alignItems: 'center', paddingHorizontal: 4 },
+  badgeTitle: { color: COLORS.text, fontSize: 12, fontFamily: FONTS.bold, textAlign: 'center', marginTop: 7 },
   lockedText: { color: COLORS.textMuted },
   badgeDesc: { fontSize: 10, fontFamily: FONTS.regular, color: COLORS.textSoft, textAlign: 'center', marginTop: 2 },
-  progressWrap: { width: '100%', marginTop: 6 },
-  progress: { fontSize: 10, fontFamily: FONTS.bold, color: COLORS.textMuted, marginTop: 4, textAlign: 'center' },
+  progress: { fontSize: 10, fontFamily: FONTS.bold, color: COLORS.textMuted, marginTop: 3 },
 });
