@@ -388,7 +388,7 @@ export const SIZES = {
   touch: 44,
   touchComfortable: 48,
   header: 56,
-  tabBar: 68,
+  tabBar: 56,
   contentMax: 760,
 } as const;
 

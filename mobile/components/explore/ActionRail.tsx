@@ -139,7 +139,8 @@ const styles = StyleSheet.create({
   rail: {
     position: 'absolute',
     right: SPACE.sm,
-    bottom: 64,
+    // Au-dessus de la tab bar flottante mini (46 px + encoche) avec une marge.
+    bottom: 96,
     alignItems: 'center',
     gap: 2,
   },
