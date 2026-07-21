@@ -6,7 +6,7 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
-Dernière mise à jour : **2026-07-21** (Claude/Étienne) — années aberrantes « Film · 1 » corrigées (garde-fou serveur plausibleYear, récupère l'année depuis la vraie date) + faute « 3 jeus » → « 3 jeux »
+Dernière mise à jour : **2026-07-21** (Claude/Étienne) — resync globale des métadonnées (script one-shot serveur) pour nettoyer à la source les fiches (années aberrantes, données périmées), sans toucher aux affiches/personnalisations
 
 ---
 
@@ -90,6 +90,29 @@ la migration visuelle doit encore être exécutée sans modifier la logique mét
 6. Publication native optionnelle (EAS Build APK, puis stores).
 
 ## Journal des modifications
+
+### 2026-07-21 — Claude/Étienne : resync globale des métadonnées (nettoyage à la source)
+- **Objectif** : nettoyer durablement les copies locales des œuvres (années
+  aberrantes, données périmées) plutôt que de seulement masquer le symptôme à
+  l'affichage. Complète le garde-fou `plausibleYear` (affichage) par une remise
+  au propre de la base elle-même, depuis la source (TMDb/TheTVDB).
+- **`refreshMediaMetadata(media)`** (`services/tmdb/enrich.ts`) : re-télécharge
+  et met à jour les données FACTUELLES d'une fiche existante — année (recalculée
+  depuis la vraie date), dates, durée, genres, notes, statut, langue, ids
+  externes, + sous-champs série (saisons/épisodes, en production, chaîne, dates
+  d'épisodes). Source respectée : TMDb pour films et séries à tmdbId, TheTVDB
+  pour séries à tvdbId seul, jeux IGDB hors périmètre. **Ne touche pas** aux
+  affiches/bannières (personnalisables), titres, résumés, traductions, épisodes
+  ni aux données utilisateur.
+- **Script one-shot** `apps/server/scripts/resync-metadata.ts` (npm
+  `resync:metadata`) : parcourt toutes les séries/films par lots (concurrence 4,
+  pause entre lots), journalise l'avancement, idempotent. Deux modes :
+  `pnpm --filter @serietime/server resync:metadata` (global) ou
+  `… resync:metadata -- --bad-years-only` (uniquement les fiches à année
+  absente/aberrante). À lancer par Benjamin sur le serveur (clés API en env).
+- Tests : `resync-metadata.test.ts` (garde-fous : jeux/fiches sans id → skipped,
+  pas de crash) ; suite serveur au vert.
+
 
 ### 2026-07-21 — Claude/Étienne : année « Film · 1 » corrigée + faute « jeus »
 - **Bug « Film · 1 »** (années aberrantes) : certains médias portent en base une

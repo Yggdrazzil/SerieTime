@@ -357,3 +357,113 @@ export async function syncCreditsFromTmdb(mediaId: string): Promise<void> {
     });
   }
 }
+
+// Année plausible tirée d'une chaîne de date (ou undefined). Utilisé par la
+// resync : d'anciennes fiches portent une année aberrante (1, 0…) ; on la
+// recalcule depuis la vraie date renvoyée par la source.
+function plausibleYearFromDate(dateStr?: string | null): number | undefined {
+  if (!dateStr) return undefined;
+  const y = new Date(dateStr).getFullYear();
+  const max = new Date().getFullYear() + 10;
+  return Number.isFinite(y) && y >= 1888 && y <= max ? y : undefined;
+}
+
+export type MetadataResync = 'updated' | 'skipped' | 'unavailable';
+
+// Rafraîchit les MÉTADONNÉES FACTUELLES d'un média EXISTANT depuis sa source
+// (TMDb films/séries, TheTVDB séries sans tmdbId) : année, dates, durée,
+// genres, notes, statut, langue, ids externes (+ sous-champs série). Ne touche
+// VOLONTAIREMENT PAS : affiches/bannières (posterPath/backdropPath, souvent
+// personnalisées), titres/résumés, traductions, épisodes, ni données
+// utilisateur. Utilisé par le script de resync globale des métadonnées.
+export async function refreshMediaMetadata(
+  media: Pick<Media, 'id' | 'type' | 'tmdbId' | 'tvdbId'>,
+): Promise<MetadataResync> {
+  if (media.type === 'movie') {
+    if (!media.tmdbId || !tmdbEnabled()) return 'skipped';
+    const d = await tmdbMovieDetails(media.tmdbId);
+    if (!d) return 'unavailable';
+    await prisma.media.update({
+      where: { id: media.id },
+      data: {
+        releaseDate: parseDate(d.release_date),
+        // `?? null` : on efface explicitement une année aberrante quand la
+        // source n'a pas de date (sinon `undefined` laisserait le « 1 »).
+        year: plausibleYearFromDate(d.release_date) ?? null,
+        runtime: d.runtime ?? undefined,
+        status: d.status ?? undefined,
+        genres: d.genres?.length ? d.genres.map((g) => g.name).join(', ') : undefined,
+        originalLanguage: d.original_language ?? undefined,
+        popularity: d.popularity ?? undefined,
+        voteAverage: d.vote_average ?? undefined,
+        voteCount: d.vote_count ?? undefined,
+        imdbId: d.imdb_id ?? undefined,
+        lastSyncedAt: new Date(),
+      },
+    });
+    return 'updated';
+  }
+
+  // Série avec tmdbId : TMDb (métadonnées factuelles les plus riches).
+  if (media.tmdbId && tmdbEnabled()) {
+    const d = await tmdbShowDetails(media.tmdbId, false);
+    if (!d) return 'unavailable';
+    await prisma.media.update({
+      where: { id: media.id },
+      data: {
+        firstAirDate: parseDate(d.first_air_date),
+        year: plausibleYearFromDate(d.first_air_date) ?? null,
+        status: d.status ?? undefined,
+        genres: d.genres?.length ? d.genres.map((g) => g.name).join(', ') : undefined,
+        originalLanguage: d.original_language ?? undefined,
+        originCountry: d.origin_country?.join(',') ?? undefined,
+        runtime: d.episode_run_time?.[0] ?? undefined,
+        popularity: d.popularity ?? undefined,
+        voteAverage: d.vote_average ?? undefined,
+        voteCount: d.vote_count ?? undefined,
+        imdbId: d.external_ids?.imdb_id ?? undefined,
+        lastSyncedAt: new Date(),
+        show: {
+          update: {
+            numberOfSeasons: d.number_of_seasons ?? undefined,
+            numberOfEpisodes: d.number_of_episodes ?? undefined,
+            inProduction: d.in_production ?? undefined,
+            network: d.networks?.[0]?.name ?? undefined,
+            nextEpisodeAirDate: parseDate(d.next_episode_to_air?.air_date),
+            lastEpisodeAirDate: parseDate(d.last_episode_to_air?.air_date),
+          },
+        },
+      },
+    });
+    return 'updated';
+  }
+
+  // Série sans tmdbId mais avec tvdbId : TheTVDB.
+  if (media.tvdbId) {
+    const { tvdbEnabled, tvdbSeriesExtended } = await import('../tvdb/client.js');
+    if (!tvdbEnabled()) return 'skipped';
+    const ext = await tvdbSeriesExtended(media.tvdbId);
+    if (!ext) return 'unavailable';
+    const tvdbYear = ext.year ? Number(ext.year) : NaN;
+    const maxY = new Date().getFullYear() + 10;
+    const year =
+      Number.isFinite(tvdbYear) && tvdbYear >= 1888 && tvdbYear <= maxY
+        ? tvdbYear
+        : plausibleYearFromDate(ext.firstAired) ?? null;
+    await prisma.media.update({
+      where: { id: media.id },
+      data: {
+        firstAirDate: parseDate(ext.firstAired),
+        year,
+        status: ext.status?.name ?? undefined,
+        genres: ext.genres?.length ? ext.genres.map((g) => g.name).join(', ') : undefined,
+        originalLanguage: ext.originalLanguage ?? undefined,
+        lastSyncedAt: new Date(),
+      },
+    });
+    return 'updated';
+  }
+
+  // Jeux (IGDB) et fiches sans identifiant externe : hors périmètre.
+  return 'skipped';
+}
