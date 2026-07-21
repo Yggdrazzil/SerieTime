@@ -55,10 +55,21 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
             const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
             if (!actuallyFocused && !event.defaultPrevented) {
               navigation.navigate(route.name);
-              if (route.name === 'explore') qc.invalidateQueries({ queryKey: ['explore'] });
+              // NE PAS invalider ['explore'] ici : le deck de l'Explorer est
+              // FIGÉ pendant la session de l'onglet (règle produit) — l'écran
+              // reste monté (web : display:none), l'invalidation refetchait
+              // donc un deck ENTIÈREMENT NEUF à chaque retour sur l'onglet
+              // (position perdue + choix ❤️/👁 « oubliés »). Renouvellement
+              // uniquement via pull-to-refresh, carte de fin, ou re-tap ci-dessous.
             }
             if (actuallyFocused) {
-              qc.invalidateQueries();
+              // Re-tap = rafraîchir l'onglet COURANT. Le deck Explorer (clés
+              // ['explore', …]) est figé et son écran reste monté (donc actif) :
+              // on ne l'invalide que si c'est bien l'onglet Explorer qu'on
+              // re-tape — sinon un re-tap d'Accueil re-tirait le deck en douce.
+              qc.invalidateQueries({
+                predicate: (q) => route.name === 'explore' || q.queryKey[0] !== 'explore',
+              });
               bumpReset(route.name);
             }
           };

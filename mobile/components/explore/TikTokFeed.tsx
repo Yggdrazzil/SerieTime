@@ -13,16 +13,17 @@ import {
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useFocusEffect } from 'expo-router';
 import { api, tmdbImage } from '@/lib/api';
 import { COLORS, FONTS, RADIUS, SHADOW, SIZES, SPACE } from '@/lib/theme';
 import { EmptyState, LoadError, Loading } from '@/components/ui';
+import { useTabResetSeq } from '@/lib/tabReset';
 import { TikTokCard } from './TikTokCard';
 import { CommentsSheet } from './CommentsSheet';
 import { PullToRefreshView } from './PullToRefreshView';
 import { useResolveMedia } from './useResolveMedia';
+import { feedItemKey as keyOf, useFeedSessionStore } from './feedSession';
 import { FEED_CATEGORIES, catOf, type FeedCategory, type FeedItem } from './types';
-
-const keyOf = (f: FeedItem) => (f.igdbId ? `game:${f.igdbId}` : `${f.type}:${f.tmdbId ?? f.id}`);
 
 export function TikTokFeed({ topInset = 0 }: { topInset?: number }) {
   const queryClient = useQueryClient();
@@ -30,8 +31,21 @@ export function TikTokFeed({ topInset = 0 }: { topInset?: number }) {
   const listRef = useRef<FlatList<FeedItem>>(null);
   const scrollY = useRef(0); // offset vertical courant du flux (pour le pull-to-refresh web+natif)
 
+  // Session d'onglet (position + choix optimistes), module-scope : survit aux
+  // remontages (fiche, recherche, masquage d'onglet). Un re-tap de l'onglet
+  // Explorer bump `resetSeq` → session d'un ancien tirage : on repart de zéro
+  // AVANT d'initialiser cat/index (synchrone, idempotent).
+  const resetSeq = useTabResetSeq('explore');
+  if (useFeedSessionStore.getState().seq !== resetSeq) {
+    useFeedSessionStore.getState().reset(resetSeq);
+  }
+
   const [height, setHeight] = useState(0);
-  const [cat, setCat] = useState<FeedCategory>('tout');
+  const [cat, setCatState] = useState<FeedCategory>(() => useFeedSessionStore.getState().cat);
+  const setCat = useCallback((c: FeedCategory) => {
+    setCatState(c);
+    useFeedSessionStore.getState().setCat(c); // nouvelle liste → position repart en haut
+  }, []);
   const [extra, setExtra] = useState<FeedItem[]>([]); // pages ajoutées (flux infini)
   const [commentsFor, setCommentsFor] = useState<FeedItem | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -80,6 +94,29 @@ export function TikTokFeed({ topInset = 0 }: { topInset?: number }) {
   // Le deck courant, lu par les callbacks stables (onViewable) sans closure périmée.
   const deckRef = useRef(deck);
   deckRef.current = deck;
+  // Hauteur courante, lue par le repositionnement au refocus (callback stable).
+  const heightRef = useRef(height);
+  heightRef.current = height;
+
+  // Position restaurée AU REFOCUS de l'onglet : sur web, enableScreens(true)
+  // passe l'écran inactif en display:none — le conteneur de scroll perd son
+  // scrollTop (remis à 0 par le navigateur) au retour d'une fiche ou d'un
+  // autre onglet, alors que le composant reste monté. On resnappe la liste sur
+  // la carte sauvegardée (index borné : le deck a pu changer). Inoffensif en
+  // natif / quand la position est déjà bonne (scroll non animé, même offset).
+  useFocusEffect(
+    useCallback(() => {
+      const raf = requestAnimationFrame(() => {
+        const d = deckRef.current;
+        const h = heightRef.current;
+        if (d.length === 0 || h <= 0) return;
+        const idx = Math.max(0, Math.min(useFeedSessionStore.getState().index, d.length - 1));
+        scrollY.current = idx * h; // le pull-to-refresh ne doit capter qu'en haut
+        listRef.current?.scrollToIndex({ index: idx, animated: false });
+      });
+      return () => cancelAnimationFrame(raf);
+    }, []),
+  );
 
   const invalidateLibrary = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['shows'] });
@@ -119,6 +156,12 @@ export function TikTokFeed({ topInset = 0 }: { topInset?: number }) {
   // Callback stable (RN interdit de le changer entre les rendus) : lit deckRef.
   const onViewable = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
     const idx = viewableItems[0]?.index ?? 0;
+    // Mémorise la carte courante (session module-scope) — restaurée au
+    // remontage/refocus. `null` = carte de fin (footer hors data) : on garde
+    // la dernière position connue.
+    if (typeof viewableItems[0]?.index === 'number') {
+      useFeedSessionStore.getState().setIndex(viewableItems[0].index);
+    }
     const d = deckRef.current;
     for (let i = idx + 1; i <= idx + 2; i++) {
       const it = d[i];
@@ -128,10 +171,13 @@ export function TikTokFeed({ topInset = 0 }: { topInset?: number }) {
     }
   }).current;
 
-  // Tirer-pour-actualiser : nouveau tirage complet, on repart du haut.
+  // Tirer-pour-actualiser : nouveau tirage complet, on repart du haut — la
+  // session (position + overrides optimistes) est purgée : le nouveau deck
+  // exclut ce qui vient d'entrer en bibliothèque, les overrides seraient orphelins.
   const onRefresh = useCallback(async () => {
     dryRef.current = 0;
     setExtra([]);
+    useFeedSessionStore.getState().clearDeck();
     await (isGames ? gamesQuery.refetch() : refetch());
     listRef.current?.scrollToOffset({ offset: 0, animated: false });
   }, [refetch, isGames, gamesQuery]);
@@ -196,6 +242,11 @@ export function TikTokFeed({ topInset = 0 }: { topInset?: number }) {
             accessibilityLabel="Suggestions personnalisées"
             decelerationRate="fast"
             getItemLayout={(_, index) => ({ length: height, offset: height * index, index })}
+            // Remontage complet (détour par la recherche — FadeSwitch — ou
+            // re-tap de l'onglet) : on repart sur la carte sauvegardée (0 après
+            // un reset volontaire). Index borné : le deck a pu raccourcir
+            // (pages « extra » du flux infini perdues au remontage).
+            initialScrollIndex={Math.max(0, Math.min(useFeedSessionStore.getState().index, deck.length - 1))}
             initialNumToRender={2}
             maxToRenderPerBatch={3}
             windowSize={3}
