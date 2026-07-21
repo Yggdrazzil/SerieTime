@@ -232,7 +232,7 @@ export async function statsRoutes(app: FastifyInstance): Promise<void> {
     ]);
     const ids = [userId, ...following.map((f) => f.followingId).filter((id) => !blockedIds.has(id))];
 
-    const [epRows, mvRows, users] = await Promise.all([
+    const [epRows, mvRows, gmRows, users] = await Promise.all([
       prisma.$queryRaw<{ userId: string; minutes: bigint | number; count: bigint | number }[]>`
         SELECT ues.userId AS userId,
                SUM(CASE WHEN e.runtime > 0 THEN e.runtime
@@ -252,6 +252,16 @@ export async function statsRoutes(app: FastifyInstance): Promise<void> {
         FROM "UserMediaStatus" ums
         JOIN "Media" m ON m.id = ums.mediaId
         WHERE ums.status = 'completed' AND m.type = 'movie' AND ums.userId IN (${Prisma.join(ids)})
+        GROUP BY ums.userId`,
+      // Jeux : temps de jeu DÉCLARATIF (saisi sur la fiche / import Steam) —
+      // même règle que l'onglet Jeux des stats. « Joués » = en cours/terminés.
+      prisma.$queryRaw<{ userId: string; minutes: bigint | number; count: bigint | number }[]>`
+        SELECT ums.userId AS userId,
+               SUM(COALESCE(ums.playtimeMinutes, 0)) AS minutes,
+               SUM(CASE WHEN ums.status IN ('playing', 'completed') THEN 1 ELSE 0 END) AS count
+        FROM "UserMediaStatus" ums
+        JOIN "Media" m ON m.id = ums.mediaId
+        WHERE m.type = 'game' AND ums.isHidden = 0 AND ums.userId IN (${Prisma.join(ids)})
         GROUP BY ums.userId`,
       prisma.user.findMany({
         where: { id: { in: ids } },
@@ -273,7 +283,11 @@ export async function statsRoutes(app: FastifyInstance): Promise<void> {
     const movies = users
       .map((u) => ({ ...entry(u), minutes: mv.get(u.id)?.minutes ?? 0, movies: mv.get(u.id)?.count ?? 0 }))
       .sort((a, b) => b.minutes - a.minutes);
-    return { series, movies };
+    const gm = new Map(gmRows.map((r) => [r.userId, { minutes: Number(r.minutes), count: Number(r.count) }]));
+    const games = users
+      .map((u) => ({ ...entry(u), minutes: gm.get(u.id)?.minutes ?? 0, games: gm.get(u.id)?.count ?? 0 }))
+      .sort((a, b) => b.minutes - a.minutes);
+    return { series, movies, games };
   });
 
   // Badges (Bloc 3) : calculés à la volée depuis l'état du compte — pas de table
