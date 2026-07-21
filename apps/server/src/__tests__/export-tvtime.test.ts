@@ -170,14 +170,15 @@ describe('Export au format TV Time', () => {
     expect(seen[3]).toBe('Dark,297621,,1,2,6108215,2020-05-03 21:00:00,');
 
     const followed = read('followed_tv_show.csv');
-    expect(followed[0]).toBe('tv_show_name,tvdb_id,tmdb_id,active,status,created_at,rating');
-    // Titre avec virgule échappé + série arrêtée → active=0 (convention TV Time)
-    // ET status=stopped_watching (notre colonne de statut fin).
-    expect(followed.find((l) => l.includes('Vieille'))).toBe('"Vieille Série, arrêtée",424242,,0,stopped_watching,2021-01-01 10:00:00,');
-    expect(followed.find((l) => l.startsWith('Dark'))).toBe('Dark,297621,,1,watching,2020-05-01 10:00:00,9');
-    expect(followed.find((l) => l.startsWith('Pause Café'))).toBe('Pause Café,313131,,1,paused,2019-01-15 10:00:00,');
-    expect(followed.find((l) => l.startsWith('Jamais'))).toBe('Jamais Commencée,646464,,1,not_started,2023-09-01 10:00:00,');
-    expect(followed.find((l) => l.startsWith('Future'))).toBe('Future Pépite,555555,,1,for_later,2024-06-01 10:00:00,');
+    expect(followed[0]).toBe('tv_show_name,tvdb_id,tmdb_id,archived,active,status,created_at,rating');
+    // Titre avec virgule échappé + série arrêtée → archived=1 (LE signal
+    // « Stop watching » des vrais exports TV Time) + active=0 (signal
+    // secondaire) ET status=stopped_watching (notre colonne de statut fin).
+    expect(followed.find((l) => l.includes('Vieille'))).toBe('"Vieille Série, arrêtée",424242,,1,0,stopped_watching,2021-01-01 10:00:00,');
+    expect(followed.find((l) => l.startsWith('Dark'))).toBe('Dark,297621,,0,1,watching,2020-05-01 10:00:00,9');
+    expect(followed.find((l) => l.startsWith('Pause Café'))).toBe('Pause Café,313131,,0,1,paused,2019-01-15 10:00:00,');
+    expect(followed.find((l) => l.startsWith('Jamais'))).toBe('Jamais Commencée,646464,,0,1,not_started,2023-09-01 10:00:00,');
+    expect(followed.find((l) => l.startsWith('Future'))).toBe('Future Pépite,555555,,0,1,for_later,2024-06-01 10:00:00,');
 
     const special = read('user_show_special_status.csv');
     expect(special[0]).toBe('entity_type,tv_show_name,tv_show_id,tmdb_id,status,created_at');
