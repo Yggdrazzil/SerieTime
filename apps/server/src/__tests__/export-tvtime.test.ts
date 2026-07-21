@@ -37,6 +37,8 @@ const auth = (token: string) => ({ authorization: `Bearer ${token}` });
 
 const WATCHED_E1 = new Date('2020-05-02T21:00:00Z');
 const WATCHED_E2 = new Date('2020-05-03T21:00:00Z');
+const WATCHED_P1 = new Date('2019-02-01T20:00:00Z'); // épisode de la série en pause
+const MOVIE_SEEN_AT = new Date('2025-03-10T20:00:00Z');
 
 beforeAll(async () => {
   execSync('pnpm exec prisma migrate deploy', {
@@ -60,8 +62,10 @@ beforeAll(async () => {
   ({ token: tokenB, id: userB } = await register('Importeur', 'import@example.com'));
 
   // ————— Seed du compte A —————
-  // 1 série suivie (2 épisodes vus + notes), 1 série abandonnée,
-  // 1 série favorite en watchlist, 1 film vu, 1 film à voir.
+  // 1 série suivie (2 épisodes vus + notes), 1 série abandonnée, 1 série EN
+  // PAUSE (avec 1 épisode vu : le statut doit être restitué, pas déduit),
+  // 1 série PAS COMMENCÉE, 1 série favorite en watchlist,
+  // 1 film vu (noté + favori), 1 film à voir.
   const dark = await prisma.media.create({
     data: { type: 'show', title: 'Dark', year: 2017, tvdbId: '297621', show: { create: {} } },
     include: { show: true },
@@ -74,6 +78,16 @@ beforeAll(async () => {
   });
   const stopped = await prisma.media.create({
     data: { type: 'show', title: 'Vieille Série, arrêtée', year: 2010, tvdbId: '424242', show: { create: {} } },
+  });
+  const paused = await prisma.media.create({
+    data: { type: 'show', title: 'Pause Café', year: 2019, tvdbId: '313131', show: { create: {} } },
+    include: { show: true },
+  });
+  const p1 = await prisma.episode.create({
+    data: { showId: paused.show!.id, seasonNumber: 1, episodeNumber: 1, title: 'Pilote', tvdbId: '7000001' },
+  });
+  const fresh = await prisma.media.create({
+    data: { type: 'show', title: 'Jamais Commencée', year: 2023, tvdbId: '646464', show: { create: {} } },
   });
   const later = await prisma.media.create({
     data: { type: 'show', title: 'Future Pépite', year: 2024, tvdbId: '555555', show: { create: {} } },
@@ -89,6 +103,8 @@ beforeAll(async () => {
     data: [
       { userId: userA, mediaId: dark.id, status: 'watching', rating: 9, addedAt: new Date('2020-05-01T10:00:00Z') },
       { userId: userA, mediaId: stopped.id, status: 'abandoned', addedAt: new Date('2021-01-01T10:00:00Z') },
+      { userId: userA, mediaId: paused.id, status: 'paused', addedAt: new Date('2019-01-15T10:00:00Z') },
+      { userId: userA, mediaId: fresh.id, status: 'not_started', addedAt: new Date('2023-09-01T10:00:00Z') },
       {
         userId: userA,
         mediaId: later.id,
@@ -101,8 +117,11 @@ beforeAll(async () => {
         userId: userA,
         mediaId: movieSeen.id,
         status: 'completed',
-        completedAt: new Date('2025-03-10T20:00:00Z'),
-        lastWatchedAt: new Date('2025-03-10T20:00:00Z'),
+        rating: 7,
+        isFavorite: true,
+        favoritedAt: new Date('2025-03-11T09:00:00Z'),
+        completedAt: MOVIE_SEEN_AT,
+        lastWatchedAt: MOVIE_SEEN_AT,
       },
       { userId: userA, mediaId: movieLater.id, status: 'watchlist' },
     ],
@@ -111,6 +130,7 @@ beforeAll(async () => {
     data: [
       { userId: userA, episodeId: e1.id, status: 'watched', watchedAt: WATCHED_E1, rating: 8 },
       { userId: userA, episodeId: e2.id, status: 'watched', watchedAt: WATCHED_E2 },
+      { userId: userA, episodeId: p1.id, status: 'watched', watchedAt: WATCHED_P1 },
     ],
   });
 }, 120_000);
@@ -144,24 +164,31 @@ describe('Export au format TV Time', () => {
 
     const seen = read('seen_episode.csv');
     expect(seen[0]).toBe('tv_show_name,tvdb_id,tmdb_id,episode_season_number,episode_number,episode_id,watched_at,rating');
-    expect(seen).toHaveLength(3); // en-tête + 2 épisodes vus
-    expect(seen[1]).toBe('Dark,297621,,1,1,6108214,2020-05-02 21:00:00,8');
-    expect(seen[2]).toBe('Dark,297621,,1,2,6108215,2020-05-03 21:00:00,');
+    expect(seen).toHaveLength(4); // en-tête + 3 épisodes vus (tri watched_at asc)
+    expect(seen[1]).toBe('Pause Café,313131,,1,1,7000001,2019-02-01 20:00:00,');
+    expect(seen[2]).toBe('Dark,297621,,1,1,6108214,2020-05-02 21:00:00,8');
+    expect(seen[3]).toBe('Dark,297621,,1,2,6108215,2020-05-03 21:00:00,');
 
     const followed = read('followed_tv_show.csv');
-    expect(followed[0]).toBe('tv_show_name,tvdb_id,tmdb_id,active,created_at,rating');
-    // Titre avec virgule échappé + série arrêtée → active=0 (la convention TV Time).
-    expect(followed.find((l) => l.includes('Vieille'))).toBe('"Vieille Série, arrêtée",424242,,0,2021-01-01 10:00:00,');
-    expect(followed.find((l) => l.startsWith('Dark'))).toBe('Dark,297621,,1,2020-05-01 10:00:00,9');
+    expect(followed[0]).toBe('tv_show_name,tvdb_id,tmdb_id,active,status,created_at,rating');
+    // Titre avec virgule échappé + série arrêtée → active=0 (convention TV Time)
+    // ET status=stopped_watching (notre colonne de statut fin).
+    expect(followed.find((l) => l.includes('Vieille'))).toBe('"Vieille Série, arrêtée",424242,,0,stopped_watching,2021-01-01 10:00:00,');
+    expect(followed.find((l) => l.startsWith('Dark'))).toBe('Dark,297621,,1,watching,2020-05-01 10:00:00,9');
+    expect(followed.find((l) => l.startsWith('Pause Café'))).toBe('Pause Café,313131,,1,paused,2019-01-15 10:00:00,');
+    expect(followed.find((l) => l.startsWith('Jamais'))).toBe('Jamais Commencée,646464,,1,not_started,2023-09-01 10:00:00,');
+    expect(followed.find((l) => l.startsWith('Future'))).toBe('Future Pépite,555555,,1,for_later,2024-06-01 10:00:00,');
 
     const special = read('user_show_special_status.csv');
-    expect(special[0]).toBe('tv_show_name,tv_show_id,tmdb_id,status,created_at');
-    expect(special.filter((l) => l.endsWith('favorite,2024-06-01 10:00:00') && l.startsWith('Future Pépite'))).toHaveLength(1);
-    expect(special.filter((l) => l.includes(',for_later,') && l.startsWith('Future Pépite'))).toHaveLength(1);
+    expect(special[0]).toBe('entity_type,tv_show_name,tv_show_id,tmdb_id,status,created_at');
+    expect(special.filter((l) => l.endsWith('favorite,2024-06-01 10:00:00') && l.startsWith('show,Future Pépite'))).toHaveLength(1);
+    expect(special.filter((l) => l.includes(',for_later,') && l.startsWith('show,Future Pépite'))).toHaveLength(1);
+    // Favori FILM : entity_type=movie + tmdb_id (pas d'id TheTVDB pour un film).
+    expect(special.find((l) => l.startsWith('movie,'))).toBe('movie,Mickey 17,,696506,favorite,2025-03-11 09:00:00');
 
     const tracking = read('tracking-prod-records-v2.csv');
-    expect(tracking[0]).toBe('entity_type,movie_name,release_date,type,tmdb_id,created_at');
-    expect(tracking.find((l) => l.includes('Mickey 17'))).toBe('movie,Mickey 17,2025-03-05,watch,696506,2025-03-10 20:00:00');
+    expect(tracking[0]).toBe('entity_type,movie_name,release_date,type,tmdb_id,created_at,rating');
+    expect(tracking.find((l) => l.includes('Mickey 17'))).toBe('movie,Mickey 17,2025-03-05,watch,696506,2025-03-10 20:00:00,7');
     expect(tracking.find((l) => l.includes('Suzume'))).toContain('movie,Suzume,2022-11-11,towatch');
   });
 
@@ -179,14 +206,14 @@ describe('Export au format TV Time', () => {
     const res = await app.inject({ method: 'POST', url: `/api/import/tvtime/${importId}/analyze`, headers: auth(tokenB) });
     expect(res.statusCode).toBe(200);
     const { summary } = res.json();
-    expect(summary.showsDetected).toBe(3);
+    expect(summary.showsDetected).toBe(5);
     expect(summary.moviesDetected).toBe(2);
-    expect(summary.episodesWatchedDetected).toBe(2);
-    expect(summary.favoritesDetected).toBe(1);
-    expect(summary.ratingsDetected).toBe(1); // la note de série (Dark, 9)
+    expect(summary.episodesWatchedDetected).toBe(3);
+    expect(summary.favoritesDetected).toBe(2); // 1 série + 1 film
+    expect(summary.ratingsDetected).toBe(2); // note de série (Dark, 9) + note de film (Mickey 17, 7)
     // Toutes les entrées portent un id externe ou titre+année : rien à résoudre à la main.
     expect(summary.unresolved).toBe(0);
-    expect(summary.autoImport).toBe(5);
+    expect(summary.autoImport).toBe(7);
 
     // Confirmation : l'import (tâche de fond) doit aboutir.
     const confirm = await app.inject({ method: 'POST', url: `/api/import/tvtime/${importId}/confirm`, headers: auth(tokenB) });
@@ -203,32 +230,51 @@ describe('Export au format TV Time', () => {
   it('le compte cible retrouve les épisodes vus (dates et note comprises)', async () => {
     const statuses = await prisma.userEpisodeStatus.findMany({
       where: { userId: userB, status: 'watched' },
-      include: { episode: true },
-      orderBy: { episode: { episodeNumber: 'asc' } },
+      include: { episode: { include: { show: { include: { media: true } } } } },
+      orderBy: { watchedAt: 'asc' },
     });
-    expect(statuses).toHaveLength(2);
-    expect(statuses.map((s) => s.episode.episodeNumber)).toEqual([1, 2]);
+    expect(statuses).toHaveLength(3);
+    const darkEpisodes = statuses.filter((s) => s.episode.show.media.title === 'Dark');
+    expect(darkEpisodes.map((s) => s.episode.episodeNumber)).toEqual([1, 2]);
     // Les dates ne dérivent pas de plus d'un jour (l'export écrit l'heure UTC,
     // l'import la relit dans le fuseau du serveur — comme un vrai export TV Time).
     const DAY = 24 * 3600 * 1000;
-    expect(Math.abs(statuses[0]!.watchedAt!.getTime() - WATCHED_E1.getTime())).toBeLessThan(DAY);
-    expect(Math.abs(statuses[1]!.watchedAt!.getTime() - WATCHED_E2.getTime())).toBeLessThan(DAY);
-    expect(statuses[0]!.rating).toBe(8);
+    expect(Math.abs(darkEpisodes[0]!.watchedAt!.getTime() - WATCHED_E1.getTime())).toBeLessThan(DAY);
+    expect(Math.abs(darkEpisodes[1]!.watchedAt!.getTime() - WATCHED_E2.getTime())).toBeLessThan(DAY);
+    expect(darkEpisodes[0]!.rating).toBe(8);
   });
 
-  it('le compte cible retrouve statuts, favori, watchlist, note de série', async () => {
+  it('le compte cible retrouve les statuts fins À L’IDENTIQUE (pas déduits)', async () => {
     const statuses = await prisma.userMediaStatus.findMany({
       where: { userId: userB },
       include: { media: true },
     });
     const byTitle = new Map(statuses.map((s) => [s.media.title, s]));
 
+    expect(byTitle.get('Dark')?.status).toBe('watching');
     expect(byTitle.get('Vieille Série, arrêtée')?.status).toBe('abandoned');
+    // En pause AVEC un épisode vu : sans la colonne status, la recalculation
+    // l'aurait déduite « watching » — elle doit revenir « paused ».
+    expect(byTitle.get('Pause Café')?.status).toBe('paused');
+    expect(byTitle.get('Jamais Commencée')?.status).toBe('not_started');
     expect(byTitle.get('Future Pépite')?.status).toBe('watchlist');
     expect(byTitle.get('Future Pépite')?.isFavorite).toBe(true);
     expect(byTitle.get('Dark')?.rating).toBe(9);
-    expect(byTitle.get('Mickey 17')?.status).toBe('completed');
     expect(byTitle.get('Suzume')?.status).toBe('watchlist');
+  });
+
+  it('le compte cible retrouve date de visionnage, note et favori du film', async () => {
+    const mickey = await prisma.userMediaStatus.findFirst({
+      where: { userId: userB, media: { title: 'Mickey 17' } },
+    });
+    expect(mickey?.status).toBe('completed');
+    expect(mickey?.rating).toBe(7);
+    expect(mickey?.isFavorite).toBe(true);
+    // La date de visionnage vient du created_at du tracking record (fuseau
+    // serveur à la relecture, comme pour les épisodes) — pas du favori, ni de « maintenant ».
+    const DAY = 24 * 3600 * 1000;
+    expect(mickey?.completedAt).toBeTruthy();
+    expect(Math.abs(mickey!.completedAt!.getTime() - MOVIE_SEEN_AT.getTime())).toBeLessThan(DAY);
   });
 
   it('ré-importe sur les médias existants sans créer de doublon catalogue', async () => {

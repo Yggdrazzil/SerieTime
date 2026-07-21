@@ -13,7 +13,9 @@ import {
   normalizeImportedEpisode,
   normalizeImportedMedia,
   normalizeTitle,
+  parseDateSafe,
   parseFileContent,
+  parseFloatSafe,
   scoreMatch,
   type MatchCandidate,
   type ParsedFile,
@@ -69,7 +71,9 @@ type SuggestionEntry = {
   score: number;
 };
 
-const TVTIME_STATUS_MAP: Record<string, string> = {
+// Exporté pour le script de réparation scripts/reapply-import-statuses.ts :
+// il ne doit considérer que les statuts EXPLICITEMENT mappés (jamais le défaut).
+export const TVTIME_STATUS_MAP: Record<string, string> = {
   watching: 'watching',
   up_to_date: 'watching',
   'up to date': 'watching',
@@ -169,7 +173,14 @@ export async function analyzeImport(importId: string): Promise<ImportAnalysisSum
   // Films : TV Time ne les met pas dans un fichier dédié, ils sont noyés dans
   // les tracking records (entity_type=movie, movie_name, release_date, type).
   // On les collecte à part, « vu » l'emportant sur « à voir » (towatch).
-  const movieSeen = new Map<string, { title: string; year?: number; watched: boolean }>();
+  // On relit aussi : created_at (date de visionnage d'un rang watch — présent
+  // chez TV Time comme dans nos exports), et — colonnes de NOS exports
+  // uniquement, absentes des vrais TV Time — tmdb_id (clé de fusion avec les
+  // rangs films de user_show_special_status.csv) et rating (note du film).
+  const movieSeen = new Map<
+    string,
+    { title: string; year?: number; tmdbId?: string; watched: boolean; watchedAt?: string; rating?: number }
+  >();
 
   for (const file of parsedFiles) {
     if (file.kind === 'episodes_watched') {
@@ -182,9 +193,22 @@ export async function analyzeImport(importId: string): Promise<ImportAnalysisSum
           const rd = String(row['release_date'] ?? '');
           const year = /^\d{4}/.test(rd) ? parseInt(rd.slice(0, 4), 10) : undefined;
           const watched = type !== 'towatch'; // watch/rewatch/follow => vu ; towatch => à voir
-          const key = `movie:${normalizeTitle(title)}`;
+          const tmdbRaw = String(row['tmdb_id'] ?? '').trim();
+          const tmdbId = tmdbRaw || undefined;
+          const watchedAt = watched ? parseDateSafe(row['created_at']) : undefined;
+          const rating = parseFloatSafe(row['rating']);
+          // Même clé que mediaKey() plus bas : indispensable pour fusionner avec
+          // les rangs films (favoris) de user_show_special_status.csv.
+          const key = tmdbId ? `tmdb-movie:${tmdbId}` : `movie:${normalizeTitle(title)}`;
           const prev = movieSeen.get(key);
-          movieSeen.set(key, { title, year, watched: (prev?.watched ?? false) || watched });
+          movieSeen.set(key, {
+            title: prev?.title ?? title,
+            year: prev?.year ?? year,
+            tmdbId: prev?.tmdbId ?? tmdbId,
+            watched: (prev?.watched ?? false) || watched,
+            watchedAt: prev?.watchedAt ?? watchedAt,
+            rating: prev?.rating ?? rating,
+          });
           continue;
         }
         const ep = normalizeImportedEpisode(row);
@@ -224,7 +248,10 @@ export async function analyzeImport(importId: string): Promise<ImportAnalysisSum
       mediaType: 'movie',
       title: m.title,
       year: m.year,
+      tmdbId: m.tmdbId,
       status: m.watched ? 'watched' : 'watchlist',
+      watchedAt: m.watchedAt,
+      rating: m.rating,
       raw: {},
     });
   }

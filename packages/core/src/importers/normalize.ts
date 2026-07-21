@@ -64,9 +64,16 @@ export function normalizeImportedMedia(record: RawRecord, fileKind: FileKind): N
   // (user_show_special_status.csv). « favorite » n'est pas un statut de suivi :
   // on le bascule en favori et on laisse le statut se déduire ailleurs.
   let favoriteFromStatus = false;
-  if (status && status.trim().toLowerCase() === 'favorite') {
-    favoriteFromStatus = true;
-    status = undefined;
+  let specialStatusRow = false;
+  if (status) {
+    const s = status.trim().toLowerCase();
+    if (s === 'favorite') {
+      favoriteFromStatus = true;
+      specialStatusRow = true;
+      status = undefined;
+    } else if (s === 'for_later' || s === 'for later') {
+      specialStatusRow = true;
+    }
   }
   if (!status) {
     if (fileKind === 'watchlist') status = 'watchlist';
@@ -92,7 +99,11 @@ export function normalizeImportedMedia(record: RawRecord, fileKind: FileKind): N
     rating: parseFloatSafe(pickField(record, 'rating')),
     isFavorite,
     addedAt: parseDateSafe(pickField(record, 'addedAt')),
-    watchedAt: parseDateSafe(pickField(record, 'watchedAt')),
+    // Un rang « special status » (favorite / for_later) ne date PAS un
+    // visionnage : son created_at est la date de mise en favori / watchlist.
+    // Sans ce garde, un FILM favori serait marqué « vu » à cette date
+    // (applyMapping considère watchedAt comme preuve de visionnage).
+    watchedAt: specialStatusRow ? undefined : parseDateSafe(pickField(record, 'watchedAt')),
     listNames: typeof listName === 'string' && listName.trim() ? [listName.trim()] : undefined,
     raw: record,
   };
