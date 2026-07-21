@@ -8,6 +8,7 @@ import { EmptyState, Loading } from '@/components/ui';
 import { useComments } from '@/components/comments/useComments';
 import { CommentCard } from '@/components/comments/CommentCard';
 import { BlockedCommentPopup } from '@/components/comments/BlockedCommentPopup';
+import { useBackClose } from '@/lib/useBackClose';
 import type { FeedItem } from './types';
 
 export function CommentsSheet({
@@ -25,6 +26,8 @@ export function CommentsSheet({
   const insets = useSafeAreaInsets();
   const [mediaId, setMediaId] = useState<string | null>(null);
   const [error, setError] = useState(false);
+  // Le « retour » ferme la feuille de commentaires au lieu de quitter l'Explorer.
+  useBackClose(!!item, onClose);
 
   useEffect(() => {
     if (!item) return;

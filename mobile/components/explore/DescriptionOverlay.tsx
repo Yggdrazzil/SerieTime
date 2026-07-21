@@ -5,6 +5,7 @@ import { api } from '@/lib/api';
 import { COLORS, FONTS, RADIUS, SHADOW, SIZES, SPACE } from '@/lib/theme';
 import { SlideUpBar } from '@/components/anim';
 import { useHideTabBar } from '@/lib/tabBarHidden';
+import { useBackClose } from '@/lib/useBackClose';
 import type { FeedItem } from './types';
 
 type DetailInfo = {
@@ -48,6 +49,8 @@ export function DescriptionOverlay({
   // Sheet du bas : la tab bar flottante passerait devant le bouton
   // « Voir la fiche » — on la cache tant que le panneau est ouvert.
   useHideTabBar(visible);
+  // Le « retour » ferme le panneau de détails au lieu de quitter l'Explorer.
+  useBackClose(visible, onClose);
 
   useEffect(() => {
     if (!visible) return;
