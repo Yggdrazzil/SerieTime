@@ -47,6 +47,7 @@ la migration visuelle doit encore être exécutée sans modifier la logique mét
 | Notifications push (OS) | ⏸ Non commencé | Nécessite dev build Expo + tokens Expo Push (la génération d'événements existe déjà) |
 | Import ZIP TV Time | ✅ Fait (v. initiale) | Analyse, matching, résolution manuelle, application |
 | Sauvegarde / restauration JSON | 🛠 Export réparé | Client aligné sur le `POST` serveur ; téléchargement JSON web, partage natif et erreur visible. L’interface de restauration reste à ajouter. |
+| Export au format TV Time | ✅ Fait | `POST /api/backup/export-tvtime` : ZIP de CSV calqués sur l'export TV Time (séries suivies, épisodes vus, favoris/watchlist, films), relu parfaitement par notre propre import (test d'aller-retour). Rangée dédiée dans Paramètres (téléchargement web ; natif orienté vers la web app). Jeux hors format (couverts par l'export JSON). |
 | Hébergement VPS | ✅ Fait | Prod sur le VPS Hostinger de Benjamin : `https://serietime.studio-vives.fr` (Docker isolé, HTTPS Let's Encrypt, backup DB nocturne) |
 | Web app (navigateur / écran d'accueil) | ✅ Fait | Export Expo web servi par Nginx à la racine du domaine (`/api` proxifié) ; utilisable iPhone + Android sans store |
 | Distribution native (APK / stores) | ⏳ Optionnel | EAS Build documenté dans le README ; la web app couvre déjà l'usage quotidien |
@@ -90,6 +91,38 @@ la migration visuelle doit encore être exécutée sans modifier la logique mét
 6. Publication native optionnelle (EAS Build APK, puis stores).
 
 ## Journal des modifications
+
+### 2026-07-21 — Claude/Étienne : export de données au format TV Time
+- **Objectif** (demande produit Étienne) : « se calquer sur le format de TV
+  Time » — les données PlotTime deviennent lisibles par tout outil qui comprend
+  un export TV Time, notre propre import en tête (portabilité totale).
+- **Contrat** : la spec n'est pas un fichier TV Time officiel (aucune spec
+  publique) mais NOTRE importeur (`packages/core/src/importers/records.ts`
+  `TVTIME_KNOWN`/`FIELD_ALIASES` + `normalize.ts`). Le zip produit doit être
+  relu parfaitement par `analyzeImport`.
+- **Serveur** — `POST /api/backup/export-tvtime` (`modules/backup/routes.ts`,
+  auth requise) : ZIP en mémoire (AdmZip) de 4 CSV :
+  `seen_episode.csv` (un rang par épisode vu : titre série, tvdb_id de la
+  série, saison/épisode, episode_id TheTVDB, watched_at, note d'épisode),
+  `followed_tv_show.csv` (séries suivies : `active=0` pour « Arrêtée », comme
+  TV Time, created_at, note de série), `user_show_special_status.csv`
+  (`favorite` + `for_later` dans la colonne status, comme TV Time),
+  `tracking-prod-records-v2.csv` (films : `entity_type=movie`,
+  `type=watch|towatch`). Jeux exclus (hors format TV Time — l'export JSON
+  complet les couvre).
+- **Test d'aller-retour** (`__tests__/export-tvtime.test.ts`, 6 tests) : seed
+  d'un compte (série suivie avec 2 épisodes vus + notes, série abandonnée,
+  série favorite en watchlist, film vu, film à voir) → export → ré-import du
+  zip sur un DEUXIÈME compte via le vrai flux upload/analyze/confirm →
+  l'analyse retrouve tout (3 séries, 2 films, 2 épisodes, favori, note,
+  0 non-résolu) et le compte cible récupère statuts/dates/notes sans doublon
+  catalogue.
+- **Mobile** (`app/settings.tsx`) : rangée « Exporter au format TV Time » sous
+  l'export JSON — web : téléchargement direct du ZIP (`api.download`, nouveau
+  helper fetch binaire dans `lib/api.ts`) ; natif : message orientant vers la
+  web app (partage binaire peu fiable, choix simple assumé).
+- QA : `tsc --noEmit` serveur + mobile OK ; suite vitest complète : 260/261
+  (seul échec : /health APP_NAME, préexistant et toléré).
 
 ### 2026-07-21 — Claude/Étienne : resync globale des métadonnées (nettoyage à la source)
 - **Objectif** : nettoyer durablement les copies locales des œuvres (années

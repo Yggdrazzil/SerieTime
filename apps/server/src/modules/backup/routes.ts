@@ -1,8 +1,37 @@
 import type { FastifyInstance } from 'fastify';
+import AdmZip from 'adm-zip';
 import { z } from 'zod';
 import { prisma } from '../../db/client.js';
 import { requireAuth } from '../auth/routes.js';
 import { APP_VERSION } from '../../config/env.js';
+
+// ————— Export « format TV Time » (demande produit) —————
+// Le contrat n'est PAS un fichier officiel TV Time (il n'y a pas de spec
+// publique) : c'est NOTRE importeur (packages/core/src/importers/records.ts +
+// normalize.ts) qui fait foi. Noms de fichiers = liste blanche TVTIME_KNOWN,
+// intitulés de colonnes = alias FIELD_ALIASES — le zip produit ici doit être
+// relu parfaitement par analyzeImport (test d'aller-retour export-tvtime.test.ts).
+
+function csvCell(value: unknown): string {
+  if (value === undefined || value === null) return '';
+  const s = String(value);
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+function toCsv(headers: string[], rows: unknown[][]): string {
+  return [headers.join(','), ...rows.map((r) => r.map(csvCell).join(','))].join('\n') + '\n';
+}
+
+// Format de date TV Time : « YYYY-MM-DD HH:mm:ss » (UTC ici — parseDateSafe le relit).
+function tvtimeDate(d: Date | null | undefined): string {
+  return d ? d.toISOString().replace('T', ' ').slice(0, 19) : '';
+}
+
+// « YYYY-MM-DD » (release_date des films ; l'année est lue sur les 4 premiers caractères).
+function tvtimeDay(d: Date | null | undefined, year?: number | null): string {
+  if (d) return d.toISOString().slice(0, 10);
+  return year ? `${year}-01-01` : '';
+}
 
 // Export/restauration JSON des données utilisateur (spec §14.10, §37).
 export async function backupRoutes(app: FastifyInstance): Promise<void> {
@@ -31,6 +60,103 @@ export async function backupRoutes(app: FastifyInstance): Promise<void> {
       exportedAt: new Date().toISOString(),
       data: { user: safeUser, media, shows, seasons, episodes, mediaStatuses, episodeStatuses, watchEvents, lists, listItems },
     };
+  });
+
+  // ZIP de CSV calqués sur l'export TV Time : lisible par tout outil qui
+  // comprend ce format — et par notre propre import (aller-retour garanti).
+  // Les jeux sont hors format TV Time : ils restent couverts par l'export JSON.
+  app.post('/api/backup/export-tvtime', async (request, reply) => {
+    const userId = request.userId;
+    const [showStatuses, movieStatuses, episodeStatuses] = await Promise.all([
+      prisma.userMediaStatus.findMany({
+        where: { userId, media: { type: 'show' } },
+        include: { media: true },
+        orderBy: { addedAt: 'asc' },
+      }),
+      prisma.userMediaStatus.findMany({
+        where: { userId, media: { type: 'movie' } },
+        include: { media: true },
+        orderBy: { addedAt: 'asc' },
+      }),
+      prisma.userEpisodeStatus.findMany({
+        where: { userId, status: 'watched' },
+        include: { episode: { include: { show: { include: { media: true } } } } },
+        orderBy: { watchedAt: 'asc' },
+      }),
+    ]);
+
+    // 1) seen_episode.csv — un rang par épisode vu. `tvdb_id` = id TheTVDB de
+    //    LA SÉRIE (comme TV Time : notre normaliseur le lit en tvdbShowId),
+    //    `episode_id` = id TheTVDB de l'épisode (alias tvdbEpisodeId).
+    const seenEpisodes = toCsv(
+      ['tv_show_name', 'tvdb_id', 'tmdb_id', 'episode_season_number', 'episode_number', 'episode_id', 'watched_at', 'rating'],
+      episodeStatuses.map((s) => [
+        s.episode.show.media.title,
+        s.episode.show.media.tvdbId,
+        s.episode.show.media.tmdbId,
+        s.episode.seasonNumber,
+        s.episode.episodeNumber,
+        s.episode.tvdbId,
+        tvtimeDate(s.watchedAt ?? s.updatedAt),
+        s.rating,
+      ]),
+    );
+
+    // 2) followed_tv_show.csv — un rang par série de la bibliothèque.
+    //    `active = 0` est la façon TV Time de dire « Arrêtée » (statut
+    //    abandoned) : notre normaliseur le retraduit en stopped_watching.
+    const followedShows = toCsv(
+      ['tv_show_name', 'tvdb_id', 'tmdb_id', 'active', 'created_at', 'rating'],
+      showStatuses.map((s) => [
+        s.media.title,
+        s.media.tvdbId,
+        s.media.tmdbId,
+        s.status === 'abandoned' ? 0 : 1,
+        tvtimeDate(s.addedAt),
+        s.rating,
+      ]),
+    );
+
+    // 3) user_show_special_status.csv — comme TV Time : `favorite` (séries
+    //    favorites) et `for_later` (watchlist) dans la même colonne status.
+    const specialRows: unknown[][] = [];
+    for (const s of showStatuses) {
+      if (s.isFavorite) {
+        specialRows.push([s.media.title, s.media.tvdbId, s.media.tmdbId, 'favorite', tvtimeDate(s.favoritedAt ?? s.addedAt)]);
+      }
+      if (s.status === 'watchlist') {
+        specialRows.push([s.media.title, s.media.tvdbId, s.media.tmdbId, 'for_later', tvtimeDate(s.addedAt)]);
+      }
+    }
+    const specialStatus = toCsv(['tv_show_name', 'tv_show_id', 'tmdb_id', 'status', 'created_at'], specialRows);
+
+    // 4) tracking-prod-records-v2.csv — les films, noyés dans les tracking
+    //    records comme chez TV Time : entity_type=movie, type=watch|towatch.
+    const trackingRecords = toCsv(
+      ['entity_type', 'movie_name', 'release_date', 'type', 'tmdb_id', 'created_at'],
+      movieStatuses.map((s) => {
+        const watched = s.status === 'completed';
+        return [
+          'movie',
+          s.media.title,
+          tvtimeDay(s.media.releaseDate, s.media.year),
+          watched ? 'watch' : 'towatch',
+          s.media.tmdbId,
+          tvtimeDate(watched ? s.completedAt ?? s.lastWatchedAt ?? s.addedAt : s.addedAt),
+        ];
+      }),
+    );
+
+    const zip = new AdmZip();
+    zip.addFile('seen_episode.csv', Buffer.from(seenEpisodes, 'utf-8'));
+    zip.addFile('followed_tv_show.csv', Buffer.from(followedShows, 'utf-8'));
+    zip.addFile('user_show_special_status.csv', Buffer.from(specialStatus, 'utf-8'));
+    zip.addFile('tracking-prod-records-v2.csv', Buffer.from(trackingRecords, 'utf-8'));
+
+    return reply
+      .header('content-type', 'application/zip')
+      .header('content-disposition', 'attachment; filename="plottime-export-tvtime.zip"')
+      .send(zip.toBuffer());
   });
 
   app.post('/api/backup/import', async (request, reply) => {

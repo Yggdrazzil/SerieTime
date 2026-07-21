@@ -58,6 +58,7 @@ function AccountTab() {
   const [nameOpen, setNameOpen] = useState(false);
   const [countryOpen, setCountryOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [exportingTvtime, setExportingTvtime] = useState(false);
   // Nom d'utilisateur = nom d'affichage COURANT (source : profil serveur).
   // Le store local est figé à la connexion : après « Modifier le profil »,
   // il affichait encore l'ancien nom.
@@ -99,6 +100,40 @@ function AccountTab() {
     }
   };
 
+  // Exporter au format TV Time : ZIP de CSV lisible par tout outil qui
+  // comprend un export TV Time (et par notre propre import). Réponse binaire →
+  // téléchargement direct sur web ; sur natif, le partage de fichier binaire
+  // est peu fiable → on oriente vers la web app (choix simple assumé).
+  const exportTvtime = async () => {
+    if (exportingTvtime) return;
+    if (Platform.OS !== 'web') {
+      Alert.alert(
+        'Export au format TV Time',
+        'Le téléchargement du fichier ZIP est disponible sur la version web de PlotTime.',
+      );
+      return;
+    }
+    setExportingTvtime(true);
+    try {
+      const blob = await api.download('/api/backup/export-tvtime');
+      if (typeof document !== 'undefined') {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'plottime-export-tvtime.zip';
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    } catch {
+      Alert.alert(
+        'Export impossible',
+        'Le fichier au format TV Time n’a pas pu être préparé. Vérifie ta connexion puis réessaie.',
+      );
+    } finally {
+      setExportingTvtime(false);
+    }
+  };
+
   return (
     <>
       <Section title="Identification">
@@ -120,6 +155,10 @@ function AccountTab() {
       <Section title="Import & sauvegarde">
         <Row label="Importer mes données TV Time" onPress={() => router.push('/import')} />
         <Row label={exporting ? 'Préparation de la sauvegarde…' : 'Exporter mes données PlotTime'} onPress={exporting ? undefined : exportData} />
+        <Row
+          label={exportingTvtime ? 'Préparation de l’export TV Time…' : 'Exporter au format TV Time'}
+          onPress={exportingTvtime ? undefined : exportTvtime}
+        />
         <ResyncLibraryRow />
       </Section>
 
