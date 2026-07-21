@@ -206,3 +206,28 @@ describe('QG Communauté — « Récemment vus » compte les épisodes réels', 
     expect(daveMovie?.count).toBe(1);
   });
 });
+
+describe('Classement entre amis — segment Jeux (temps de jeu déclaratif)', () => {
+  it('renvoie games trié par playtimeMinutes, jeux masqués exclus', async () => {
+    const gameA = await db.media.create({ data: { type: 'game', title: 'Jeu Alpha' } });
+    const gameB = await db.media.create({ data: { type: 'game', title: 'Jeu Bêta' } });
+    // Bob : 300 min déclarées (en cours). Carol : 120 min mais jeu MASQUÉ → 0.
+    await db.userMediaStatus.create({
+      data: { userId: uid('Bob'), mediaId: gameA.id, status: 'playing', playtimeMinutes: 300 },
+    });
+    await db.userMediaStatus.create({
+      data: { userId: uid('Carol'), mediaId: gameB.id, status: 'completed', playtimeMinutes: 120, isHidden: true },
+    });
+    const res = await app.inject({ method: 'GET', url: '/api/stats/leaderboard', headers: bearer('Alice') });
+    expect(res.statusCode).toBe(200);
+    const games = res.json().games as { userId: string; minutes: number; games: number }[];
+    expect(Array.isArray(games)).toBe(true);
+    const bob = games.find((g) => g.userId === uid('Bob'));
+    const carol = games.find((g) => g.userId === uid('Carol'));
+    expect(bob?.minutes).toBe(300);
+    expect(bob?.games).toBe(1);
+    expect(carol?.minutes).toBe(0);
+    // Tri décroissant : Bob (300) devant tous les 0 min.
+    expect(games[0]?.userId).toBe(uid('Bob'));
+  });
+});

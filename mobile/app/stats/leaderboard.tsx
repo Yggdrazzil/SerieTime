@@ -19,12 +19,13 @@ export type LeaderboardEntry = {
   isMe: boolean;
 };
 type Entry = LeaderboardEntry;
-export type Leaderboard = { series: Entry[]; movies: Entry[] };
-type Tab = 'series' | 'movies';
+export type Leaderboard = { series: Entry[]; movies: Entry[]; games?: Entry[] };
+type Tab = 'series' | 'movies' | 'games';
 
 const TAB_OPTIONS = [
   { value: 'series', label: 'SÉRIES' },
   { value: 'movies', label: 'FILMS' },
+  { value: 'games', label: 'JEUX' },
 ] as const;
 
 // « 15 mois 10 j 21 h » (les zéros de tête sont omis).
@@ -98,12 +99,12 @@ export default function LeaderboardScreen() {
     staleTime: 5 * 60_000,
   });
 
-  const entries = tab === 'movies' ? data?.movies : data?.series;
+  const entries = tab === 'movies' ? data?.movies : tab === 'games' ? data?.games : data?.series;
 
   return (
     <ScreenShell contentContainerStyle={styles.shellContent}>
       <ScreenHeader
-        title={tab === 'movies' ? 'Temps passé devant des films' : 'Temps passé devant des séries'}
+        title={tab === 'movies' ? 'Temps passé devant des films' : tab === 'games' ? 'Temps de jeu' : 'Temps passé devant des séries'}
         leading={<IconAction icon="chevron-left" label="Retour" onPress={() => goBack('/stats')} />}
       />
       <SegmentedFilter

@@ -126,8 +126,7 @@ function ProfileScreenInner() {
               accessibilityRole="button"
               accessibilityLabel="Modifier le profil"
             >
-              <Feather name="edit-3" size={15} color="#FFFFFF" />
-              <Text style={styles.editBtnText}>Modifier</Text>
+              <Feather name="edit-3" size={16} color="#FFFFFF" />
             </Pressable>
             <View style={styles.bannerRow}>
               <View style={styles.avatarWrap}>
@@ -482,23 +481,22 @@ const styles = StyleSheet.create({
   prismShapePrimary: { width: 190, height: 190, borderRadius: 95, backgroundColor: COLORS.primary, right: -50, top: -18 },
   prismShapeSecondary: { width: 132, height: 132, borderRadius: 36, backgroundColor: COLORS.secondary, right: 104, top: 42 },
   prismShapeTertiary: { width: 92, height: 92, borderRadius: 46, backgroundColor: COLORS.tertiary, left: -20, bottom: 12 },
+  // Bulle ronde, icône stylo seule (retour Étienne 2026-07-21 — texte retiré).
   editBtn: {
     position: 'absolute',
     top: SPACE.sm,
     right: SPACE.sm,
     zIndex: 2,
-    minHeight: 36,
-    flexDirection: 'row',
+    width: 38,
+    height: 38,
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: SPACE.sm,
+    justifyContent: 'center',
     borderRadius: RADIUS.pill,
     backgroundColor: 'rgba(17,11,35,0.42)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.28)',
   },
   editBtnPressed: { backgroundColor: 'rgba(17,11,35,0.62)', transform: [{ scale: 0.97 }] },
-  editBtnText: { color: '#FFFFFF', fontSize: 12.5, fontFamily: FONTS.bold },
   bannerRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.md, padding: SPACE.md, paddingTop: 56 },
   avatarWrap: { flexShrink: 0 },
   avatar: {

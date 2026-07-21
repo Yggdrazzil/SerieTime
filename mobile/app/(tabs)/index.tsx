@@ -707,15 +707,17 @@ function UpcomingCard({ item, past = false }: { item: UpcomingItemDto; past?: bo
 
 // Carte chronologique compacte : hiérarchie Studio dans le shell Prisme.
 const styles = StyleSheet.create({
+  // En-tête aligné sur ceux de l'Agenda et de la Communauté (mêmes paddings,
+  // retour Étienne 2026-07-21).
   homeHeader: {
     backgroundColor: COLORS.white,
-    paddingHorizontal: 20,
-    paddingBottom: 16,
+    paddingHorizontal: SPACE.md,
+    paddingBottom: SPACE.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: COLORS.borderLight,
   },
-  // Sous-onglets Séries / Films / Jeux (miroir de l'Agenda).
-  homeTabs: { width: '100%', maxWidth: SIZES.contentMax, alignSelf: 'center', marginTop: SPACE.xs },
+  // Sous-onglets Séries / Films / Jeux (identiques à ceux de l'Agenda).
+  homeTabs: { width: '100%', maxWidth: SIZES.contentMax, alignSelf: 'center' },
   // File « À voir » : contenu centré et borné à contentMax comme l'agenda et la
   // bibliothèque (les cartes ne s'étirent plus bord à bord sur web/tablette).
   queueContent: { alignItems: 'center', paddingBottom: SIZES.tabBar + SPACE.xl },

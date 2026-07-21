@@ -1,8 +1,9 @@
 import React, { useRef, useState } from 'react';
-import { View, Text, StyleSheet, Image, Pressable, Platform } from 'react-native';
+import { View, Text, StyleSheet, Image, Pressable } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, type Href } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { api, tmdbImage } from '@/lib/api';
 import { COLORS, FONTS, RADIUS, SPACE } from '@/lib/theme';
 import { shareMedia } from '@/lib/share';
@@ -10,9 +11,14 @@ import { ActionRail, type RailState } from './ActionRail';
 import { DescriptionOverlay } from './DescriptionOverlay';
 import type { FeedItem } from './types';
 
+// Dégagement bas : hauteur de la barre de navigation flottante mini
+// (≈ 46 + marges) au-dessus de l'encoche — l'affiche s'arrête juste dessus.
+const NAV_CLEARANCE = 58;
+
 export function TikTokCard({
   item,
   height,
+  topInset = 0,
   resolveMedia,
   onOpenComments,
   onAdvance,
@@ -22,6 +28,9 @@ export function TikTokCard({
 }: {
   item: FeedItem;
   height: number;
+  // Hauteur de la barre de recherche flottante : l'affiche démarre juste en
+  // dessous (fournie par le feed, mesurée dans explore.tsx).
+  topInset?: number;
   resolveMedia: (item: FeedItem) => Promise<string>;
   onOpenComments: (item: FeedItem) => void;
   // Passe à la carte suivante — appelé dès qu'une action « traite » la
@@ -36,6 +45,7 @@ export function TikTokCard({
   commentBump?: number;
 }) {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [detail, setDetail] = useState(false);
   // Une action réseau à la fois par carte : un double-tap rapide sur ❤️/👁 (ou
   // ❤️ puis 👁 pendant l'appel) déclenchait deux mutations concurrentes → états
@@ -55,10 +65,8 @@ export function TikTokCard({
   // (backdrop, sinon l'affiche) remplit l'écran derrière pour l'immersion.
   const isGame = Boolean(item.igdbId);
   // w780 suffit largement pour un écran de téléphone (l'« original » TMDb fait
-  // plusieurs Mo → 3-4 s de carte noire au chargement). Le fond est flouté à
-  // 30px : w300 est indiscernable et quasi instantané.
+  // plusieurs Mo → 3-4 s de carte noire au chargement).
   const poster = tmdbImage(item.posterPath, 'w780') ?? tmdbImage(item.backdropPath, 'w1280');
-  const bg = tmdbImage(item.backdropPath, 'w300') ?? tmdbImage(item.posterPath, 'w300');
   const kind = isGame ? 'Jeu' : item.category === 'anime' ? 'Animé' : item.type === 'show' ? 'Série' : 'Film';
   const meta = item.year ? String(item.year) : 'Date à confirmer';
 
@@ -173,25 +181,13 @@ export function TikTokCard({
 
   return (
     <View style={[styles.card, { height }]}>
-      {/* Fond flouté plein écran (immersion, cache l'upscale). Blur natif via
-          blurRadius ; sur le web react-native-web ignore blurRadius → filtre CSS. */}
-      {bg ? (
-        <Image
-          source={{ uri: bg }}
-          style={[
-            StyleSheet.absoluteFill,
-            Platform.OS === 'web' ? ({ filter: 'blur(30px)', transform: [{ scale: 1.15 }] } as never) : null,
-          ]}
-          resizeMode="cover"
-          blurRadius={Platform.OS === 'web' ? 0 : 30}
-          accessible={false}
-        />
-      ) : null}
-      <View style={styles.bgDim} pointerEvents="none" />
-      <View style={styles.prismPrimary} pointerEvents="none" />
-      <View style={styles.prismSecondary} pointerEvents="none" />
-      {/* L'affiche reste entière, mais vit désormais dans un cadre Prisme distinct. */}
-      <View style={styles.artFrame} pointerEvents="none">
+      {/* Affiche entière, du bas de la barre de recherche (topInset) jusqu'au-
+          dessus de la barre de navigation. Le fond (sombre + Prisme) est FIXE,
+          rendu par le feed derrière la liste : seule l'affiche défile. */}
+      <View
+        style={[styles.artFrame, { top: topInset, bottom: insets.bottom + NAV_CLEARANCE }]}
+        pointerEvents="none"
+      >
         {poster ? (
           <Image source={{ uri: poster }} style={StyleSheet.absoluteFill} resizeMode="contain" accessible={false} />
         ) : (
@@ -295,49 +291,21 @@ export function TikTokCard({
 }
 
 const styles = StyleSheet.create({
+  // Carte TRANSPARENTE : le fond (sombre + Prisme) est fixe, rendu par le feed
+  // derrière la liste — il transparaît dans les marges de l'affiche `contain`.
   card: {
     width: '100%',
     justifyContent: 'flex-end',
     overflow: 'hidden',
-    backgroundColor: '#0D0A14',
+    backgroundColor: 'transparent',
   },
   noImg: { alignItems: 'center', justifyContent: 'center' },
-  bgDim: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(7,4,12,0.56)',
-  },
-  prismPrimary: {
-    position: 'absolute',
-    top: 96,
-    left: -48,
-    width: 150,
-    height: 150,
-    backgroundColor: COLORS.primary,
-    borderRadius: 34,
-    opacity: 0.3,
-    transform: [{ rotate: '24deg' }],
-  },
-  prismSecondary: {
-    position: 'absolute',
-    right: -46,
-    bottom: 82,
-    width: 138,
-    height: 138,
-    backgroundColor: COLORS.secondary,
-    borderRadius: 69,
-    opacity: 0.22,
-  },
+  // Affiche pleine largeur, bord à bord (top/bottom posés en ligne).
   artFrame: {
     position: 'absolute',
-    top: 70,
-    left: SPACE.sm,
-    right: SPACE.sm,
-    bottom: SPACE.sm,
+    left: 0,
+    right: 0,
     overflow: 'hidden',
-    backgroundColor: 'rgba(7,4,12,0.34)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-    borderRadius: RADIUS.sheet,
   },
   scrimTop: {
     position: 'absolute',

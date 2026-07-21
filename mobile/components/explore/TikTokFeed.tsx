@@ -174,6 +174,13 @@ export function TikTokFeed({ topInset = 0 }: { topInset?: number }) {
 
   return (
     <View style={styles.wrap} onLayout={(e) => setHeight(e.nativeEvent.layout.height)}>
+      {/* Arrière-plan FIGÉ (retour Étienne 2026-07-21) : le fond sombre + les
+          formes Prisme vivent ici, derrière la liste — ils ne défilent jamais.
+          Seules les affiches (dans chaque carte) glissent au-dessus. */}
+      <View style={styles.fixedBg} pointerEvents="none">
+        <View style={styles.prismPrimary} />
+        <View style={styles.prismSecondary} />
+      </View>
       {height > 0 && failed ? (
         <View style={styles.stateWrap}>
           <LoadError onRetry={() => void onRefresh()} busy={refreshing} />
@@ -215,6 +222,7 @@ export function TikTokFeed({ topInset = 0 }: { topInset?: number }) {
               <TikTokCard
                 item={item}
                 height={height}
+                topInset={topInset}
                 resolveMedia={resolveMedia}
                 onOpenComments={setCommentsFor}
                 onAdvance={() => advance(index)}
@@ -322,6 +330,29 @@ export function TikTokFeed({ topInset = 0 }: { topInset?: number }) {
 
 const styles = StyleSheet.create({
   wrap: { flex: 1, overflow: 'hidden', backgroundColor: '#0D0A14' },
+  // Couche de fond FIXE (ne défile pas) : formes Prisme sur le noir du `wrap`.
+  fixedBg: { ...StyleSheet.absoluteFillObject },
+  prismPrimary: {
+    position: 'absolute',
+    top: 120,
+    left: -48,
+    width: 150,
+    height: 150,
+    backgroundColor: COLORS.primary,
+    borderRadius: 34,
+    opacity: 0.3,
+    transform: [{ rotate: '24deg' }],
+  },
+  prismSecondary: {
+    position: 'absolute',
+    right: -46,
+    bottom: 150,
+    width: 138,
+    height: 138,
+    backgroundColor: COLORS.secondary,
+    borderRadius: 69,
+    opacity: 0.22,
+  },
   stateWrap: {
     flex: 1,
     justifyContent: 'center',

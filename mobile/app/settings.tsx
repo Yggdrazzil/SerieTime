@@ -101,7 +101,7 @@ function AccountTab() {
 
   return (
     <>
-      <Section title="Identification" eyebrow="Profil">
+      <Section title="Identification">
         <Field label="Nom d'utilisateur" value={displayName} accent />
         <Field label="Adresse e-mail" value={user?.email || '—'} accent />
         <Field label="Identifiant utilisateur" value={user?.id ?? ''} />
@@ -113,28 +113,28 @@ function AccountTab() {
       </Section>
 
       {/* La liaison des comptes vit derrière une rangée dédiée. */}
-      <Section title="Réseaux sociaux" eyebrow="Compte">
+      <Section title="Réseaux sociaux">
         <Row label="Modifier les comptes liés" onPress={() => router.push('/linked-accounts')} />
       </Section>
 
-      <Section title="Import & sauvegarde" eyebrow="Données">
+      <Section title="Import & sauvegarde">
         <Row label="Importer mes données TV Time" onPress={() => router.push('/import')} />
         <Row label={exporting ? 'Préparation de la sauvegarde…' : 'Exporter mes données PlotTime'} onPress={exporting ? undefined : exportData} />
         <ResyncLibraryRow />
       </Section>
 
-      <Section title="Steam" eyebrow="Jeux">
+      <Section title="Steam">
         <SteamImportBlock />
       </Section>
 
-      <Section title="Vie privée" eyebrow="Confidentialité">
+      <Section title="Vie privée">
         <PrivateProfileToggle />
       </Section>
 
       {/* Zone sensible isolée (recommandation Prisme : danger à part). */}
       <PrismeCard elevated style={styles.dangerCard}>
         <Pressable style={({ pressed }) => [styles.logoutBtn, pressed && styles.btnPressed]} onPress={logout} accessibilityRole="button" accessibilityLabel="Se déconnecter">
-          <Feather name="log-out" size={17} color={COLORS.onAccent} />
+          <Feather name="log-out" size={17} color={COLORS.onPrimary} />
           <Text style={styles.logoutText}>SE DÉCONNECTER</Text>
         </Pressable>
         <Pressable style={({ pressed }) => [styles.deleteBtn, pressed && styles.deletePressed]} onPress={() => setDelOpen(true)} accessibilityRole="button" accessibilityLabel="Supprimer le compte">
@@ -211,7 +211,7 @@ function DisplayNameModal({ current, onClose }: { current: string; onClose: () =
             accessibilityRole="button"
             accessibilityLabel="Enregistrer le nom d'affichage"
           >
-            {mut.isPending ? <ActivityIndicator color={COLORS.onAccent} /> : <Text style={styles.actionBtnText}>ENREGISTRER</Text>}
+            {mut.isPending ? <ActivityIndicator color={COLORS.onPrimary} /> : <Text style={styles.actionBtnText}>ENREGISTRER</Text>}
           </Pressable>
         </>
       )}
@@ -338,7 +338,7 @@ function SteamImportBlock() {
         disabled={!canSubmit}
         onPress={() => mut.mutate(steamId.trim())}
       >
-        {mut.isPending ? <ActivityIndicator color={COLORS.onAccent} /> : <Text style={styles.actionBtnText}>IMPORTER MA BIBLIOTHÈQUE</Text>}
+        {mut.isPending ? <ActivityIndicator color={COLORS.onPrimary} /> : <Text style={styles.actionBtnText}>IMPORTER MA BIBLIOTHÈQUE</Text>}
       </Pressable>
       {result?.error ? (
         <Text style={styles.errMsg}>
@@ -373,7 +373,7 @@ function ResyncLibraryRow() {
         onPress={() => mut.mutate()}
       >
         {mut.isPending ? (
-          <ActivityIndicator color={COLORS.onAccent} />
+          <ActivityIndicator color={COLORS.onPrimary} />
         ) : (
           <Text style={styles.actionBtnText}>RESYNCHRONISER MA BIBLIOTHÈQUE</Text>
         )}
@@ -450,7 +450,7 @@ function PasswordModal({ onClose }: { onClose: () => void }) {
           <TextInput style={styles.input} secureTextEntry value={next} onChangeText={setNext} autoCapitalize="none" placeholder="8 caractères minimum" placeholderTextColor={COLORS.textSoft} />
           {error ? <Text style={styles.errMsg}>{error}</Text> : null}
           <Pressable style={({ pressed }) => [styles.actionBtn, !canSubmit && styles.actionBtnDisabled, pressed && canSubmit && styles.btnPressed]} disabled={!canSubmit} onPress={() => { setError(null); mut.mutate(); }}>
-            {mut.isPending ? <ActivityIndicator color={COLORS.onAccent} /> : <Text style={styles.actionBtnText}>ENREGISTRER</Text>}
+            {mut.isPending ? <ActivityIndicator color={COLORS.onPrimary} /> : <Text style={styles.actionBtnText}>ENREGISTRER</Text>}
           </Pressable>
           {canReset ? (
             <Pressable
@@ -541,7 +541,7 @@ function ResetPasswordSheet({ cfg, linked, onClose }: { cfg: SsoProviders; linke
             <Text style={styles.errMsg}>{error}</Text>
           ) : null}
           <Pressable style={({ pressed }) => [styles.actionBtn, !canSubmit && styles.actionBtnDisabled, pressed && canSubmit && styles.btnPressed]} disabled={!canSubmit} onPress={() => { setError(null); mut.mutate(); }}>
-            {mut.isPending ? <ActivityIndicator color={COLORS.onAccent} /> : <Text style={styles.actionBtnText}>RÉINITIALISER</Text>}
+            {mut.isPending ? <ActivityIndicator color={COLORS.onPrimary} /> : <Text style={styles.actionBtnText}>RÉINITIALISER</Text>}
           </Pressable>
         </>
       ) : (
@@ -702,11 +702,11 @@ function AppTab() {
   };
   return (
     <>
-      <Section title="Titres" eyebrow="Affichage">
+      <Section title="Titres">
         <ToggleRow label="Afficher dans votre langue" sub="Les titres s'affichent par défaut en anglais" on={s.titlesInUserLanguage ?? true} onToggle={(v) => update.mutate({ titlesInUserLanguage: v })} />
       </Section>
 
-      <Section title="Thème" eyebrow="Affichage">
+      <Section title="Thème">
         {(
           [
             ['system', "Suivre le thème défini sur l'appareil"],
@@ -726,7 +726,7 @@ function AppTab() {
         ) : null}
       </Section>
 
-      <Section title="Langue" eyebrow="Affichage">
+      <Section title="Langue">
         {CONTENT_LANGS.map(([v, l]) => (
           <RadioRow key={v} label={l} on={lang === v} onPress={() => pickLang(v)} />
         ))}
@@ -737,7 +737,7 @@ function AppTab() {
           2026-07-20 — conformité stores, cf. docs/STORES.md A7). Reste
           disponible sur la web app uniquement. */}
       {Platform.OS === 'web' ? (
-        <Section title="Suggestions" eyebrow="Contenu">
+        <Section title="Suggestions">
           <ToggleRow
             label="Contenu 18+"
             sub="Affiche le contenu réservé aux adultes dans les suggestions. Désactivé par défaut."
@@ -747,7 +747,7 @@ function AppTab() {
         </Section>
       ) : null}
 
-      <Section title="Cache" eyebrow="Maintenance">
+      <Section title="Cache">
         <View style={styles.block}>
           <Pressable style={({ pressed }) => [styles.actionBtn, pressed && styles.btnPressed]} onPress={() => api.post('/api/cache/clear').catch(() => {})}>
             <Text style={styles.actionBtnText}>VIDER LE CACHE</Text>
@@ -758,7 +758,7 @@ function AppTab() {
       {/* À propos : liens légaux (exigés par Apple/Google) + attributions des
           sources de données (mentions obligatoires TMDb/TheTVDB/IGDB — cf.
           docs/STORES.md A2/A3). */}
-      <Section title="À propos" eyebrow="Infos">
+      <Section title="À propos">
         <Row label="Politique de confidentialité" onPress={() => openExternal(`${LEGAL_BASE}/privacy`)} external />
         <Row label="Conditions d'utilisation" onPress={() => openExternal(`${LEGAL_BASE}/terms`)} external />
         <View style={styles.block}>
@@ -774,13 +774,13 @@ function AppTab() {
   );
 }
 
-// Section : titre Prisme (eyebrow + titre) au-dessus d'une carte regroupant
-// les rangées liées, comme les blocs « Trophées » / « Activité suivie » de
-// user/[id].tsx.
-function Section({ title, eyebrow, children }: { title: string; eyebrow?: string; children: React.ReactNode }) {
+// Section : UN seul titre (retour Étienne 2026-07-21 — l'ancienne paire
+// eyebrow + titre semait la confusion) au-dessus d'une carte regroupant les
+// rangées liées.
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <View style={styles.section}>
-      <SectionHeader title={title} eyebrow={eyebrow} />
+      <SectionHeader title={title} />
       <PrismeCard elevated style={styles.sectionCard}>{children}</PrismeCard>
     </View>
   );
@@ -839,12 +839,12 @@ function ToggleRow({ label, sub, on, onToggle }: { label: string; sub?: string; 
         accessibilityLabel={label}
         accessibilityState={{ checked: on }}
       >
-        <Animated.View style={[styles.toggle, { backgroundColor: v.interpolate({ inputRange: [0, 1], outputRange: [COLORS.chipSelected, COLORS.yellow] }) }]}>
+        <Animated.View style={[styles.toggle, { backgroundColor: v.interpolate({ inputRange: [0, 1], outputRange: [COLORS.chipSelected, COLORS.primary] }) }]}>
           <Animated.View
             style={[
               styles.knob,
               {
-                backgroundColor: v.interpolate({ inputRange: [0, 1], outputRange: ['#ffffff', COLORS.onAccent] }),
+                backgroundColor: v.interpolate({ inputRange: [0, 1], outputRange: ['#ffffff', '#ffffff'] }),
                 transform: [{ translateX: v.interpolate({ inputRange: [0, 1], outputRange: [0, 22] }) }],
               },
             ]}
@@ -910,8 +910,8 @@ const styles = StyleSheet.create({
   block: { paddingVertical: SPACE.sm, borderTopWidth: 1, borderTopColor: COLORS.borderLight },
   // Zone sensible isolée.
   dangerCard: { gap: SPACE.sm },
-  logoutBtn: { minHeight: SIZES.touchComfortable, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACE.xs, backgroundColor: COLORS.yellow, borderRadius: RADIUS.pill, paddingVertical: SPACE.sm },
-  logoutText: { color: COLORS.onAccent, fontSize: 15, fontFamily: FONTS.extraBold, letterSpacing: 0.6 },
+  logoutBtn: { minHeight: SIZES.touchComfortable, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACE.xs, backgroundColor: COLORS.primary, borderRadius: RADIUS.pill, paddingVertical: SPACE.sm },
+  logoutText: { color: COLORS.onPrimary, fontSize: 15, fontFamily: FONTS.extraBold, letterSpacing: 0.6 },
   deleteBtn: { minHeight: SIZES.touch, alignItems: 'center', justifyContent: 'center', borderRadius: RADIUS.pill, borderWidth: 1.5, borderColor: COLORS.danger },
   deletePressed: { backgroundColor: 'rgba(200,63,96,0.08)' },
   deleteText: { fontSize: 13, fontFamily: FONTS.extraBold, letterSpacing: 0.6, color: COLORS.danger, textAlign: 'center' },
@@ -923,9 +923,9 @@ const styles = StyleSheet.create({
   hint: { fontSize: 14, fontFamily: FONTS.regular, color: COLORS.textMuted, lineHeight: 19, marginBottom: SPACE.sm },
   mLabel: { color: COLORS.text, fontSize: 14, fontFamily: FONTS.bold, marginTop: SPACE.sm },
   input: { color: COLORS.text, backgroundColor: COLORS.surfaceMuted, borderWidth: 1, borderColor: COLORS.borderLight, borderRadius: RADIUS.control, fontSize: 15, fontFamily: FONTS.regular, paddingHorizontal: SPACE.sm, paddingVertical: 11, marginTop: 6 },
-  actionBtn: { minHeight: SIZES.touchComfortable, backgroundColor: COLORS.yellow, borderRadius: RADIUS.pill, paddingVertical: SPACE.sm, alignItems: 'center', justifyContent: 'center', marginTop: SPACE.md },
+  actionBtn: { minHeight: SIZES.touchComfortable, backgroundColor: COLORS.primary, borderRadius: RADIUS.pill, paddingVertical: SPACE.sm, alignItems: 'center', justifyContent: 'center', marginTop: SPACE.md },
   actionBtnDisabled: { opacity: 0.4 },
-  actionBtnText: { color: COLORS.onAccent, fontSize: 13, fontFamily: FONTS.extraBold, letterSpacing: 0.6 },
+  actionBtnText: { color: COLORS.onPrimary, fontSize: 13, fontFamily: FONTS.extraBold, letterSpacing: 0.6 },
   dangerAction: { backgroundColor: COLORS.danger },
   okMsg: { fontSize: 14, fontFamily: FONTS.bold, color: COLORS.success, textAlign: 'center', paddingVertical: SPACE.md },
   resetLink: { color: COLORS.primary, fontSize: 13, fontFamily: FONTS.bold, textAlign: 'center', marginTop: SPACE.md },

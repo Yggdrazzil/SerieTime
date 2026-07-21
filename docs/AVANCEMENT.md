@@ -6,7 +6,7 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
-Dernière mise à jour : **2026-07-21** (Claude/Étienne) — Explorer : cartes du feed peaufinées (libellé « Fiche », invite de dépliage cliquable, overlay détails opaque en Glass sans trait rose, bouton « Accéder à la fiche »)
+Dernière mise à jour : **2026-07-21** (Claude/Étienne) — en-tête de l'onglet Accueil aligné sur les en-têtes Agenda et Communauté (mêmes paddings)
 
 ---
 
@@ -90,6 +90,46 @@ la migration visuelle doit encore être exécutée sans modifier la logique mét
 6. Publication native optionnelle (EAS Build APK, puis stores).
 
 ## Journal des modifications
+
+### 2026-07-21 — Claude/Étienne : en-tête Accueil aligné sur Agenda/Communauté
+- **En-tête de l'onglet Accueil** (`mobile/app/(tabs)/index.tsx`) : mêmes
+  dimensions que les en-têtes Agenda et Communauté — `paddingHorizontal`
+  `20 → SPACE.md`, `paddingBottom` `16 → SPACE.sm`, et retrait du `marginTop`
+  des sous-onglets. Validé au pixel en Chromium (bas des deux en-têtes à la
+  même hauteur, diff 0).
+
+
+### 2026-07-21 — Claude/Étienne : Paramètres épurés + fin des boutons jaunes (héritage TV Time)
+- **Profil — bouton « Modifier »** (`mobile/app/(tabs)/profile.tsx`) : réduit à
+  l'icône stylo seule dans une bulle ronde (texte retiré).
+- **Paramètres — sections épurées** (`mobile/app/settings.tsx`) : chaque section
+  n'a plus qu'UN titre (l'eyebrow surtitre redondant est supprimé partout).
+- **Fin du jaune (héritage TV Time)** : tous les boutons jaunes passent au
+  violet `primary` (couleurs alignées sur la refonte Statistiques), texte/spinner
+  en `onPrimary` — RESYNCHRONISER MA BIBLIOTHÈQUE, IMPORTER MA BIBLIOTHÈQUE,
+  VIDER LE CACHE, SE DÉCONNECTER, et les boutons ENREGISTRER/RÉINITIALISER des
+  feuilles. L'interrupteur (toggle) passe aussi au violet (piste `primary`,
+  bouton blanc). « Supprimer le compte » reste en rouge (danger).
+- Validé en Chromium (thème Glass) ; `tsc --noEmit` + export web OK.
+
+
+### 2026-07-21 — Claude/Étienne : Explorer — fond figé, affiche pleine hauteur, icône nav Glass
+- **Arrière-plan figé** (`components/explore/TikTokFeed.tsx` + `TikTokCard.tsx`) :
+  le fond sombre + les formes Prisme passent dans une couche FIXE du feed,
+  derrière la liste — ils ne bougent plus au scroll. Chaque carte devient
+  transparente (plus de fond flouté/dim/prismes par carte) : seules les
+  affiches défilent au-dessus du fond immobile.
+- **Affiche pleine hauteur** : l'affiche s'étend en pleine largeur du bas de la
+  barre de recherche (`topInset`) jusqu'au-dessus de la barre de navigation
+  (`insets.bottom + NAV_CLEARANCE`) — plus de marges/cadre inséré. Validé au
+  pixel (cadre y≈48→802 sur 860, largeur pleine).
+- **Icône de navigation lisible en Glass** (`components/TabBar.tsx`) : l'icône
+  active (violet marque) se distinguait mal sur la barre translucide posée
+  au-dessus du feed sombre → halo clair (`textShadow`) autour de l'icône active
+  en Glass, lisible sur fond sombre et sans effet sur fond clair. Icône seule.
+- Validé en Chromium (thème Glass, 2 cartes : fond immobile confirmé) ;
+  `tsc --noEmit` + export web OK.
+
 
 ### 2026-07-21 — Claude/Étienne : Explorer — cartes & overlay détails peaufinés
 - **Libellé « Fiche »** sous la vignette-affiche du rail d'actions

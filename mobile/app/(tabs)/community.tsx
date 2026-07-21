@@ -70,13 +70,13 @@ export default function CommunityScreen() {
 // films) — même tableau que l'écran Stats, embarqué directement dans l'onglet.
 function ChallengesSection() {
   const queryClient = useQueryClient();
-  const [kind, setKind] = useState<'series' | 'movies'>('series');
+  const [kind, setKind] = useState<'series' | 'movies' | 'games'>('series');
   const { data, isLoading, isError, refetch, isRefetching } = useQuery({
     queryKey: ['stats', 'leaderboard'],
     queryFn: () => api.get<Leaderboard>('/api/stats/leaderboard'),
     staleTime: 5 * 60_000,
   });
-  const entries = kind === 'movies' ? data?.movies : data?.series;
+  const entries = kind === 'movies' ? data?.movies : kind === 'games' ? data?.games : data?.series;
   // Tirer pour rafraîchir : leaderboard + défi hebdo (requête interne à
   // WeeklyChallengeCard, relancée via son queryKey).
   const { refreshing, onRefresh } = usePullRefresh([
@@ -102,6 +102,7 @@ function ChallengesSection() {
         options={[
           { value: 'series', label: 'Séries' },
           { value: 'movies', label: 'Films' },
+          { value: 'games', label: 'Jeux' },
         ]}
         value={kind}
         onChange={setKind}
