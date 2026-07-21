@@ -64,6 +64,9 @@ function ExploreScreenInner() {
   const [query, setQuery] = useState('');
   const [focused, setFocused] = useState(false);
   const [tab, setTab] = useState<'media' | 'users' | 'games'>('media');
+  // Hauteur mesurée de la barre de recherche FLOTTANTE : le feed passe derrière
+  // elle (fond pleine hauteur), on décale d'autant les chips et les résultats.
+  const [headerHeight, setHeaderHeight] = useState(0);
   // Debounce : une requête quand l'utilisateur marque une pause, pas à chaque frappe.
   const debouncedQuery = useDebounced(query.trim(), 300);
 
@@ -79,10 +82,52 @@ function ExploreScreenInner() {
 
   return (
     <View style={styles.screen}>
-      {/* En-tête MINIMAL en navigation (l'image du feed prime) : pas de titre,
-          barre de recherche compacte. Elle reprend sa taille confortable dès le
-          focus ou une saisie (retour Benjamin 2026-07-21). */}
-      <View style={[styles.header, headerActive ? styles.headerActive : null, { paddingTop: insets.top + (headerActive ? SPACE.sm : SPACE.xxs) }]}>
+      {/* Le feed (et les résultats) occupent TOUT l'écran : leur fond remonte
+          derrière la barre de recherche flottante posée par-dessus (ci-dessous). */}
+      <FadeSwitch trigger={searching ? 'search' : 'feed'} style={styles.mode}>
+        {searching ? (
+          <View style={[styles.resultsFrame, { paddingTop: headerHeight }]}>
+            <View style={styles.tabs}>
+              <SearchTab
+                icon="film"
+                label={compact ? 'MÉDIAS' : 'SÉRIES & FILMS'}
+                active={tab === 'media'}
+                onPress={() => setTab('media')}
+              />
+              <SearchTab icon="command" label="JEUX" active={tab === 'games'} onPress={() => setTab('games')} />
+              <SearchTab
+                icon="users"
+                label={compact ? 'PROFILS' : 'UTILISATEURS'}
+                active={tab === 'users'}
+                onPress={() => setTab('users')}
+              />
+            </View>
+            <FadeSwitch trigger={tab}>
+              {tab === 'media' ? (
+                <MediaResults query={debouncedQuery} rawQuery={query} />
+              ) : tab === 'games' ? (
+                <GameResults query={debouncedQuery} rawQuery={query} />
+              ) : (
+                <UserResults query={debouncedQuery} />
+              )}
+            </FadeSwitch>
+          </View>
+        ) : (
+          <View style={styles.feedFrame}>
+            <TikTokFeed topInset={headerHeight} />
+          </View>
+        )}
+      </FadeSwitch>
+
+      {/* Barre de recherche FLOTTANTE (retour Étienne 2026-07-21) : posée en
+          absolu au-dessus du feed, sans bandeau opaque ni bordure — le fond de
+          l'onglet transparaît autour. `box-none` laisse défiler ce qu'il y a
+          derrière. Elle reprend sa taille confortable dès le focus/saisie. */}
+      <View
+        style={[styles.header, headerActive ? styles.headerActive : null, { paddingTop: insets.top + (headerActive ? SPACE.sm : SPACE.xxs) }]}
+        onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}
+        pointerEvents="box-none"
+      >
         <View style={styles.headerContent}>
           <View style={[styles.searchbar, !headerActive && styles.searchbarCompact, focused && styles.searchbarFocused]}>
             <View style={[styles.searchIcon, !headerActive && styles.searchIconCompact, focused && styles.searchIconFocused]} accessible={false}>
@@ -114,41 +159,6 @@ function ExploreScreenInner() {
           </View>
         </View>
       </View>
-
-      <FadeSwitch trigger={searching ? 'search' : 'feed'} style={styles.mode}>
-        {searching ? (
-          <View style={styles.resultsFrame}>
-            <View style={styles.tabs}>
-              <SearchTab
-                icon="film"
-                label={compact ? 'MÉDIAS' : 'SÉRIES & FILMS'}
-                active={tab === 'media'}
-                onPress={() => setTab('media')}
-              />
-              <SearchTab icon="command" label="JEUX" active={tab === 'games'} onPress={() => setTab('games')} />
-              <SearchTab
-                icon="users"
-                label={compact ? 'PROFILS' : 'UTILISATEURS'}
-                active={tab === 'users'}
-                onPress={() => setTab('users')}
-              />
-            </View>
-            <FadeSwitch trigger={tab}>
-              {tab === 'media' ? (
-                <MediaResults query={debouncedQuery} rawQuery={query} />
-              ) : tab === 'games' ? (
-                <GameResults query={debouncedQuery} rawQuery={query} />
-              ) : (
-                <UserResults query={debouncedQuery} />
-              )}
-            </FadeSwitch>
-          </View>
-        ) : (
-          <View style={styles.feedFrame}>
-            <TikTokFeed />
-          </View>
-        )}
-      </FadeSwitch>
     </View>
   );
 }
@@ -584,13 +594,16 @@ function UserResults({ query }: { query: string }) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: COLORS.pageMuted },
+  // Barre de recherche FLOTTANTE : posée en absolu au-dessus du feed, fond
+  // transparent (le fond de l'onglet remonte derrière), sans bordure.
   header: {
-    backgroundColor: COLORS.surface,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
     paddingHorizontal: SPACE.md,
     paddingBottom: SPACE.xs,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: COLORS.borderLight,
-    zIndex: 2,
+    zIndex: 5,
   },
   headerActive: { paddingBottom: SPACE.md },
   headerContent: {
@@ -605,10 +618,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: SPACE.xs,
     paddingHorizontal: 5,
-    backgroundColor: COLORS.surfaceMuted,
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.borderLight,
     borderRadius: RADIUS.control,
+    // Barre flottante : ombre portée pour la détacher du feed sous-jacent.
+    ...SHADOW.card,
   },
   searchbarFocused: {
     backgroundColor: COLORS.surface,

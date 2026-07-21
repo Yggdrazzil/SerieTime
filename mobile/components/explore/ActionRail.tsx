@@ -97,6 +97,9 @@ export function ActionRail({
             <Feather name="film" size={18} color="#fff" />
           </View>
         )}
+        {/* Libellé (comme les autres actions du rail) : signale que la vignette
+            ouvre la fiche de l'œuvre (retour Étienne 2026-07-21). */}
+        <Text style={styles.caption}>Fiche</Text>
       </Pressable>
       {/* Jeux : le ❤️ pose le statut « Voulu » et la coche « Terminé » (mêmes
           mots que la fiche jeu) — « À voir »/« Déjà vu » n'avaient pas de sens. */}
@@ -146,9 +149,9 @@ const styles = StyleSheet.create({
   },
   posterBtn: {
     width: 52,
-    height: 52,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 1,
     marginBottom: 2,
     borderRadius: RADIUS.control,
   },

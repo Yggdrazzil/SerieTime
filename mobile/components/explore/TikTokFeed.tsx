@@ -24,7 +24,7 @@ import { FEED_CATEGORIES, catOf, type FeedCategory, type FeedItem } from './type
 
 const keyOf = (f: FeedItem) => (f.igdbId ? `game:${f.igdbId}` : `${f.type}:${f.tmdbId ?? f.id}`);
 
-export function TikTokFeed() {
+export function TikTokFeed({ topInset = 0 }: { topInset?: number }) {
   const queryClient = useQueryClient();
   const resolveMedia = useResolveMedia();
   const listRef = useRef<FlatList<FeedItem>>(null);
@@ -35,7 +35,6 @@ export function TikTokFeed() {
   const [extra, setExtra] = useState<FeedItem[]>([]); // pages ajoutées (flux infini)
   const [commentsFor, setCommentsFor] = useState<FeedItem | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(0); // carte actuellement à l'écran
   const [commentBumps, setCommentBumps] = useState<Record<string, number>>({}); // +commentaires publiés par carte
   const [endRefreshing, setEndRefreshing] = useState(false); // carte de fin atteinte → nouveau tirage
   const dryRef = useRef(0); // nombre de fetchs consécutifs sans nouveauté
@@ -120,7 +119,6 @@ export function TikTokFeed() {
   // Callback stable (RN interdit de le changer entre les rendus) : lit deckRef.
   const onViewable = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
     const idx = viewableItems[0]?.index ?? 0;
-    setActiveIndex(idx);
     const d = deckRef.current;
     for (let i = idx + 1; i <= idx + 2; i++) {
       const it = d[i];
@@ -136,7 +134,6 @@ export function TikTokFeed() {
     setExtra([]);
     await (isGames ? gamesQuery.refetch() : refetch());
     listRef.current?.scrollToOffset({ offset: 0, animated: false });
-    setActiveIndex(0);
   }, [refetch, isGames, gamesQuery]);
 
   // Arrivé sur la CARTE DE FIN (page après la dernière proposition) : nouveau
@@ -275,9 +272,9 @@ export function TikTokFeed() {
         </View>
       ) : null}
 
-      {/* Filtres catégories, en surimpression haute (la barre de recherche est
-          au-dessus dans la coquille explore.tsx et gère déjà la zone sûre). */}
-      <View style={styles.top} pointerEvents="box-none">
+      {/* Filtres catégories, en surimpression : posés SOUS la barre de recherche
+          flottante (topInset = sa hauteur mesurée dans explore.tsx). */}
+      <View style={[styles.top, { top: topInset }]} pointerEvents="box-none">
         <FlatList
           data={FEED_CATEGORIES}
           keyExtractor={(c) => c.key}
@@ -293,7 +290,6 @@ export function TikTokFeed() {
               ]}
               onPress={() => {
                 setCat(c.key);
-                setActiveIndex(0);
                 listRef.current?.scrollToOffset({ offset: 0, animated: false });
               }}
               accessibilityRole="tab"
@@ -305,22 +301,6 @@ export function TikTokFeed() {
           )}
         />
       </View>
-
-      {deck.length > 1 && !failed ? (
-        <View
-          style={styles.progressWrap}
-          pointerEvents="none"
-          accessible
-          accessibilityRole="progressbar"
-          accessibilityLabel="Progression dans les suggestions"
-          accessibilityValue={{ min: 1, max: deck.length, now: Math.min(activeIndex + 1, deck.length) }}
-        >
-          <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { flex: Math.min(activeIndex + 1, deck.length) }]} />
-            <View style={{ flex: Math.max(deck.length - activeIndex - 1, 0) }} />
-          </View>
-        </View>
-      ) : null}
 
       {/* La barre « Ajouter un commentaire » a été retirée : redondante avec le
           bouton Avis du rail (retour utilisateur 2026-07-16), elle chargeait le bas
@@ -358,13 +338,12 @@ const styles = StyleSheet.create({
   },
   top: {
     position: 'absolute',
-    top: 0,
+    // `top` posé en ligne (= hauteur de la barre de recherche flottante).
     left: 0,
     right: 0,
     zIndex: 10,
     paddingTop: SPACE.xs,
     paddingBottom: SPACE.xs,
-    backgroundColor: 'rgba(13,10,20,0.22)',
   },
   chipsContent: {
     gap: 6,
@@ -392,24 +371,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.45,
   },
   chipTextOn: { color: COLORS.onPrimary },
-  progressWrap: {
-    position: 'absolute',
-    top: 59,
-    left: SPACE.sm,
-    right: SPACE.sm,
-    zIndex: 9,
-  },
-  progressTrack: {
-    height: 3,
-    flexDirection: 'row',
-    overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.28)',
-    borderRadius: RADIUS.pill,
-  },
-  progressFill: {
-    backgroundColor: COLORS.secondary,
-    borderRadius: RADIUS.pill,
-  },
   moreLoader: { marginVertical: SPACE.lg },
   endCard: {
     alignItems: 'center',

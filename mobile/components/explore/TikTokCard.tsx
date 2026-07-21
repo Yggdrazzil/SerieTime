@@ -62,6 +62,15 @@ export function TikTokCard({
   const kind = isGame ? 'Jeu' : item.category === 'anime' ? 'Animé' : item.type === 'show' ? 'Série' : 'Film';
   const meta = item.year ? String(item.year) : 'Date à confirmer';
 
+  // Ouvre/ferme l'overlay de détails (utilisé par le tap plein écran ET par le
+  // libellé « Touchez pour déplier » — qui, dans la légende `box-none`,
+  // interceptait le tap sans le transmettre au Pressable de fond : zone morte).
+  const toggleDetail = () =>
+    setDetail((d) => {
+      onDetailToggle?.(!d);
+      return !d;
+    });
+
   const openFiche = async (f: FeedItem) => {
     try {
       const id = await resolveMedia(f);
@@ -207,12 +216,7 @@ export function TikTokCard({
       {/* Zone tap = ouvre/ferme l'overlay de description. */}
       <Pressable
         style={StyleSheet.absoluteFill}
-        onPress={() =>
-          setDetail((d) => {
-            onDetailToggle?.(!d);
-            return !d;
-          })
-        }
+        onPress={toggleDetail}
         accessibilityRole="button"
         accessibilityLabel={`Afficher les détails de ${item.title}`}
         accessibilityHint="Ouvre le résumé et les informations complémentaires"
@@ -248,10 +252,20 @@ export function TikTokCard({
             {item.overview}
           </Text>
         ) : null}
-        <View style={styles.hintRow}>
+        {/* Bouton à part entière (et non simple texte dans la légende `box-none`,
+            qui créait une zone morte pile sur l'invite) : cible confortable
+            grâce au hitSlop. */}
+        <Pressable
+          style={({ pressed }) => [styles.hintRow, pressed && styles.hintRowPressed]}
+          onPress={toggleDetail}
+          hitSlop={{ top: 12, bottom: 14, left: 16, right: 24 }}
+          accessibilityRole="button"
+          accessibilityLabel={`Afficher les détails de ${item.title}`}
+          accessibilityState={{ expanded: detail }}
+        >
           <Feather name="chevron-up" size={13} color="rgba(255,255,255,0.72)" />
           <Text style={styles.hint}>Touchez pour déplier les détails</Text>
-        </View>
+        </Pressable>
       </View>
 
       <ActionRail
@@ -407,9 +421,13 @@ const styles = StyleSheet.create({
   hintRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    alignSelf: 'flex-start',
     gap: 4,
     marginTop: SPACE.xs,
+    // Petit padding vertical : élargit la cible tactile réelle du bouton.
+    paddingVertical: 4,
   },
+  hintRowPressed: { opacity: 0.6 },
   hint: {
     color: 'rgba(255,255,255,0.72)',
     fontFamily: FONTS.semiBold,

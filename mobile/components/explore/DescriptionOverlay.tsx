@@ -86,7 +86,6 @@ export function DescriptionOverlay({
 
   return (
     <SlideUpBar visible={visible} style={styles.sheet} distance={160}>
-      <View style={styles.sheetAccent} pointerEvents="none" />
       <Pressable
         style={({ pressed }) => [styles.grip, pressed && styles.gripPressed]}
         onPress={onClose}
@@ -135,11 +134,9 @@ export function DescriptionOverlay({
           style={({ pressed }) => [styles.ficheBtn, pressed && styles.ficheBtnPressed]}
           onPress={() => onOpenFiche(item)}
           accessibilityRole="button"
-          accessibilityLabel={`Voir la fiche complète de ${item.title}`}
+          accessibilityLabel={`Accéder à la fiche de ${item.title}`}
         >
-          <Feather name="external-link" size={18} color={COLORS.onPrimary} />
-          <Text style={styles.ficheText}>VOIR LA FICHE</Text>
-          <Feather name="arrow-right" size={17} color={COLORS.onPrimary} />
+          <Text style={styles.ficheText}>Accéder à la fiche</Text>
         </Pressable>
       </ScrollView>
     </SlideUpBar>
@@ -154,7 +151,10 @@ const styles = StyleSheet.create({
     top: '26%',
     bottom: 0,
     overflow: 'hidden',
-    backgroundColor: COLORS.surface,
+    // Fond des détails : `sheet` (quasi opaque en Glass) — le voile translucide
+    // de `surface` laissait l'affiche transparaître et rendait le texte
+    // illisible (retour Étienne 2026-07-21).
+    backgroundColor: COLORS.sheet,
     borderTopWidth: 1,
     borderLeftWidth: 1,
     borderRightWidth: 1,
@@ -163,16 +163,6 @@ const styles = StyleSheet.create({
     borderTopRightRadius: RADIUS.sheet,
     zIndex: 20,
     ...SHADOW.season,
-  },
-  sheetAccent: {
-    position: 'absolute',
-    top: 0,
-    left: SPACE.xl,
-    right: SPACE.xl,
-    height: 4,
-    backgroundColor: COLORS.secondary,
-    borderBottomLeftRadius: RADIUS.pill,
-    borderBottomRightRadius: RADIUS.pill,
   },
   grip: {
     width: 64,
