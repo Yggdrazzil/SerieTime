@@ -18,6 +18,7 @@ import { COLORS, FONTS, RADIUS, SHADOW, SIZES, SPACE } from '@/lib/theme';
 import { LoadError, Poster } from '@/components/ui';
 import { useReduceMotion } from '@/lib/useReduceMotion';
 import { useHideTabBar } from '@/lib/tabBarHidden';
+import { useBackClose } from '@/lib/useBackClose';
 import { useUserPreviewStore } from '@/lib/userPreview';
 
 // Aperçu de profil en feuille basse (demande Benjamin) : résumé compact d'un
@@ -72,6 +73,8 @@ export function UserPreviewSheet() {
   const reduce = useReduceMotion();
   // Tab bar flottante : masquée tant que la feuille est ouverte (cf. tabBarHidden).
   useHideTabBar(!!userId);
+  // Le « retour » ferme l'aperçu au lieu de quitter l'app.
+  useBackClose(!!userId, close);
 
   return (
     <Modal

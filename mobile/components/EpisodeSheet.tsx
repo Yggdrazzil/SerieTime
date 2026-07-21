@@ -25,6 +25,7 @@ import { CheckCircle } from '@/components/ui';
 import { Stars } from '@/components/Stars';
 import { MarkPreviousPopup, hasUnwatchedPrevious } from '@/components/MarkPreviousPopup';
 import { useReduceMotion } from '@/lib/useReduceMotion';
+import { useBackClose } from '@/lib/useBackClose';
 
 export type EpisodeSheetTarget = {
   mediaId: string;
@@ -150,6 +151,10 @@ export function EpisodeSheet({
       }),
     );
   }, [sheetWidth]);
+
+  // Le « retour » (bouton précédent du navigateur / back Android) ferme la
+  // feuille au lieu de quitter l'onglet (sinon la web app se fermait).
+  useBackClose(!!target, close);
 
   if (!target) return null;
 

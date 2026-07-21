@@ -197,13 +197,13 @@ function QueueView() {
       />
     );
 
-  // Héro « À regarder maintenant » (maquette) : le tout premier épisode
-  // regardable de la file (le tri serveur place déjà le plus pertinent en tête).
+  // Héro « À regarder maintenant » : le tout premier épisode regardable de la
+  // file (tri serveur). Il reste DANS son groupe (« À voir » en général) — il
+  // en est juste la carte de tête, sous l'en-tête du groupe (retour Étienne
+  // 2026-07-21 : l'épisode mis en avant doit compter dans « À voir »).
   const heroItem = (data?.items ?? []).find((it) => it.nextEpisode) ?? null;
   const groups = new Map<string, QueueItemDto[]>();
-  (data?.items ?? [])
-    .filter((it) => it !== heroItem)
-    .forEach((it) => groups.set(it.group, [...(groups.get(it.group) ?? []), it]));
+  (data?.items ?? []).forEach((it) => groups.set(it.group, [...(groups.get(it.group) ?? []), it]));
 
   return (
     <View style={{ flex: 1 }}>
@@ -248,23 +248,6 @@ function QueueView() {
           ))}
         </View>
       ) : null}
-      {heroItem?.nextEpisode ? (
-        <View style={styles.queueColumn} onLayout={registerSection('À regarder maintenant')}>
-          <HeroCard
-            item={heroItem}
-            marking={mark.isPending}
-            onMark={() => mark.mutate(heroItem.nextEpisode!.id)}
-            onOpenEpisode={() =>
-              setSheet({
-                mediaId: heroItem.media.id,
-                mediaTitle: heroItem.media.title,
-                posterPath: heroItem.media.posterPath,
-                episode: heroItem.nextEpisode!,
-              })
-            }
-          />
-        </View>
-      ) : null}
       {(() => {
         // Index continu à travers les groupes pour une entrée en cascade.
         let n = -1;
@@ -272,6 +255,26 @@ function QueueView() {
           <View key={group} style={styles.queueColumn} onLayout={registerSection(queueGroupLabel(group))}>
             <GroupHead label={queueGroupLabel(group)} count={items.length} />
             {items.map((item) => {
+              // L'épisode mis en avant est rendu en CARTE HÉRO, en tête de son
+              // groupe (juste sous l'en-tête « À voir »).
+              if (item === heroItem && item.nextEpisode) {
+                return (
+                  <HeroCard
+                    key={item.media.id}
+                    item={item}
+                    marking={mark.isPending}
+                    onMark={() => mark.mutate(item.nextEpisode!.id)}
+                    onOpenEpisode={() =>
+                      setSheet({
+                        mediaId: item.media.id,
+                        mediaTitle: item.media.title,
+                        posterPath: item.media.posterPath,
+                        episode: item.nextEpisode!,
+                      })
+                    }
+                  />
+                );
+              }
               n += 1;
               return (
                 <AppearItem key={item.media.id} index={n}>

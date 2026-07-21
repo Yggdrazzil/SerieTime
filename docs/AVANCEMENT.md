@@ -6,7 +6,7 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
-Dernière mise à jour : **2026-07-21** (Claude/Étienne) — en-tête de l'onglet Accueil aligné sur les en-têtes Agenda et Communauté (mêmes paddings)
+Dernière mise à jour : **2026-07-21** (Claude/Étienne) — Explorer sans point rouge, héro « À regarder maintenant » intégré à la section « À voir » de l'Accueil, et retour arrière du navigateur qui ferme les feuilles au lieu de quitter la web app
 
 ---
 
@@ -90,6 +90,28 @@ la migration visuelle doit encore être exécutée sans modifier la logique mét
 6. Publication native optionnelle (EAS Build APK, puis stores).
 
 ## Journal des modifications
+
+### 2026-07-21 — Claude/Étienne : point rouge Explorer, héro dans « À voir », retour arrière ferme les feuilles
+- **Point rouge de l'onglet Explorer supprimé** (`components/TabBar.tsx`) : la
+  pastille de notification sur l'icône loupe (sans usage) est retirée.
+- **Accueil — héro intégré à « À voir »** (`mobile/app/(tabs)/index.tsx`) :
+  l'épisode « À regarder maintenant » n'est plus une carte hors-section au-dessus
+  du groupe ; il devient la carte de tête DU groupe « À voir » (en-tête du groupe
+  au-dessus, épisode compté dedans).
+- **Correctif retour arrière (web) sur les feuilles pilotées par état** : sans
+  entrée d'historique, le bouton précédent du navigateur faisait reculer le
+  routeur et **quittait la web app** depuis un onglet racine. Nouveau hook
+  `lib/useBackClose.ts` (empile un cran d'historique fantôme sur web + intercepte
+  le back Android natif) appliqué aux overlays de niveau onglet : feuille épisode
+  (`EpisodeSheet`), détails Explorer (`DescriptionOverlay`), commentaires Explorer
+  (`CommentsSheet`) et aperçu de profil global (`UserPreviewSheet`). Le retour
+  ferme désormais l'overlay et reste dans l'app. Les modales des écrans routés
+  (fiche série/jeu, paramètres…) ne sont pas concernées : le retour y navigue
+  dans le routeur, sans quitter l'app.
+- Validé en Chromium (thème Glass, file simulée) : ordre « À voir » avant le
+  héro, feuille épisode fermée par le back sans quitter l'app ; `tsc --noEmit`
+  + export web OK.
+
 
 ### 2026-07-21 — Claude/Étienne : en-tête Accueil aligné sur Agenda/Communauté
 - **En-tête de l'onglet Accueil** (`mobile/app/(tabs)/index.tsx`) : mêmes
