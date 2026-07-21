@@ -33,6 +33,21 @@ function tvtimeDay(d: Date | null | undefined, year?: number | null): string {
   return year ? `${year}-01-01` : '';
 }
 
+// Statut PlotTime → jeton « façon TV Time » (colonne status de
+// followed_tv_show.csv). Les VRAIS exports TV Time n'ont pas cette colonne
+// (seul active=0 y code « Arrêtée ») : elle est optionnelle à la relecture
+// (pickField 'status' dans normalize.ts) et chaque jeton est retraduit par
+// TVTIME_STATUS_MAP (import-tvtime/service.ts) — aller-retour sans perte des
+// statuts fins (paused / not_started / watching) qu'active=0 seul ne code pas.
+const TVTIME_EXPORT_STATUS: Record<string, string> = {
+  watching: 'watching',
+  completed: 'finished',
+  paused: 'paused',
+  not_started: 'not_started',
+  abandoned: 'stopped_watching',
+  watchlist: 'for_later',
+};
+
 // Export/restauration JSON des données utilisateur (spec §14.10, §37).
 export async function backupRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', requireAuth);
@@ -105,35 +120,49 @@ export async function backupRoutes(app: FastifyInstance): Promise<void> {
     // 2) followed_tv_show.csv — un rang par série de la bibliothèque.
     //    `active = 0` est la façon TV Time de dire « Arrêtée » (statut
     //    abandoned) : notre normaliseur le retraduit en stopped_watching.
+    //    La colonne `status` (absente des vrais exports TV Time) porte en plus
+    //    le statut FIN (paused / not_started / watching…) pour l'aller-retour.
     const followedShows = toCsv(
-      ['tv_show_name', 'tvdb_id', 'tmdb_id', 'active', 'created_at', 'rating'],
+      ['tv_show_name', 'tvdb_id', 'tmdb_id', 'active', 'status', 'created_at', 'rating'],
       showStatuses.map((s) => [
         s.media.title,
         s.media.tvdbId,
         s.media.tmdbId,
         s.status === 'abandoned' ? 0 : 1,
+        TVTIME_EXPORT_STATUS[s.status] ?? '',
         tvtimeDate(s.addedAt),
         s.rating,
       ]),
     );
 
-    // 3) user_show_special_status.csv — comme TV Time : `favorite` (séries
-    //    favorites) et `for_later` (watchlist) dans la même colonne status.
+    // 3) user_show_special_status.csv — comme TV Time : `favorite` (favoris)
+    //    et `for_later` (watchlist séries) dans la même colonne status. La
+    //    colonne `entity_type` (absente des vrais exports TV Time) permet d'y
+    //    ranger AUSSI les films favoris : detectMediaType la lit (alias `type`)
+    //    et bascule le rang en film. Pas de rang `for_later` pour les films :
+    //    leur watchlist est déjà codée `towatch` dans les tracking records.
     const specialRows: unknown[][] = [];
     for (const s of showStatuses) {
       if (s.isFavorite) {
-        specialRows.push([s.media.title, s.media.tvdbId, s.media.tmdbId, 'favorite', tvtimeDate(s.favoritedAt ?? s.addedAt)]);
+        specialRows.push(['show', s.media.title, s.media.tvdbId, s.media.tmdbId, 'favorite', tvtimeDate(s.favoritedAt ?? s.addedAt)]);
       }
       if (s.status === 'watchlist') {
-        specialRows.push([s.media.title, s.media.tvdbId, s.media.tmdbId, 'for_later', tvtimeDate(s.addedAt)]);
+        specialRows.push(['show', s.media.title, s.media.tvdbId, s.media.tmdbId, 'for_later', tvtimeDate(s.addedAt)]);
       }
     }
-    const specialStatus = toCsv(['tv_show_name', 'tv_show_id', 'tmdb_id', 'status', 'created_at'], specialRows);
+    for (const s of movieStatuses) {
+      if (s.isFavorite) {
+        specialRows.push(['movie', s.media.title, '', s.media.tmdbId, 'favorite', tvtimeDate(s.favoritedAt ?? s.addedAt)]);
+      }
+    }
+    const specialStatus = toCsv(['entity_type', 'tv_show_name', 'tv_show_id', 'tmdb_id', 'status', 'created_at'], specialRows);
 
     // 4) tracking-prod-records-v2.csv — les films, noyés dans les tracking
     //    records comme chez TV Time : entity_type=movie, type=watch|towatch.
+    //    `created_at` d'un rang watch = date de visionnage, `rating` = note :
+    //    relus tels quels par analyzeImport (aller-retour sans perte).
     const trackingRecords = toCsv(
-      ['entity_type', 'movie_name', 'release_date', 'type', 'tmdb_id', 'created_at'],
+      ['entity_type', 'movie_name', 'release_date', 'type', 'tmdb_id', 'created_at', 'rating'],
       movieStatuses.map((s) => {
         const watched = s.status === 'completed';
         return [
@@ -143,6 +172,7 @@ export async function backupRoutes(app: FastifyInstance): Promise<void> {
           watched ? 'watch' : 'towatch',
           s.media.tmdbId,
           tvtimeDate(watched ? s.completedAt ?? s.lastWatchedAt ?? s.addedAt : s.addedAt),
+          s.rating,
         ];
       }),
     );
