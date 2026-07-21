@@ -6,7 +6,7 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
-Dernière mise à jour : **2026-07-21** (Claude/Étienne) — Explorer : une seule carte par swipe (garde JS anti-inertie côté web + `disableIntervalMomentum` natif), le scroll rapide ne saute plus plusieurs cartes
+Dernière mise à jour : **2026-07-21** (Claude/Étienne) — refonte anti TV Time des fiches série / film / épisode (identité Prisme, mêmes infos)
 
 ---
 
@@ -36,7 +36,7 @@ la migration visuelle doit encore être exécutée sans modifier la logique mét
 | Contenu séries via TheTVDB | ✅ Fait | Recherche, fiche, saisons/épisodes, titres/synopsis FR, artworks ; clé dans `apps/server/.env` |
 | Contenu films / tendances via TMDb | ✅ Fait | Clé TMDb (compte Benjamin) configurée sur le serveur de prod ; flux Explorer et images films actifs |
 | File « À voir » / « À venir » | ✅ Fait | Groupes TV Time (pas commencé, à voir, etc.) ; « Regarder plus tard » exclu des deux |
-| Fiche série/film façon TV Time | ✅ Fait | Bannière repliable, onglets À PROPOS / ÉPISODES, distribution (fiches acteurs), « également regardé », similaire à, notes de la communauté, page Commentaires dédiée |
+| Fiche série / film / épisode (identité Prisme) | ✅ Refondue | Lifting anti TV Time (2026-07-21) : pilule verre « SÉRIE/FILM » (plus le jaune), onglets **segmentés Prisme** (À propos / Épisodes), en-têtes de section pastille + sur-titre, pastilles « où regarder » violettes, puces d'intérêt en pilules, barre d'ajout violette, progression série/saison + courbe de notes en violet. Fiche épisode : bannière à dégradé + formes Prisme + sur-titre saison/épisode. **Toutes les infos conservées** (bannière repliable, distribution, « également regardé », similaire à, notes de la communauté, commentaires). Validé au rendu web (Playwright) |
 | Menu « … » de la fiche | ✅ Fait | Personnaliser (affiche + bannière, séries **et** films), Favoris, Ajouter à une liste, Regarder plus tard, Supprimer, Partager |
 | Consultation ≠ suivi | ✅ Fait | Taper un résultat ouvre la fiche sans l'ajouter ; seul le `+` suit (statut « Pas commencée » ; « En cours » au 1er épisode vu) |
 | Recherche (design TV Time) | ✅ Fait | Onglets SÉRIES ET FILMS / JEUX / UTILISATEURS, « Annuler », `+` jaunes, debounce |
@@ -91,6 +91,32 @@ la migration visuelle doit encore être exécutée sans modifier la logique mét
 6. Publication native optionnelle (EAS Build APK, puis stores).
 
 ## Journal des modifications
+
+### 2026-07-21 — Claude/Étienne : refonte des fiches série / film / épisode (anti TV Time)
+- **Demande Étienne** : les fiches série, film et épisode restaient trop proches
+  de TV Time. Faire un lifting visuel à l'identité **Prisme** en gardant
+  **exactement les mêmes infos**.
+- **Fiche série/film** (`mobile/app/show/[id].tsx`) :
+  - Bannière : pilule « SÉRIE / FILM » en verre translucide (fini la pastille
+    jaune), affiche en arête blanche, barre de progression « En cours » en violet.
+  - Onglets **À propos / Épisodes** → contrôle **segmenté Prisme** (pilule) au
+    lieu du soulignement façon TV Time (valeurs inchangées → logique intacte).
+  - En-têtes de section homogènes (pastille d'icône + sur-titre + titre) sur
+    Où regarder, Informations, Distribution, « également regardé », Notes,
+    Commentaires ; puces « Qu'est-ce qui vous intéresse ? » en pilules qui
+    s'enroulent (fini la liste empilée) ; barre d'ajout **violette** ; courbe des
+    notes et barres de progression de saison en violet ; badges/boutons jaunes
+    résiduels (« également regardé », « Créer une liste ») repassés en violet.
+  - Retrait de la roue crantée décorative de « Où regarder » (non fonctionnelle).
+- **Fiche épisode** (`mobile/components/EpisodeSheet.tsx`) : bannière à dégradé +
+  formes Prisme (plus le simple voile plat) et sur-titre « SAISON X · ÉPISODE Y »
+  au-dessus du code — le reste (Où regarder, À propos, Commentaires) était déjà
+  au format Prisme.
+- **Aucune info retirée** ; toutes les interactions (suivi, favoris, listes,
+  personnalisation, épisodes, feuille épisode, commentaires) inchangées.
+- **Validation** : export web (`expo export -p web`) OK, puis rendu réel dans le
+  Chromium de Playwright (données simulées) des trois fiches + bascule d'onglet +
+  ouverture de la feuille épisode. Typecheck mobile OK.
 
 ### 2026-07-21 — Claude/Étienne : Explorer, une seule carte par swipe (fix scroll)
 - **Symptôme** (retour Étienne) : dans le feed TikTok de l'Explorer, un scroll

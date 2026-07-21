@@ -14,6 +14,7 @@ import {
   View,
 } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, type Href } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -646,7 +647,16 @@ function EpisodePage({
             </View>
           )}
 
-          <View style={styles.heroShade} />
+          {/* Dégradé + formes Prisme (identité PlotTime) plutôt qu'un simple
+              voile plat façon TV Time. */}
+          <LinearGradient
+            colors={['rgba(9,5,16,0.10)', 'rgba(9,5,16,0.44)', 'rgba(9,5,16,0.9)']}
+            locations={[0, 0.5, 1]}
+            style={StyleSheet.absoluteFill}
+            pointerEvents="none"
+          />
+          <View style={styles.heroPrism} pointerEvents="none" />
+          <View style={styles.heroOrb} pointerEvents="none" />
 
           <View style={styles.heroTop}>
             <Pressable
@@ -682,6 +692,11 @@ function EpisodePage({
           </View>
 
           <View style={styles.heroCaption}>
+            <Text style={styles.heroEyebrow}>
+              {episode.seasonNumber === 0
+                ? 'ÉPISODE SPÉCIAL'
+                : 'SAISON ' + episode.seasonNumber + ' · ÉPISODE ' + episode.episodeNumber}
+            </Text>
             <Text style={styles.heroCode}>
               {episodeCode(
                 episode.seasonNumber,
@@ -1042,9 +1057,27 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: COLORS.imagePlaceholder,
   },
-  heroShade: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(12, 8, 28, 0.34)',
+  // Formes Prisme dans la bannière épisode (signature PlotTime).
+  heroPrism: {
+    position: 'absolute',
+    right: -70,
+    top: -60,
+    width: 150,
+    height: 150,
+    borderRadius: 38,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: 'rgba(239,91,168,0.16)',
+    transform: [{ rotate: '32deg' }],
+  },
+  heroOrb: {
+    position: 'absolute',
+    left: -54,
+    bottom: -60,
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    backgroundColor: 'rgba(109,78,209,0.20)',
   },
   heroTop: {
     position: 'absolute',
@@ -1089,6 +1122,14 @@ const styles = StyleSheet.create({
   },
   heroCaption: {
     padding: SPACE.md,
+  },
+  heroEyebrow: {
+    color: 'rgba(255,255,255,0.86)',
+    fontSize: 10,
+    lineHeight: 14,
+    letterSpacing: 1.2,
+    fontFamily: FONTS.extraBold,
+    marginBottom: 3,
   },
   heroCode: {
     color: '#FFFFFF',

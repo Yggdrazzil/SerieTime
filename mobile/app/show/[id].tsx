@@ -10,8 +10,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, tmdbImage, ApiError } from '@/lib/api';
 import type { EpisodeDto, MediaDto, UserMediaState } from '@/lib/types';
 import { episodeCode } from '@/lib/format';
-import { COLORS, RADIUS, SHADOW, FONTS, STATUS_BAR, YELLOW_TRACK, SIZES, SPACE } from '@/lib/theme';
-import { TopTabs, CheckCircle, Loading, LoadError, EmptyState } from '@/components/ui';
+import { COLORS, RADIUS, SHADOW, FONTS, STATUS_BAR, SIZES, SPACE } from '@/lib/theme';
+import { CheckCircle, Loading, LoadError, EmptyState } from '@/components/ui';
+import { SegmentedFilter } from '@/components/prisme';
 import { AnimatedFill, Pop, SlideUpBar, FadeSwitch, PressableScale } from '@/components/anim';
 import { Stars } from '@/components/Stars';
 import { MarkPreviousPopup, hasUnwatchedPrevious } from '@/components/MarkPreviousPopup';
@@ -298,8 +299,8 @@ export default function ShowDetail() {
   const bigOpacity = scrollY.interpolate({ inputRange: [0, HERO_RANGE * 0.6], outputRange: [1, 0], extrapolate: 'clamp' });
   const smallOpacity = scrollY.interpolate({ inputRange: [HERO_RANGE * 0.6, HERO_RANGE], outputRange: [0, 1], extrapolate: 'clamp' });
   const onScroll = Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false });
-  // Hauteur de la barre d'onglets À PROPOS / ÉPISODES (TopTabs, ui.tsx).
-  const TABS_H = 42;
+  // Hauteur de la barre d'onglets À propos / Épisodes (contrôle segmenté Prisme).
+  const TABS_H = 58;
   const topPad = HERO_MAX + (isMovie ? 0 : TABS_H);
 
   // Barre de progression globale : épisodes diffusés vus / diffusés (hors
@@ -325,7 +326,11 @@ export default function ShowDetail() {
       : media.userStatus === 'completed' ? 'completed'
       : media.userStatus === 'watchlist' ? 'watchlist'
       : complete ? 'upToDate' : 'watching';
-    return { pct: kind === 'completed' ? 100 : Math.min(100, (watched / aired) * 100), ...STATUS_BAR[kind] };
+    const pct = kind === 'completed' ? 100 : Math.min(100, (watched / aired) * 100);
+    // « En cours » : violet Prisme sur la fiche (plus le jaune TV Time) ; les
+    // autres statuts gardent leur code couleur (STATUS_BAR, partagé avec le profil).
+    if (kind === 'watching') return { pct, fill: COLORS.primary, track: COLORS.primarySoft };
+    return { pct, ...STATUS_BAR[kind] };
   })();
 
   // Ligne de suivi (même présentation que la fiche jeu) : première carte du
@@ -425,7 +430,7 @@ export default function ShowDetail() {
           ) : null}
           <View style={styles.heroCopy}>
             <View style={styles.heroKindBadge}>
-              <Feather name={isMovie ? 'film' : 'tv'} size={12} color={COLORS.onAccent} />
+              <Feather name={isMovie ? 'film' : 'tv'} size={12} color="#FFFFFF" />
               <Text style={styles.heroKindText}>{isMovie ? 'FILM' : 'SÉRIE'}</Text>
             </View>
             <Text accessibilityRole="header" style={styles.heroTitle} numberOfLines={2}>{media.title}</Text>
@@ -447,8 +452,21 @@ export default function ShowDetail() {
           </View>
         ) : null}
       </Animated.View>
-      {/* Comme TV Time : deux onglets, les commentaires vivent au bas de « À propos ». */}
-      {!isMovie ? <TopTabs tabs={['À PROPOS', 'ÉPISODES']} active={tab} onChange={setTab} /> : null}
+      {/* Onglets Prisme (contrôle segmenté en pilule) — les commentaires vivent
+          au bas de « À propos ». Valeurs inchangées (pilotent FadeSwitch). */}
+      {!isMovie ? (
+        <View style={styles.ficheTabs}>
+          <SegmentedFilter
+            options={[
+              { value: 'À PROPOS', label: 'À propos' },
+              { value: 'ÉPISODES', label: 'Épisodes' },
+            ]}
+            value={tab}
+            onChange={setTab}
+            accessibilityLabel="Sections de la fiche"
+          />
+        </View>
+      ) : null}
       </View>
 
       {/* Barre du bas façon TV Time : + AJOUTER, puis ✓ AJOUTÉE ! pendant 2 s. */}
@@ -462,10 +480,10 @@ export default function ShowDetail() {
           accessibilityState={{ busy: trackingBusy, disabled: trackingBusy }}
         >
           {follow.isPending ? (
-            <ActivityIndicator color={COLORS.onAccent} />
+            <ActivityIndicator color={COLORS.onPrimary} />
           ) : (
             <View style={styles.addBarRow}>
-              <Feather name="plus" size={24} color={COLORS.onAccent} />
+              <Feather name="plus" size={24} color={COLORS.onPrimary} />
               <Text style={styles.addBarText}>{isMovie ? 'AJOUTER LE FILM' : 'AJOUTER LA SÉRIE'}</Text>
             </View>
           )}
@@ -476,7 +494,7 @@ export default function ShowDetail() {
         style={[styles.addBar, { bottom: insets.bottom + SPACE.sm }]}
       >
         <View style={styles.addBarRow} accessibilityLiveRegion="polite">
-          <Feather name="check" size={24} color={COLORS.onAccent} />
+          <Feather name="check" size={24} color={COLORS.onPrimary} />
           <Text style={styles.addBarText}>{toast ?? (isMovie ? 'AJOUTÉ !' : 'AJOUTÉE !')}</Text>
         </View>
       </SlideUpBar>
@@ -973,7 +991,7 @@ function ListsSheet({
               accessibilityLabel="Créer la liste"
               accessibilityState={{ busy: creating, disabled: !newTitle.trim() || creating || busyId !== null }}
             >
-              {creating ? <ActivityIndicator color={COLORS.black} size="small" /> : <Text style={pstyles.newListBtnText}>CRÉER</Text>}
+              {creating ? <ActivityIndicator color={COLORS.onPrimary} size="small" /> : <Text style={pstyles.newListBtnText}>CRÉER</Text>}
             </Pressable>
           </View>
         </ScrollView>
@@ -1125,13 +1143,13 @@ const pstyles = StyleSheet.create({
   newListBtn: {
     minHeight: SIZES.touch,
     minWidth: 76,
-    backgroundColor: COLORS.yellow,
+    backgroundColor: COLORS.primary,
     borderRadius: RADIUS.pill,
     paddingHorizontal: SPACE.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  newListBtnText: { color: COLORS.onAccent, fontFamily: FONTS.extraBold, fontSize: 13, letterSpacing: 0.4 },
+  newListBtnText: { color: COLORS.onPrimary, fontFamily: FONTS.extraBold, fontSize: 13, letterSpacing: 0.4 },
 });
 
 // Ouvre une recommandation TMDb : fiche locale si la série/le film est déjà
@@ -1160,15 +1178,40 @@ function useOpenRec(type: 'show' | 'movie') {
   };
   return { open, busyId };
 }
-// « Où regarder » : pastilles noires horizontales (une par plateforme), rouage
-// à droite — cotes TV Time.
+// En-tête de section Prisme : pastille d'icône + sur-titre + titre (même recette
+// que la fiche épisode). `trailing` pour un compteur/chevron éventuel.
+function SectionHead({
+  icon,
+  eyebrow,
+  title,
+  trailing,
+  style,
+}: {
+  icon: keyof typeof Feather.glyphMap;
+  eyebrow: string;
+  title: string;
+  trailing?: React.ReactNode;
+  style?: any;
+}) {
+  return (
+    <View style={[styles.sectionHead, style]}>
+      <View style={styles.sectionHeadIcon} accessible={false}>
+        <Feather name={icon} size={18} color={COLORS.primary} />
+      </View>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={styles.sectionEyebrow}>{eyebrow}</Text>
+        <Text accessibilityRole="header" style={styles.sectionTitle} numberOfLines={2}>{title}</Text>
+      </View>
+      {trailing}
+    </View>
+  );
+}
+
+// « Où regarder » : pastilles violettes horizontales (une par plateforme).
 function WhereToWatch({ providers }: { providers: { name: string }[] }) {
   return (
     <View style={styles.section}>
-      <View style={styles.sectionHeadRowTight}>
-        <Text accessibilityRole="header" style={styles.sectionTitle}>Où regarder</Text>
-        <Feather name="settings" size={18} color={COLORS.black} />
-      </View>
+      <SectionHead icon="play-circle" eyebrow="DISPONIBILITÉ" title="Où regarder" />
       {providers.length === 0 ? (
         <Text style={styles.muted}>Non disponible</Text>
       ) : (
@@ -1251,7 +1294,7 @@ function CastSection({ cast, mediaId, type }: { cast: any[]; mediaId: string; ty
   if (!cast.length) return null;
   return (
     <View style={[styles.section, { paddingHorizontal: 0 }]}>
-      <Text style={[styles.sectionTitle, { paddingHorizontal: 20 }]}>Distribution</Text>
+      <SectionHead icon="users" eyebrow="CASTING" title="Distribution" style={{ paddingHorizontal: 20 }} />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingHorizontal: 20, paddingTop: 14 }}>
         {cast.map((c, i) => (
           <PressableScale
@@ -1287,7 +1330,7 @@ function AlsoWatched({ items, type }: { items: any[]; type: 'show' | 'movie' }) 
   if (!items.length) return null;
   return (
     <View style={[styles.section, { paddingHorizontal: 0 }]}>
-      <Text style={[styles.sectionTitle, { paddingHorizontal: 20 }]}>Les utilisateurs ont également regardé</Text>
+      <SectionHead icon="eye" eyebrow="RECOMMANDÉ" title="Les utilisateurs ont également regardé" style={{ paddingHorizontal: 20 }} />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingHorizontal: 20, paddingTop: 14 }}>
         {items.map((r) => (
           <PressableScale
@@ -1308,7 +1351,7 @@ function AlsoWatched({ items, type }: { items: any[]; type: 'show' | 'movie' }) 
             )}
             {r.inLibrary ? (
               <View style={styles.recoBadge}>
-                <Feather name="check" size={18} color={COLORS.onAccent} />
+                <Feather name="check" size={18} color={COLORS.onPrimary} />
               </View>
             ) : null}
             {rec.busyId === r.tmdbId ? (
@@ -1352,7 +1395,7 @@ function CommunityRatings({ mediaId }: { mediaId: string }) {
   const pts = cur.points.map((p, i) => `${PAD.l + i * xs},${y(p.avg)}`).join(' ');
   return (
     <View style={styles.section}>
-      <Text accessibilityRole="header" style={styles.sectionTitle}>Notes de la communauté</Text>
+      <SectionHead icon="trending-up" eyebrow="COMMUNAUTÉ" title="Notes de la communauté" />
       <Pressable
         style={({ pressed }) => [styles.seasonPickRow, pressed && styles.pressed]}
         onPress={() => setSeason((idx + 1) % seasons.length)}
@@ -1381,9 +1424,9 @@ function CommunityRatings({ mediaId }: { mediaId: string }) {
             </React.Fragment>
           );
         })}
-        {cur.points.length > 1 ? <Polyline points={pts} fill="none" stroke={COLORS.yellow} strokeWidth={2.5} /> : null}
+        {cur.points.length > 1 ? <Polyline points={pts} fill="none" stroke={COLORS.primary} strokeWidth={2.5} /> : null}
         {cur.points.map((p, i) => (
-          <Circle key={i} cx={PAD.l + i * xs} cy={y(p.avg)} r={3.5} fill={COLORS.yellow} />
+          <Circle key={i} cx={PAD.l + i * xs} cy={y(p.avg)} r={3.5} fill={COLORS.primary} />
         ))}
       </Svg>
       </View>
@@ -1409,17 +1452,23 @@ function CommentsRowLink({ mediaId, title, type }: { mediaId: string; title: str
   const total = (q.data?.comments ?? []).reduce((n, c) => n + 1 + (c.replies?.length ?? 0), 0);
   return (
     <Pressable
-      style={[styles.section, styles.commentsRow]}
+      style={({ pressed }) => [styles.section, pressed && styles.pressed]}
       onPress={() => router.push(`/comments/${mediaId}?title=${encodeURIComponent(title)}&type=${type}`)}
       accessibilityRole="button"
       accessibilityLabel={`Commentaires, ${total}`}
       accessibilityHint="Ouvre tous les commentaires"
     >
-      <Text accessibilityRole="header" style={styles.sectionTitle}>Commentaires</Text>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        <Text style={styles.commentsCount}>{total}</Text>
-        <Feather name="chevron-right" size={20} color={COLORS.black} />
-      </View>
+      <SectionHead
+        icon="message-circle"
+        eyebrow="COMMUNAUTÉ"
+        title="Commentaires"
+        trailing={
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Text style={styles.commentsCount}>{total}</Text>
+            <Feather name="chevron-right" size={20} color={COLORS.textMuted} />
+          </View>
+        }
+      />
     </Pressable>
   );
 }
@@ -1442,27 +1491,29 @@ function AboutTab({ media, detail, mediaId, tracking, interest, setInterest, onS
       <WhereToWatch providers={detail.providers ?? []} />
 
       <View style={styles.section}>
-        <Text style={styles.question}>QU'EST-CE QUI VOUS INTÉRESSE LE PLUS DANS CETTE SÉRIE ?</Text>
-        {INTEREST.map((o) => (
-          <Pressable
-            key={o}
-            style={({ pressed }) => [styles.qbtn, interest.includes(o) && styles.qbtnSel, pressed && styles.pressed]}
-            onPress={() =>
-              setInterest((sel: string[]) => (sel.includes(o) ? sel.filter((x) => x !== o) : [...sel, o]))
-            }
-            accessibilityRole="checkbox"
-            accessibilityLabel={o}
-            accessibilityState={{ checked: interest.includes(o) }}
-          >
-            <Text style={[styles.qbtnText, interest.includes(o) && { color: COLORS.onPrimary }]}>{o}</Text>
-          </Pressable>
-        ))}
+        <SectionHead icon="compass" eyebrow="VOTRE AVIS" title="Qu'est-ce qui vous intéresse ?" />
+        <View style={styles.interestWrap}>
+          {INTEREST.map((o) => (
+            <Pressable
+              key={o}
+              style={({ pressed }) => [styles.qbtn, interest.includes(o) && styles.qbtnSel, pressed && styles.pressed]}
+              onPress={() =>
+                setInterest((sel: string[]) => (sel.includes(o) ? sel.filter((x) => x !== o) : [...sel, o]))
+              }
+              accessibilityRole="checkbox"
+              accessibilityLabel={o}
+              accessibilityState={{ checked: interest.includes(o) }}
+            >
+              <Text style={[styles.qbtnText, interest.includes(o) && { color: COLORS.onPrimary }]}>{o}</Text>
+            </Pressable>
+          ))}
+        </View>
       </View>
 
       {detail.recommendations?.length ? <SimilarTo item={detail.recommendations[0]} isMovie={false} /> : null}
 
       <View style={styles.section}>
-        <Text accessibilityRole="header" style={styles.sectionTitle}>Informations sur la série</Text>
+        <SectionHead icon="info" eyebrow="FICHE" title="Informations sur la série" />
         <Text style={styles.infoMeta}>
           {[yearRange(media, detail.endYear), genresFr(media.genres)].filter(Boolean).join(' • ')}
         </Text>
@@ -1490,7 +1541,7 @@ function MovieBody({ media, detail, mediaId, tracking, onScroll, topPad }: any) 
       {detail.recommendations?.length ? <SimilarTo item={detail.recommendations[0]} isMovie /> : null}
 
       <View style={styles.section}>
-        <Text accessibilityRole="header" style={styles.sectionTitle}>Informations sur le film</Text>
+        <SectionHead icon="info" eyebrow="FICHE" title="Informations sur le film" />
         <Text style={styles.infoMeta}>{[media.year, genresFr(media.genres)].filter(Boolean).join(' • ')}</Text>
         {media.voteAverage ? <Stars rating10={media.voteAverage} size={17} /> : null}
         {media.overview ? <Text style={styles.overview}>{media.overview}</Text> : null}
@@ -1804,10 +1855,11 @@ function EpisodesTab({ showId, title, posterPath, onChange, onScroll, topPad }: 
                       onPress={episodeBusy ? undefined : () => (done ? markAllUnwatched.mutate(s.seasonNumber) : markAll.mutate(s.seasonNumber))}
                     />
                   </View>
-                  {/* Barre : piste jaune pâle toujours visible, remplissage jaune,
-                      le tout vert quand tous les épisodes diffusés sont vus. */}
+                  {/* Barre : piste violette pâle toujours visible, remplissage
+                      violet Prisme, le tout vert quand tous les épisodes diffusés
+                      sont vus. */}
                   <View style={[styles.progressTrack, done && { backgroundColor: COLORS.green }]}>
-                    <AnimatedFill pct={pct} color={done ? COLORS.green : COLORS.yellow} style={styles.progressFill} />
+                    <AnimatedFill pct={pct} color={done ? COLORS.green : COLORS.primary} style={styles.progressFill} />
                   </View>
                 </Pressable>
                 {isOpen
@@ -1960,26 +2012,30 @@ const styles = StyleSheet.create({
     paddingBottom: SPACE.md,
   },
   heroPoster: {
-    width: 62,
-    height: 92,
-    borderRadius: RADIUS.small,
+    width: 64,
+    height: 94,
+    borderRadius: RADIUS.poster,
     backgroundColor: COLORS.imagePlaceholder,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.28)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.5)',
   },
   heroCopy: { flex: 1, minWidth: 0, paddingBottom: 2 },
+  // Pilule « SÉRIE / FILM » : verre translucide à arête blanche (Prisme), plus
+  // le pastille jaune héritée de TV Time.
   heroKindBadge: {
     alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
     minHeight: 24,
-    paddingHorizontal: SPACE.xs,
+    paddingHorizontal: SPACE.sm,
     borderRadius: RADIUS.pill,
-    backgroundColor: COLORS.yellow,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.42)',
     marginBottom: SPACE.xs,
   },
-  heroKindText: { color: COLORS.onAccent, fontSize: 10, fontFamily: FONTS.extraBold, letterSpacing: 1 },
+  heroKindText: { color: '#FFFFFF', fontSize: 10, fontFamily: FONTS.extraBold, letterSpacing: 1.2 },
   heroTitle: { color: '#FFFFFF', fontSize: 25, lineHeight: 29, fontFamily: FONTS.extraBold },
   heroSub: { color: 'rgba(255,255,255,0.86)', fontFamily: FONTS.semiBold, fontSize: 13, lineHeight: 18, marginTop: 3 },
   heroCollapsedTitle: {
@@ -1994,14 +2050,15 @@ const styles = StyleSheet.create({
   },
   heroProgressTrack: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 5 },
   heroProgressFill: { height: '100%' },
+  // Barre d'ajout flottante : pilule violette Prisme (plus le jaune TV Time).
   addBar: {
     position: 'absolute',
     left: SPACE.sm,
     right: SPACE.sm,
     zIndex: 40,
     minHeight: 56,
-    borderRadius: RADIUS.card,
-    backgroundColor: COLORS.yellow,
+    borderRadius: RADIUS.pill,
+    backgroundColor: COLORS.primary,
     paddingHorizontal: SPACE.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -2009,7 +2066,9 @@ const styles = StyleSheet.create({
   },
   addBarPressed: { opacity: 0.84, transform: [{ scale: 0.99 }] },
   addBarRow: { minHeight: SIZES.touch, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACE.xs },
-  addBarText: { color: COLORS.onAccent, fontSize: 14, fontFamily: FONTS.extraBold, letterSpacing: 0.7 },
+  addBarText: { color: COLORS.onPrimary, fontSize: 14, fontFamily: FONTS.extraBold, letterSpacing: 0.7 },
+  // Conteneur des onglets segmentés Prisme, dans l'en-tête (hauteur = TABS_H).
+  ficheTabs: { paddingHorizontal: SPACE.sm, paddingTop: SPACE.xxs, paddingBottom: SPACE.xs },
   section: {
     marginHorizontal: SPACE.sm,
     marginTop: SPACE.sm,
@@ -2028,7 +2087,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACE.lg,
     marginBottom: SPACE.sm,
   },
-  sectionHeadRowTight: { minHeight: 32, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   // Petit titre discret de la ligne de suivi (même recette que la fiche jeu).
   trackingTitle: {
     color: COLORS.textMuted,
@@ -2046,6 +2104,18 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     paddingHorizontal: SPACE.lg,
   },
+  // En-tête de section Prisme (pastille + sur-titre + titre).
+  sectionHead: { flexDirection: 'row', alignItems: 'center', gap: SPACE.sm },
+  sectionHeadIcon: {
+    width: 38,
+    height: 38,
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: RADIUS.control,
+    backgroundColor: COLORS.primarySoft,
+  },
+  sectionEyebrow: { color: COLORS.primary, fontSize: 10, lineHeight: 14, fontFamily: FONTS.extraBold, letterSpacing: 1 },
   muted: { color: COLORS.textMuted, fontFamily: FONTS.regular, fontSize: 13.5, lineHeight: 20, marginTop: SPACE.xs },
   overview: { color: COLORS.text, fontFamily: FONTS.regular, fontSize: 14, lineHeight: 21, marginTop: SPACE.sm },
   infoMeta: { color: COLORS.textMuted, fontFamily: FONTS.semiBold, fontSize: 13, lineHeight: 18, marginTop: 5 },
@@ -2059,21 +2129,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACE.md,
   },
   provText: { color: COLORS.onPrimary, fontSize: 12, fontFamily: FONTS.extraBold, letterSpacing: 0.3 },
-  question: { color: COLORS.text, textAlign: 'center', fontSize: 13, lineHeight: 19, fontFamily: FONTS.extraBold, marginBottom: SPACE.md, letterSpacing: 0.2 },
+  // Puces d'intérêt : pilules Prisme qui s'enroulent (plus la liste empilée TV Time).
+  interestWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACE.xs, marginTop: SPACE.md },
   qbtn: {
-    minHeight: SIZES.touch,
+    minHeight: 38,
     backgroundColor: COLORS.surfaceMuted,
-    borderRadius: RADIUS.control,
+    borderRadius: RADIUS.pill,
     borderWidth: 1,
     borderColor: COLORS.borderLight,
     paddingHorizontal: SPACE.sm,
-    paddingVertical: SPACE.sm,
-    marginBottom: SPACE.xs,
+    paddingVertical: SPACE.xs,
     alignItems: 'center',
     justifyContent: 'center',
   },
   qbtnSel: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  qbtnText: { color: COLORS.text, textAlign: 'center', fontSize: 13, fontFamily: FONTS.bold },
+  qbtnText: { color: COLORS.text, textAlign: 'center', fontSize: 12, fontFamily: FONTS.bold, letterSpacing: 0.3 },
   similarRow: { minHeight: 78, flexDirection: 'row', alignItems: 'center', gap: SPACE.sm },
   similarThumb: { width: 52, height: 52, borderRadius: RADIUS.control, backgroundColor: COLORS.imagePlaceholder },
   similarTitle: { color: COLORS.text, fontSize: 16, fontFamily: FONTS.extraBold },
@@ -2103,7 +2173,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.borderLight,
   },
-  recoBadge: { position: 'absolute', top: 0, right: SPACE.xs, width: 36, height: 32, backgroundColor: COLORS.yellow, borderBottomLeftRadius: RADIUS.small, borderBottomRightRadius: RADIUS.small, alignItems: 'center', justifyContent: 'center' },
+  recoBadge: { position: 'absolute', top: 0, right: SPACE.xs, width: 36, height: 32, backgroundColor: COLORS.primary, borderBottomLeftRadius: RADIUS.small, borderBottomRightRadius: RADIUS.small, alignItems: 'center', justifyContent: 'center' },
   seasonPickRow: {
     minHeight: SIZES.touch,
     flexDirection: 'row',
@@ -2120,7 +2190,6 @@ const styles = StyleSheet.create({
   dotsRow: { flexDirection: 'row', gap: 6, justifyContent: 'center', marginTop: SPACE.xs },
   dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: COLORS.chipSelected },
   dotOn: { width: 20, backgroundColor: COLORS.primary },
-  commentsRow: { minHeight: 68, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   commentsCount: { fontSize: 14, fontFamily: FONTS.bold, color: COLORS.secondary },
   eprow: {
     flexDirection: 'row',
@@ -2163,7 +2232,7 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: RADIUS.card,
     borderBottomRightRadius: RADIUS.card,
     overflow: 'hidden',
-    backgroundColor: YELLOW_TRACK,
+    backgroundColor: COLORS.primarySoft,
   },
   progressFill: { position: 'absolute', left: 0, bottom: 0, top: 0, borderBottomLeftRadius: RADIUS.card },
   unmarkBar: {
