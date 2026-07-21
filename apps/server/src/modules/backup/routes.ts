@@ -118,16 +118,18 @@ export async function backupRoutes(app: FastifyInstance): Promise<void> {
     );
 
     // 2) followed_tv_show.csv — un rang par série de la bibliothèque.
-    //    `active = 0` est la façon TV Time de dire « Arrêtée » (statut
-    //    abandoned) : notre normaliseur le retraduit en stopped_watching.
-    //    La colonne `status` (absente des vrais exports TV Time) porte en plus
-    //    le statut FIN (paused / not_started / watching…) pour l'aller-retour.
+    //    `archived = 1` est LE signal « Stop watching » des vrais exports
+    //    TV Time (vérifié sur un export réel : 333/760 séries arrêtées) ;
+    //    `active = 0` est un signal secondaire qu'on émet aussi. La colonne
+    //    `status` (absente des vrais exports) porte en plus le statut FIN
+    //    (paused / not_started / watching…) pour l'aller-retour sans perte.
     const followedShows = toCsv(
-      ['tv_show_name', 'tvdb_id', 'tmdb_id', 'active', 'status', 'created_at', 'rating'],
+      ['tv_show_name', 'tvdb_id', 'tmdb_id', 'archived', 'active', 'status', 'created_at', 'rating'],
       showStatuses.map((s) => [
         s.media.title,
         s.media.tvdbId,
         s.media.tmdbId,
+        s.status === 'abandoned' ? 1 : 0,
         s.status === 'abandoned' ? 0 : 1,
         TVTIME_EXPORT_STATUS[s.status] ?? '',
         tvtimeDate(s.addedAt),
