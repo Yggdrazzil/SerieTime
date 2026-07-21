@@ -6,7 +6,7 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
-Dernière mise à jour : **2026-07-21** (Claude/Étienne) — refonte anti TV Time des fiches série / film / épisode (identité Prisme, mêmes infos)
+Dernière mise à jour : **2026-07-21** (Claude/Étienne) — coche « ajouté » recherche (verte pleine) + bascule vue cartes / grille d'affiches dans Accueil et Agenda (3 sous-onglets, préférence partagée)
 
 ---
 
@@ -91,6 +91,27 @@ la migration visuelle doit encore être exécutée sans modifier la logique mét
 6. Publication native optionnelle (EAS Build APK, puis stores).
 
 ## Journal des modifications
+
+### 2026-07-21 — Claude/Étienne : coche « ajouté » recherche + vue grille d'affiches (Accueil/Agenda)
+- **Coche recherche** (`mobile/app/(tabs)/explore.tsx`) : quand un résultat est
+  déjà suivi/ajouté, la coche était un contour vert froid → remplacée par une
+  **pastille verte pleine + coche blanche**, identique à la coche d'épisode vu
+  (CheckCircle). Parité chaleureuse demandée par Étienne.
+- **Bascule vue cartes ⇄ grille d'affiches** (retour Étienne) : bouton d'en-tête
+  (icône grille/liste) posé **à gauche** dans Accueil et Agenda (symétrique de la
+  cloche de notifications). Une **grille d'affiches responsive** (3 colonnes
+  téléphone, 4-5 tablette/large) remplace les cartes pour les **3 sous-onglets**
+  (Séries / Films / Jeux) des deux onglets, en conservant les regroupements
+  (« À voir », « Aujourd'hui », « Février 2027 »…) et une ligne de contexte sous
+  chaque affiche (code épisode, heure, année, date de sortie). Taper une affiche
+  ouvre la fiche.
+  - Nouveau composant `mobile/components/PosterGrid.tsx` (`PosterGrid`,
+    `ViewModeToggle`, `useGridView`) ; préférence **unique partagée** par les deux
+    onglets, persistée (`gridView` dans le store) ; `TabHeader` gagne un slot
+    `leading`.
+- **Validation** : export web OK, puis rendu Playwright (données simulées) des 6
+  vues en grille (Accueil + Agenda × Séries/Films/Jeux), bascule d'en-tête et
+  préférence partagée vérifiées. Typecheck mobile OK.
 
 ### 2026-07-21 — Claude/Étienne : refonte des fiches série / film / épisode (anti TV Time)
 - **Demande Étienne** : les fiches série, film et épisode restaient trop proches

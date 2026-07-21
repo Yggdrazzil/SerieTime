@@ -13,6 +13,7 @@ import { EmptyState, LoadError, PillHeader } from '@/components/ui';
 import { QueueSkeleton } from '@/components/skeletons';
 import { usePullRefresh } from '@/lib/usePullRefresh';
 import { useTabResetSeq } from '@/lib/tabReset';
+import { PosterGrid, ViewModeToggle, useGridView } from '@/components/PosterGrid';
 import { UpcomingView } from './index';
 
 // Agenda coupé en trois (décision design 2026-07-20) : les sorties à venir de
@@ -33,7 +34,7 @@ export default function AgendaScreen() {
   return (
     <View key={resetSeq} style={styles.screen}>
       <View style={[styles.header, { paddingTop: insets.top }]}>
-        <TabHeader title="Agenda" />
+        <TabHeader title="Agenda" leading={<ViewModeToggle />} />
         <SegmentedFilter
           options={TAB_OPTIONS}
           value={tab}
@@ -53,6 +54,7 @@ type MoviesResponse = { toWatch: MediaDto[]; upcoming: { media: MediaDto; releas
 
 function MoviesUpcoming() {
   const router = useRouter();
+  const gridView = useGridView();
   const { data, isLoading, isError, refetch, isRefetching } = useQuery({
     queryKey: ['movies'],
     queryFn: () => api.get<MoviesResponse>('/api/movies'),
@@ -77,6 +79,23 @@ function MoviesUpcoming() {
   const items = data?.upcoming ?? [];
   if (items.length === 0)
     return <EmptyState title="Aucun film à venir" message="Les prochaines sorties des films de ta liste apparaîtront ici." />;
+  if (gridView)
+    return (
+      <PosterGrid
+        sections={[{
+          key: 'a-venir',
+          cells: items.map(({ media, releaseDate }) => ({
+            key: media.id,
+            title: media.title,
+            sub: shortDateFr(releaseDate),
+            uri: tmdbImage(media.posterPath, 'w342'),
+            onPress: () => router.push(`/show/${media.id}?type=movie`),
+            accessibilityHint: 'Ouvre la fiche du film',
+          })),
+        }]}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} colors={[COLORS.primary]} />}
+      />
+    );
   return (
     <FlatList
       data={items}
@@ -99,6 +118,7 @@ type GamesUpcomingResponse = { groups: { label: string; items: GameUpcomingItemD
 
 function GamesUpcoming() {
   const router = useRouter();
+  const gridView = useGridView();
   const { data, isLoading, isError, refetch, isRefetching } = useQuery({
     queryKey: ['games', 'upcoming'],
     queryFn: () => api.get<GamesUpcomingResponse>('/api/games/upcoming'),
@@ -129,6 +149,24 @@ function GamesUpcoming() {
   const groups = data?.groups ?? [];
   if (groups.length === 0)
     return <EmptyState title="Aucun jeu à venir" message="Les sorties des jeux que tu suis apparaîtront ici." />;
+  if (gridView)
+    return (
+      <PosterGrid
+        sections={groups.map((g) => ({
+          key: g.label,
+          header: <PillHeader label={g.label} />,
+          cells: g.items.map((it) => ({
+            key: it.id,
+            title: it.title,
+            sub: shortDateFr(it.releaseDate),
+            uri: tmdbImage(it.posterPath, 'w342'),
+            onPress: () => router.push(`/game/${it.id}`),
+            accessibilityHint: 'Ouvre la fiche du jeu',
+          })),
+        }))}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} colors={[COLORS.primary]} />}
+      />
+    );
   return (
     <FlatList
       data={groups}

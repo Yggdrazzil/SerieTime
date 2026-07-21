@@ -340,7 +340,7 @@ function MediaResults({ query, rawQuery }: { query: string; rawQuery: string }) 
               ) : isFollowed ? (
                 <View accessible accessibilityLabel="Déjà dans votre bibliothèque">
                   <PopIn style={styles.addedSquare}>
-                    <Feather name="check" size={20} color={COLORS.success} />
+                    <Feather name="check" size={20} color={COLORS.onPrimary} />
                   </PopIn>
                 </View>
               ) : (
@@ -469,7 +469,7 @@ function GameResults({ query, rawQuery }: { query: string; rawQuery: string }) {
               ) : isFollowed ? (
                 <View accessible accessibilityLabel="Déjà dans votre bibliothèque">
                   <PopIn style={styles.addedSquare}>
-                    <Feather name="check" size={20} color={COLORS.success} />
+                    <Feather name="check" size={20} color={COLORS.onPrimary} />
                   </PopIn>
                 </View>
               ) : (
@@ -759,14 +759,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // « Déjà ajouté » : pastille verte pleine + coche blanche, identique à la
+  // coche d'épisode vu (CheckCircle) — plus chaleureuse que l'ancien contour.
   addedSquare: {
     width: SIZES.touch,
     height: SIZES.touch,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.surfaceMuted,
+    backgroundColor: COLORS.green,
     borderWidth: 1,
-    borderColor: COLORS.success,
+    borderColor: COLORS.green,
     borderRadius: RADIUS.pill,
   },
   skeletonTitle: { width: '74%', height: 17, borderRadius: RADIUS.small },

@@ -20,10 +20,14 @@ type AppState = {
   coverPick: string | null;
   // Tri choisi sur les pages « préférés » (persisté, comme TV Time).
   favSort: Record<MediaType, FavSortKey>;
+  // Affichage Accueil/Agenda : false = cartes (défaut), true = grille d'affiches.
+  // Préférence unique partagée par les deux onglets (un seul modèle mental).
+  gridView: boolean;
   setServerUrl: (url: string) => void;
   setAuth: (token: string, user: UserInfo) => void;
   setCoverPick: (url: string | null) => void;
   setFavSort: (kind: MediaType, sort: FavSortKey) => void;
+  setGridView: (on: boolean) => void;
   logout: () => void;
 };
 
@@ -36,10 +40,12 @@ export const useAppStore = create<AppState>()(
       hydrated: false,
       coverPick: null,
       favSort: { show: 'user', movie: 'user', game: 'user' },
+      gridView: false,
       setServerUrl: (url) => set({ serverUrl: url.replace(/\/+$/, '') }),
       setAuth: (token, user) => set({ token, user }),
       setCoverPick: (url) => set({ coverPick: url }),
       setFavSort: (kind, sort) => set((s) => ({ favSort: { ...s.favSort, [kind]: sort } })),
+      setGridView: (on) => set({ gridView: on }),
       logout: () => set({ token: null, user: null }),
     }),
     {
@@ -51,7 +57,7 @@ export const useAppStore = create<AppState>()(
           ? { getItem: async () => null, setItem: async () => {}, removeItem: async () => {} }
           : AsyncStorage,
       ),
-      partialize: (s) => ({ serverUrl: s.serverUrl, token: s.token, user: s.user, favSort: s.favSort }),
+      partialize: (s) => ({ serverUrl: s.serverUrl, token: s.token, user: s.user, favSort: s.favSort, gridView: s.gridView }),
       onRehydrateStorage: () => (state) => {
         useAppStore.setState({ hydrated: true });
       },
