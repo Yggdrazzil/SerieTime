@@ -5,6 +5,7 @@ import { requireAuth } from '../auth/routes.js';
 import { serializeEpisode } from '../media/serialize.js';
 import { createWatchEvent, markEpisodeUnwatched, markEpisodeWatched, recalculateShowStatus } from '../media/actions.js';
 import { scheduleRecompute } from '../gamification/service.js';
+import { getEpisodeOrders } from '../shows/episodeOrders.js';
 
 export async function episodeRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', requireAuth);
@@ -19,9 +20,11 @@ export async function episodeRoutes(app: FastifyInstance): Promise<void> {
     const status = await prisma.userEpisodeStatus.findUnique({
       where: { userId_episodeId: { userId: request.userId, episodeId: id } },
     });
+    // Numérotation selon l'ordre effectif de la série pour cet utilisateur.
+    const orders = await getEpisodeOrders(request.userId, [episode.show.mediaId]);
     return {
       episode: serializeEpisode(
-        episode,
+        orders.remap(episode.show.mediaId, episode),
         episode.show,
         episode.show.media.localizedTitle ?? episode.show.media.title,
         status,
@@ -61,11 +64,14 @@ export async function episodeRoutes(app: FastifyInstance): Promise<void> {
         OR: [{ airDate: null }, { airDate: { lte: now } }],
       },
     });
-    const previous = episodes.filter(
-      (e) =>
-        e.seasonNumber < target.seasonNumber ||
-        (e.seasonNumber === target.seasonNumber && e.episodeNumber < target.episodeNumber),
-    );
+    // « Précédents » évalués dans l'ordre EFFECTIF de la série (une fiche en
+    // numérotation streaming coche les précédents de CET ordre-là).
+    const orders = await getEpisodeOrders(request.userId, [target.show.mediaId]);
+    const t = orders.remap(target.show.mediaId, target);
+    const previous = episodes.filter((e) => {
+      const m = orders.remap(target.show.mediaId, e);
+      return m.seasonNumber < t.seasonNumber || (m.seasonNumber === t.seasonNumber && m.episodeNumber < t.episodeNumber);
+    });
     for (const ep of previous) {
       await prisma.userEpisodeStatus.upsert({
         where: { userId_episodeId: { userId: request.userId, episodeId: ep.id } },

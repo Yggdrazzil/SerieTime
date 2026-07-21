@@ -7,7 +7,7 @@ import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import { goBack } from '@/lib/nav';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, tmdbImage } from '@/lib/api';
+import { api, tmdbImage, ApiError } from '@/lib/api';
 import type { EpisodeDto, MediaDto, UserMediaState } from '@/lib/types';
 import { episodeCode } from '@/lib/format';
 import { COLORS, RADIUS, SHADOW, FONTS, STATUS_BAR, YELLOW_TRACK, SIZES, SPACE } from '@/lib/theme';
@@ -42,6 +42,28 @@ const MOVIE_STATUS_OPTIONS = [
   { value: 'completed', label: 'Vu' },
 ];
 
+// Ordres d'épisodes (numérotation) : le serveur remappe DÉJÀ toutes les
+// réponses (fiche, queue, agenda) — côté app il n'y a qu'une légende discrète
+// quand un ordre non officiel est actif, et un override caché dans le menu ⋯.
+type EpisodeOrderInfo = {
+  effective: 'official' | 'alternate' | 'dvd' | 'absolute' | 'regional' | 'altdvd';
+  source: 'auto' | 'user' | 'official';
+};
+type OrdersData = {
+  available: { type: string; label: string; seasons?: number }[];
+  effective: string;
+  source: 'auto' | 'user' | 'official';
+  current: string | null;
+};
+const ORDER_LABELS: Record<string, string> = {
+  official: 'Officielle',
+  alternate: 'Streaming',
+  dvd: 'DVD',
+  absolute: 'Absolue',
+  regional: 'Régionale',
+  altdvd: 'DVD alternatif',
+};
+
 export default function ShowDetail() {
   const { id, type } = useLocalSearchParams<{ id: string; type?: string }>();
   const isMovie = type === 'movie';
@@ -59,6 +81,7 @@ export default function ShowDetail() {
   const [artwork, setArtwork] = useState<'poster' | 'banner' | null>(null);
   const [listsOpen, setListsOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
+  const [orderOpen, setOrderOpen] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const addedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -101,6 +124,33 @@ export default function ShowDetail() {
         `/api/shows/${id}/episodes`,
       ),
     enabled: !isMovie,
+  });
+
+  // Ordres d'épisodes disponibles : tirés SEULEMENT à l'ouverture du menu ⋯
+  // (l'entrée « Ordre des épisodes » n'apparaît que s'il y a un vrai choix).
+  const ordersQ = useQuery({
+    queryKey: ['show', id, 'orders'],
+    queryFn: () => api.get<OrdersData>(`/api/shows/${id}/orders`),
+    enabled: !isMovie && (menu || orderOpen),
+    staleTime: 5 * 60_000,
+  });
+  // Override d'ordre : POST puis invalidation du préfixe ['show', id] (fiche,
+  // épisodes, orders) + ['shows'] (files/agenda) — le serveur renvoie tout remappé.
+  const setOrder = useMutation({
+    mutationFn: (order: string | null) => api.post<{ ok: boolean; effective: string }>(`/api/shows/${id}/order`, { order }),
+    onSuccess: () => {
+      setOrderOpen(false);
+      qc.invalidateQueries({ queryKey: ['show', id] });
+      qc.invalidateQueries({ queryKey: ['shows'] });
+    },
+    onError: (e: unknown) => {
+      setOrderOpen(false);
+      showToast(
+        e instanceof ApiError && e.status === 422
+          ? "Cet ordre n'est pas disponible pour cette série."
+          : 'Modification impossible. Réessaie.',
+      );
+    },
   });
 
   // Mises à jour OPTIMISTES (recette TanStack Query) : on écrit tout de suite
@@ -459,6 +509,11 @@ export default function ShowDetail() {
             disabled={trackingBusy}
           />
           <SheetItem icon="plus-square" label="Ajouter à une liste" onPress={() => { setMenu(false); setListsOpen(true); }} />
+          {/* Override caché de la numérotation : uniquement s'il existe un
+              vrai choix (plusieurs ordres proposés par le serveur). */}
+          {!isMovie && (ordersQ.data?.available?.length ?? 0) > 1 ? (
+            <SheetItem icon="list" label="Ordre des épisodes" onPress={() => { setMenu(false); setOrderOpen(true); }} />
+          ) : null}
           {/* « Regarder plus tard » et « Arrêter de regarder » ont quitté le
               menu : la ligne de suivi (À voir / Arrêtée) fait strictement la
               même chose, directement sur la fiche. */}
@@ -477,6 +532,14 @@ export default function ShowDetail() {
       </Modal>
 
       <ReportModal visible={reportOpen} onClose={() => setReportOpen(false)} onConfirm={submitReport} />
+
+      <EpisodeOrderSheet
+        visible={orderOpen}
+        onClose={() => setOrderOpen(false)}
+        orders={ordersQ.data}
+        pendingOrder={setOrder.isPending ? setOrder.variables : undefined}
+        onSelect={(order) => { if (!setOrder.isPending) setOrder.mutate(order); }}
+      />
 
       <PersonalizeMenu
         visible={persoMenu}
@@ -546,6 +609,78 @@ function PersonalizeMenu({
           <Text accessibilityRole="header" style={pstyles.menuHeader}>Personnaliser l’affichage</Text>
           <SheetItem icon="image" label="Modifier l’affiche" onPress={() => onPick('poster')} />
           <SheetItem icon="maximize" label="Changer la bannière" onPress={() => onPick('banner')} last />
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+// « Ordre des épisodes » (override caché, ouvert depuis le menu ⋯) : liste les
+// ordres proposés par le serveur + « Automatique » (POST null = défaut auto).
+// La coche suit la source : choix utilisateur → l'ordre choisi ; sinon Automatique.
+function EpisodeOrderSheet({
+  visible,
+  onClose,
+  orders,
+  pendingOrder,
+  onSelect,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  orders?: OrdersData;
+  pendingOrder?: string | null;
+  onSelect: (order: string | null) => void;
+}) {
+  const insets = useSafeAreaInsets();
+  const reduceMotion = useReduceMotion();
+  const busy = pendingOrder !== undefined;
+  const userChosen = orders?.source === 'user';
+  const row = (label: string, order: string | null, selected: boolean, hint?: string, last?: boolean) => (
+    <Pressable
+      key={order ?? 'auto'}
+      style={({ pressed }) => [styles.sheetItem, last && { borderBottomWidth: 0 }, busy && pstyles.disabled, pressed && !busy && styles.sheetItemPressed]}
+      onPress={busy ? undefined : () => onSelect(order)}
+      disabled={busy}
+      accessibilityRole="radio"
+      accessibilityLabel={hint ? `${label}, ${hint}` : label}
+      accessibilityState={{ checked: selected, disabled: busy, busy: pendingOrder === order }}
+    >
+      <Feather name={selected ? 'check-circle' : 'circle'} size={20} color={selected ? COLORS.success : COLORS.textMuted} />
+      <Text style={styles.sheetLabel} numberOfLines={1}>{label}</Text>
+      {pendingOrder === order && busy ? (
+        <ActivityIndicator color={COLORS.black} size="small" />
+      ) : hint ? (
+        <Text style={pstyles.listCount}>{hint}</Text>
+      ) : null}
+    </Pressable>
+  );
+  return (
+    <Modal visible={visible} transparent animationType={reduceMotion ? 'none' : 'fade'} onRequestClose={onClose}>
+      <Pressable
+        style={styles.overlay}
+        onPress={onClose}
+        accessibilityRole="button"
+        accessibilityLabel="Fermer le choix de l'ordre des épisodes"
+      />
+      <View style={[styles.sheetWrap, { paddingBottom: insets.bottom + SPACE.xs }]} pointerEvents="box-none">
+        <View style={styles.sheet} accessibilityViewIsModal onAccessibilityEscape={onClose}>
+          <View style={styles.sheetHandle} />
+          <Text accessibilityRole="header" style={pstyles.menuHeader}>Ordre des épisodes</Text>
+          {orders ? (
+            <View accessibilityRole="radiogroup">
+              {row(
+                'Automatique',
+                null,
+                !userChosen,
+                !userChosen ? (ORDER_LABELS[orders.effective] ?? orders.effective) : undefined,
+              )}
+              {orders.available.map((o, i) =>
+                row(o.label, o.type, userChosen && o.type === (orders.current ?? orders.effective), undefined, i === orders.available.length - 1),
+              )}
+            </View>
+          ) : (
+            <Loading />
+          )}
         </View>
       </View>
     </Modal>
@@ -1370,7 +1505,7 @@ function MovieBody({ media, detail, mediaId, tracking, onScroll, topPad }: any) 
 }
 
 type SeasonData = { id: string; seasonNumber: number; title: string; watchedCount: number; totalCount: number; episodes: EpisodeDto[] };
-type EpisodesData = { seasons: SeasonData[]; nextEpisode: EpisodeDto | null };
+type EpisodesData = { seasons: SeasonData[]; nextEpisode: EpisodeDto | null; episodeOrder?: EpisodeOrderInfo };
 
 // Un épisode encore non diffusé (pas d'image de toute façon : rien n'a été diffusé).
 const isUpcoming = (iso?: string | null) => !!iso && new Date(iso).getTime() > Date.now();
@@ -1627,6 +1762,14 @@ function EpisodesTab({ showId, title, posterPath, onChange, onScroll, topPad }: 
             <Feather name="check" size={18} color={COLORS.black} />
           </Pressable>
         </View>
+        {/* Légende discrète : visible seulement quand la numérotation suivie
+            n'est pas l'ordre officiel (remappage déjà appliqué par le serveur). */}
+        {data.episodeOrder && data.episodeOrder.effective !== 'official' ? (
+          <Text style={styles.orderLegend}>
+            Numérotation : {ORDER_LABELS[data.episodeOrder.effective] ?? data.episodeOrder.effective}
+            {data.episodeOrder.source === 'auto' ? ' (auto)' : ''}
+          </Text>
+        ) : null}
         <View style={{ padding: 12 }}>
           {seasons.map((s) => {
             const isOpen = open[s.seasonNumber];
@@ -1895,6 +2038,14 @@ const styles = StyleSheet.create({
     marginBottom: SPACE.xs,
   },
   sectionTitle: { color: COLORS.text, fontSize: 17, lineHeight: 22, fontFamily: FONTS.extraBold },
+  // Légende « Numérotation : … » sous l'en-tête « Tous les épisodes ».
+  orderLegend: {
+    color: COLORS.textMuted,
+    fontFamily: FONTS.regular,
+    fontSize: 12.5,
+    lineHeight: 17,
+    paddingHorizontal: SPACE.lg,
+  },
   muted: { color: COLORS.textMuted, fontFamily: FONTS.regular, fontSize: 13.5, lineHeight: 20, marginTop: SPACE.xs },
   overview: { color: COLORS.text, fontFamily: FONTS.regular, fontSize: 14, lineHeight: 21, marginTop: SPACE.sm },
   infoMeta: { color: COLORS.textMuted, fontFamily: FONTS.semiBold, fontSize: 13, lineHeight: 18, marginTop: 5 },

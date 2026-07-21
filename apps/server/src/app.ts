@@ -6,6 +6,7 @@ import { ZodError } from 'zod';
 import { APP_VERSION, env } from './config/env.js';
 import { authRoutes } from './modules/auth/routes.js';
 import { showRoutes } from './modules/shows/routes.js';
+import { episodeOrderRoutes } from './modules/shows/episodeOrders.js';
 import { episodeRoutes } from './modules/episodes/routes.js';
 import { movieRoutes } from './modules/movies/routes.js';
 import { searchRoutes } from './modules/search/routes.js';
@@ -76,6 +77,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   await app.register(authRoutes);
   await app.register(showRoutes);
+  await app.register(episodeOrderRoutes);
   await app.register(episodeRoutes);
   await app.register(movieRoutes);
   await app.register(searchRoutes);

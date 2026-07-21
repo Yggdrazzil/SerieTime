@@ -467,3 +467,47 @@ export async function refreshMediaMetadata(
   // Jeux (IGDB) et fiches sans identifiant externe : hors périmètre.
   return 'skipped';
 }
+
+// ————— Titres français (comblement) —————
+//
+// TMDb répond déjà en fr-FR (env.DEFAULT_LANGUAGE) : `name`/`title` d'une
+// réponse TMDb est donc le titre FRANÇAIS. Ce patch COMBLE localizedTitle (et
+// originalTitle) quand ils sont NULL, sans JAMAIS toucher `title` — il sert au
+// matching des ré-imports TV Time. Le chemin TheTVDB (traduction `fra`,
+// services/tvdb/enrich.ts) reste prioritaire : on ne remplit que du NULL.
+export function localizedTitleFillPatch(
+  media: { title: string; localizedTitle?: string | null; originalTitle?: string | null },
+  candidate: { localized?: string | null; original?: string | null },
+): { localizedTitle?: string; originalTitle?: string } {
+  const patch: { localizedTitle?: string; originalTitle?: string } = {};
+  const localized = candidate.localized?.trim();
+  // Identique au titre stocké = aucune valeur ajoutée (et « The Office » n'a
+  // simplement pas de titre français) : on ne pose rien.
+  if (!media.localizedTitle && localized && localized !== media.title) patch.localizedTitle = localized;
+  const original = candidate.original?.trim();
+  if (!media.originalTitle && original && original !== media.title) patch.originalTitle = original;
+  return patch;
+}
+
+// Backfill du STOCK (script resync-metadata --titles) : fiche à tmdbId dont
+// localizedTitle est NULL → on lit les détails TMDb (fr-FR, cache ApiCache) et
+// on comble localizedTitle (+ originalTitle si NULL). Ne touche à rien d'autre.
+export async function backfillLocalizedTitle(
+  media: Pick<Media, 'id' | 'type' | 'title' | 'tmdbId' | 'localizedTitle' | 'originalTitle'>,
+): Promise<MetadataResync> {
+  if ((media.type !== 'show' && media.type !== 'movie') || !media.tmdbId || !tmdbEnabled()) return 'skipped';
+  if (media.localizedTitle) return 'skipped'; // déjà traduit (TVDB ou TMDb)
+  let patch: { localizedTitle?: string; originalTitle?: string };
+  if (media.type === 'movie') {
+    const d = await tmdbMovieDetails(media.tmdbId);
+    if (!d) return 'unavailable';
+    patch = localizedTitleFillPatch(media, { localized: d.title, original: d.original_title });
+  } else {
+    const d = await tmdbShowDetails(media.tmdbId, false);
+    if (!d) return 'unavailable';
+    patch = localizedTitleFillPatch(media, { localized: d.name, original: d.original_name });
+  }
+  if (Object.keys(patch).length === 0) return 'skipped';
+  await prisma.media.update({ where: { id: media.id }, data: patch });
+  return 'updated';
+}

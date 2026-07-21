@@ -11,6 +11,7 @@ import { scheduleRecompute } from '../gamification/service.js';
 import { isAllowedImageUrl } from '../media/imageUrl.js';
 import { nextFavoriteOrder } from '../media/favorites.js';
 import { refreshStaleContinuingShows, resyncAllUserShows, isResyncRunning } from './refresh.js';
+import { getEpisodeOrders, episodeIdsForEffectiveSeason } from './episodeOrders.js';
 import {
   parseTranslations,
   syncCreditsFromTmdb,
@@ -99,6 +100,10 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
     });
     const watchedSet = new Set(episodeStatuses.map((e) => e.episodeId));
 
+    // Ordres d'épisodes alternatifs : les numéros émis (et l'ordre de visionnage
+    // qui en découle) suivent l'ordre effectif de chaque série (batch, 2-3 req).
+    const orders = await getEpisodeOrders(userId, statuses.map((s) => s.media.id));
+
     const now = new Date();
     type PendingItem = {
       status: (typeof statuses)[number];
@@ -111,13 +116,16 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
     for (const status of statuses) {
       const show = status.media.show;
       if (!show) continue;
-      const refs = (episodesByShow.get(show.id) ?? []).map((e) => ({
-        id: e.id,
-        seasonNumber: e.seasonNumber,
-        episodeNumber: e.episodeNumber,
-        airDate: e.airDate?.toISOString() ?? null,
-        watched: watchedSet.has(e.id),
-      }));
+      const refs = (episodesByShow.get(show.id) ?? []).map((e) => {
+        const m = orders.remap(status.media.id, e);
+        return {
+          id: m.id,
+          seasonNumber: m.seasonNumber,
+          episodeNumber: m.episodeNumber,
+          airDate: m.airDate?.toISOString() ?? null,
+          watched: watchedSet.has(m.id),
+        };
+      });
       const next = nextEpisodeToWatch(refs, now);
       const remaining = remainingAiredCount(refs, now);
 
@@ -160,7 +168,9 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
     const items: QueueItemDto[] = [];
     for (const { status, group, nextId, remaining, refs } of pendings) {
       const show = status.media.show!;
-      const nextEpisode = nextId ? fullById.get(nextId) ?? null : null;
+      const fetched = nextId ? fullById.get(nextId) ?? null : null;
+      // Numérotation de l'ordre effectif (les badges PREMIERE/… s'évaluent dessus).
+      const nextEpisode = fetched ? orders.remap(status.media.id, fetched) : null;
       const badges: QueueItemDto['badges'] = [];
       if (nextEpisode) {
         // PREMIERE : 1er épisode d'une série OU d'une saison (façon TV Time).
@@ -223,11 +233,13 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
       take: 10,
       include: { episode: { include: { show: { include: { media: true } } } } },
     });
+    // Numéros remappés selon l'ordre effectif de chaque série (batch).
+    const orders = await getEpisodeOrders(request.userId, rows.map((r) => r.episode.show.media.id));
     return {
       items: rows.map((r) => ({
         media: serializeMedia(r.episode.show.media, null, lang),
         episode: serializeEpisode(
-          r.episode,
+          orders.remap(r.episode.show.media.id, r.episode),
           r.episode.show,
           mediaTitle(r.episode.show.media, lang),
           r,
@@ -262,6 +274,8 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
     });
     const watchedSet = new Set(watched.map((w) => w.episodeId));
     const mediaByShowId = new Map(statuses.map((s) => [s.media.show?.id, s]));
+    // Numéros remappés selon l'ordre effectif de chaque série (batch).
+    const orders = await getEpisodeOrders(userId, statuses.map((s) => s.media.id));
 
     const groups = new Map<string, UpcomingItemDto[]>();
     const past = new Map<string, UpcomingItemDto[]>();
@@ -275,7 +289,7 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
       const isPast = ep.airDate < startOfToday;
       const label = isPast ? pastGroupLabel(ep.airDate, now) : upcomingGroupLabel(ep.airDate, now);
       const target = isPast ? past : groups;
-      const dto = serializeEpisode(ep, ep.show, mediaTitle(status.media, lang), null);
+      const dto = serializeEpisode(orders.remap(status.media.id, ep), ep.show, mediaTitle(status.media, lang), null);
       const list = target.get(label) ?? [];
       const sameShow = list.find((i) => i.media.id === status.media.id);
       if (sameShow) sameShow.episodes.push(dto);
@@ -399,6 +413,15 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
     }
     await syncProvidersFromTmdb(media.id).catch(() => undefined);
     await syncCreditsFromTmdb(media.id).catch(() => undefined);
+    // Ordre d'épisodes AUTO (Disney+…) : résolu paresseusement au premier
+    // affichage de la fiche (après la sync providers, dont dépend
+    // l'heuristique), marqué même si le résultat est null. JAMAIS bloquant :
+    // en cas d'échec TheTVDB la fiche est servie normalement en officiel.
+    if (media.show && media.tvdbId && !media.show.episodeOrderCheckedAt) {
+      const { resolveDefaultOrder } = await import('../../services/tvdb/index.js');
+      await resolveDefaultOrder(media.id).catch(() => undefined);
+    }
+    const episodeOrders = await getEpisodeOrders(request.userId, [media.id]);
     // Langue de contenu ≠ fr et traduction absente : récupérée à la volée
     // (une requête TMDb, cache 7 j) — même pattern que providers/credits.
     if (lang !== 'fr' && !parseTranslations(media.translationsJson)[lang]?.title) {
@@ -490,6 +513,9 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
       trailerUrl,
       recommendations,
       personalNote: status?.personalNote ?? null,
+      // Légende discrète côté mobile : quel ordre d'épisodes est appliqué et
+      // pourquoi ('auto' = heuristique plateforme, 'user' = override).
+      episodeOrder: episodeOrders.info(media.id),
     };
   });
 
@@ -536,37 +562,61 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
     const statusMap = new Map(statuses.map((s) => [s.episodeId, s]));
     const title = mediaTitle(media, lang);
 
-    const seasons = media.show.seasons.map((season) => {
-      const episodes = media.show!.episodes
-        .filter((e) => e.seasonNumber === season.seasonNumber)
-        .sort((a, b) => a.episodeNumber - b.episodeNumber)
-        .map((e) => serializeEpisode(e, media.show!, title, statusMap.get(e.id)));
-      return {
-        id: season.id,
-        seasonNumber: season.seasonNumber,
-        title: season.title ?? `Saison ${season.seasonNumber}`,
-        posterPath: season.posterPath,
-        watchedCount: episodes.filter((e) => e.watched).length,
-        totalCount: episodes.length,
-        episodes,
-      };
-    });
+    // Ordre d'épisodes effectif (override user ?? défaut série ?? officiel) :
+    // les saisons sont REGROUPÉES selon la numérotation de cet ordre (tri S
+    // puis E) — mêmes lignes Episode, seuls les numéros affichés changent.
+    const orders = await getEpisodeOrders(request.userId, [id]);
+    const { effective, source } = orders.info(id);
+    const mappedEpisodes = media.show.episodes.map((e) => orders.remap(id, e));
 
-    // Séries importées sans saisons synchronisées : reconstituer depuis les épisodes.
-    if (seasons.length === 0 && media.show.episodes.length > 0) {
-      const bySeason = new Map<number, typeof media.show.episodes>();
-      for (const e of media.show.episodes) {
+    type SeasonDto = {
+      id: string;
+      seasonNumber: number;
+      title: string;
+      posterPath: string | null;
+      watchedCount: number;
+      totalCount: number;
+      episodes: ReturnType<typeof serializeEpisode>[];
+    };
+    const seasons: SeasonDto[] = [];
+
+    if (effective === 'official') {
+      for (const season of media.show.seasons) {
+        const episodes = mappedEpisodes
+          .filter((e) => e.seasonNumber === season.seasonNumber)
+          .sort((a, b) => a.episodeNumber - b.episodeNumber)
+          .map((e) => serializeEpisode(e, media.show!, title, statusMap.get(e.id)));
+        seasons.push({
+          id: season.id,
+          seasonNumber: season.seasonNumber,
+          title: season.title ?? `Saison ${season.seasonNumber}`,
+          posterPath: season.posterPath,
+          watchedCount: episodes.filter((e) => e.watched).length,
+          totalCount: episodes.length,
+          episodes,
+        });
+      }
+    }
+
+    // Ordre alternatif OU séries importées sans saisons synchronisées :
+    // saisons reconstruites depuis les (numéros de) épisodes eux-mêmes.
+    if (effective !== 'official' || (seasons.length === 0 && mappedEpisodes.length > 0)) {
+      seasons.length = 0;
+      const seasonRows = new Map(media.show.seasons.map((s) => [s.seasonNumber, s]));
+      const bySeason = new Map<number, typeof mappedEpisodes>();
+      for (const e of mappedEpisodes) {
         bySeason.set(e.seasonNumber, [...(bySeason.get(e.seasonNumber) ?? []), e]);
       }
       for (const [num, eps] of [...bySeason.entries()].sort((a, b) => a[0] - b[0])) {
+        const row = seasonRows.get(num);
         const dtos = eps
           .sort((a, b) => a.episodeNumber - b.episodeNumber)
           .map((e) => serializeEpisode(e, media.show!, title, statusMap.get(e.id)));
         seasons.push({
-          id: `virtual-${num}`,
+          id: row?.id ?? `virtual-${num}`,
           seasonNumber: num,
-          title: `Saison ${num}`,
-          posterPath: null,
+          title: row?.title ?? `Saison ${num}`,
+          posterPath: row?.posterPath ?? null,
           watchedCount: dtos.filter((e) => e.watched).length,
           totalCount: dtos.length,
           episodes: dtos,
@@ -574,7 +624,9 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
       }
     }
 
-    const refs = media.show.episodes.map((e) => ({
+    // Le « prochain épisode » suit lui aussi l'ordre effectif (c'est tout
+    // l'intérêt : la numérotation plateforme EST l'ordre de visionnage).
+    const refs = mappedEpisodes.map((e) => ({
       id: e.id,
       seasonNumber: e.seasonNumber,
       episodeNumber: e.episodeNumber,
@@ -582,13 +634,14 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
       watched: statusMap.get(e.id)?.status === 'watched',
     }));
     const next = nextEpisodeToWatch(refs);
-    const nextEpisode = next ? media.show.episodes.find((e) => e.id === next.id) : null;
+    const nextEpisode = next ? mappedEpisodes.find((e) => e.id === next.id) : null;
 
     return {
       seasons,
       nextEpisode: nextEpisode
         ? serializeEpisode(nextEpisode, media.show, title, statusMap.get(nextEpisode.id))
         : null,
+      episodeOrder: { effective, source },
     };
   });
 
@@ -698,10 +751,16 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
     const media = await prisma.media.findFirst({ where: { id, type: 'show' }, include: { show: true } });
     if (!media?.show) return reply.code(404).send({ error: 'not_found' });
     const now = new Date();
+    // Fiche regroupée en ordre alternatif : le seasonNumber reçu désigne la
+    // saison AFFICHÉE — on la traduit en ids d'épisodes réels.
+    const altSeasonIds =
+      body.seasonNumber !== undefined
+        ? await episodeIdsForEffectiveSeason(request.userId, id, media.show.id, body.seasonNumber)
+        : null;
     const episodes = await prisma.episode.findMany({
       where: {
         showId: media.show.id,
-        seasonNumber: body.seasonNumber ?? { gt: 0 },
+        ...(altSeasonIds ? { id: { in: altSeasonIds } } : { seasonNumber: body.seasonNumber ?? { gt: 0 } }),
         OR: [{ airDate: null }, { airDate: { lte: now } }],
       },
     });
@@ -726,8 +785,16 @@ export async function showRoutes(app: FastifyInstance): Promise<void> {
     const body = z.object({ seasonNumber: z.number().int().optional() }).parse(request.body ?? {});
     const media = await prisma.media.findFirst({ where: { id, type: 'show' }, include: { show: true } });
     if (!media?.show) return reply.code(404).send({ error: 'not_found' });
+    // Même traduction saison affichée → ids réels que pour « tout marquer ».
+    const altSeasonIds =
+      body.seasonNumber !== undefined
+        ? await episodeIdsForEffectiveSeason(request.userId, id, media.show.id, body.seasonNumber)
+        : null;
     const episodes = await prisma.episode.findMany({
-      where: { showId: media.show.id, seasonNumber: body.seasonNumber ?? { gt: 0 } },
+      where: {
+        showId: media.show.id,
+        ...(altSeasonIds ? { id: { in: altSeasonIds } } : { seasonNumber: body.seasonNumber ?? { gt: 0 } }),
+      },
     });
     for (const ep of episodes) {
       await prisma.userEpisodeStatus.upsert({

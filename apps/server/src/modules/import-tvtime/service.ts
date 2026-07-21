@@ -29,6 +29,7 @@ import {
   tmdbSearch,
   ensureMediaFromTmdb,
   tmdbFindByExternalId,
+  localizedTitleFillPatch,
 } from '../../services/tmdb/index.js';
 import { syncShowEpisodesFromTmdb } from '../../services/tmdb/index.js';
 import { syncEpisodesFromTvdb, tvdbEnabled } from '../../services/tvdb/index.js';
@@ -640,11 +641,15 @@ async function setProgress(importId: string, progress: ImportProgress): Promise<
 
 // Pose l'affiche (et l'id TMDb) d'un média importé. Série : résout l'id TheTVDB
 // → TMDb (l'export TV Time ne donne que des ids TheTVDB). Film : recherche TMDb
-// par titre + année (l'export ne donne aucun id pour les films). On ne
+// par titre + année (l'export ne donne aucun id pour les films). Les réponses
+// TMDb étant en fr-FR (env.DEFAULT_LANGUAGE), `tv.name`/`m.title` est le titre
+// FRANÇAIS : on comble localizedTitle/originalTitle au passage — sans JAMAIS
+// modifier `title` (il sert au matching des ré-imports TV Time). On ne
 // synchronise PAS la liste complète des épisodes ici : c'est trop lourd (ça
 // bloquait l'app) et elle se charge à l'ouverture d'une série. La progression,
 // elle, vient déjà du CSV (épisodes cochés posés à l'étape 1).
-async function enrichImportedMedia(mediaId: string): Promise<void> {
+// (Exporté pour les tests — import-titles.test.ts.)
+export async function enrichImportedMedia(mediaId: string): Promise<void> {
   if (!tmdbEnabled()) return;
   const media = await prisma.media.findUnique({ where: { id: mediaId } });
   if (!media || media.tmdbId) return; // déjà enrichi
@@ -660,6 +665,7 @@ async function enrichImportedMedia(mediaId: string): Promise<void> {
           backdropPath: media.backdropPath ?? tv.backdrop_path ?? undefined,
           overview: media.overview ?? tv.overview ?? undefined,
           year: media.year ?? (tv.first_air_date ? new Date(tv.first_air_date).getFullYear() : undefined),
+          ...localizedTitleFillPatch(media, { localized: tv.name, original: tv.original_name }),
         },
       });
     }
@@ -675,6 +681,7 @@ async function enrichImportedMedia(mediaId: string): Promise<void> {
           backdropPath: media.backdropPath ?? m.backdrop_path ?? undefined,
           overview: media.overview ?? m.overview ?? undefined,
           year: media.year ?? (m.release_date ? new Date(m.release_date).getFullYear() : undefined),
+          ...localizedTitleFillPatch(media, { localized: m.title, original: m.original_title }),
         },
       });
     }

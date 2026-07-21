@@ -112,7 +112,7 @@ export async function tvdbSearch(query: string): Promise<TvdbSearchResult[]> {
   return (data?.data ?? []).filter((r) => r.tvdb_id);
 }
 
-export type TvdbSeasonRef = { number: number; type?: { type?: string } };
+export type TvdbSeasonRef = { number: number; type?: { type?: string; name?: string } };
 export type TvdbSeriesExtended = {
   id: number;
   name: string;
@@ -152,6 +152,28 @@ export type TvdbEpisode = {
 // (/episodes/default/{lang}) — les champs name/overview y sont localisés.
 async function fetchEpisodePages(tvdbId: string, lang?: string, ttlMs: number = 3 * DAY): Promise<TvdbEpisode[]> {
   const base = `/series/${tvdbId}/episodes/default${lang ? `/${lang}` : ''}`;
+  const all: TvdbEpisode[] = [];
+  for (let page = 0; page < 50; page++) {
+    const data = await tvdbGet<{
+      data?: { episodes?: TvdbEpisode[] };
+      links?: { next?: string | null };
+    }>(base, { page: String(page) }, ttlMs);
+    all.push(...(data?.data?.episodes ?? []));
+    if (!data?.links?.next) break;
+  }
+  return all;
+}
+
+// Épisodes d'un ORDRE (season type) donné : official / dvd / absolute /
+// alternate / regional / altdvd… Même pagination que fetchEpisodePages —
+// seule la numérotation (seasonNumber/number) nous intéresse ici, pas de
+// variante traduite. Sert aux ordres d'épisodes alternatifs (Disney+…).
+export async function tvdbSeriesEpisodesByType(
+  tvdbId: string,
+  seasonType: string,
+  ttlMs: number = 3 * DAY,
+): Promise<TvdbEpisode[]> {
+  const base = `/series/${tvdbId}/episodes/${encodeURIComponent(seasonType)}`;
   const all: TvdbEpisode[] = [];
   for (let page = 0; page < 50; page++) {
     const data = await tvdbGet<{

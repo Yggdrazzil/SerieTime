@@ -188,11 +188,38 @@ model Show {
   airTime            String?
   airDay             String?
 
+  // Ordre d'épisodes AUTO retenu pour la série (résolu une fois, partagé par
+  // tous les utilisateurs) : 'alternate' quand la numérotation streaming
+  // (Disney+…) diffère de l'ordre de diffusion ; null = ordre officiel.
+  // episodeOrderCheckedAt marque que l'heuristique a déjà tourné (même si le
+  // résultat est null) pour ne pas re-vérifier TheTVDB à chaque fiche.
+  defaultEpisodeOrder   String?
+  episodeOrderCheckedAt DateTime?
+
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
   seasons            Season[]
   episodes           Episode[]
+  altNumbers         EpisodeAltNumber[]
+}
+
+// Numérotation alternative TheTVDB (dvd/absolute/alternate/regional…) d'un
+// épisode : les épisodes restent les MÊMES lignes (progression/stats/écritures
+// par episodeId inchangées) — seule la (saison, numéro) affichée change quand
+// l'ordre effectif d'une série n'est pas l'officiel.
+model EpisodeAltNumber {
+  id            String  @id @default(cuid())
+  showId        String
+  show          Show    @relation(fields: [showId], references: [id], onDelete: Cascade)
+  orderType     String // 'dvd' | 'absolute' | 'alternate' | 'regional' | 'altdvd'
+  episodeId     String
+  episode       Episode @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  seasonNumber  Int
+  episodeNumber Int
+
+  @@unique([orderType, episodeId])
+  @@index([showId, orderType])
 }
 
 model Season {
@@ -253,6 +280,7 @@ model Episode {
   watchEvents       WatchEvent[]
   ratings           Rating[]
   comments          Comment[]
+  altNumbers        EpisodeAltNumber[]
 
   @@unique([showId, seasonNumber, episodeNumber])
   @@index([showId])
@@ -314,6 +342,11 @@ model UserMediaStatus {
   personalNote  String?
   rating        Float?
   playtimeMinutes Int?
+  // Override PAR UTILISATEUR de l'ordre d'épisodes de la série : 'official'
+  // pour forcer l'ordre de diffusion malgré un défaut auto, ou
+  // 'dvd'|'alternate'|'absolute'|'regional'|'altdvd' ; null = suivre le
+  // défaut de la série (Show.defaultEpisodeOrder).
+  episodeOrder  String?
 
   addedAt       DateTime  @default(now())
   startedAt     DateTime?
