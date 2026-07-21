@@ -9,6 +9,7 @@ import { COLORS, FONTS, RADIUS, SPACE } from '@/lib/theme';
 import { shareMedia } from '@/lib/share';
 import { ActionRail, type RailState } from './ActionRail';
 import { DescriptionOverlay } from './DescriptionOverlay';
+import { feedItemKey, useFeedSessionStore, type FeedOverride } from './feedSession';
 import type { FeedItem } from './types';
 
 // Dégagement bas : hauteur de la barre de navigation flottante mini
@@ -51,14 +52,35 @@ export function TikTokCard({
   // ❤️ puis 👁 pendant l'appel) déclenchait deux mutations concurrentes → états
   // et compteurs incohérents, impressions de « rollback ».
   const actionPending = useRef(false);
-  // État optimiste local, initialisé depuis les stats serveur.
-  const [state, setState] = useState<RailState>({
-    liked: item.me?.liked ?? false,
-    watched: item.me?.watched ?? false,
-    likes: item.stats?.likes ?? 0,
-    watchedCount: item.stats?.watched ?? 0,
-    comments: item.stats?.comments ?? 0,
+  // État optimiste local, initialisé depuis les stats serveur FUSIONNÉES avec
+  // l'override de session (choix ❤️/👁 posé pendant ce tirage) : la carte est
+  // démontée/remontée en permanence (virtualisation, masquage de l'onglet,
+  // détour recherche) et `item.me` vient du lot en cache PRÉ-like — sans
+  // l'override, l'état choisi disparaissait visuellement à chaque remontage.
+  const itemKey = feedItemKey(item);
+  const [state, setState] = useState<RailState>(() => {
+    const meLiked = item.me?.liked ?? false;
+    const meWatched = item.me?.watched ?? false;
+    const o = useFeedSessionStore.getState().overrides[itemKey];
+    const liked = o?.liked ?? meLiked;
+    const watched = o?.watched ?? meWatched;
+    return {
+      liked,
+      watched,
+      // Compteurs ajustés si l'override contredit la donnée serveur (le +1 de
+      // l'utilisateur n'est pas encore dans le lot en cache).
+      likes: Math.max(0, (item.stats?.likes ?? 0) + (liked === meLiked ? 0 : liked ? 1 : -1)),
+      watchedCount: Math.max(0, (item.stats?.watched ?? 0) + (watched === meWatched ? 0 : watched ? 1 : -1)),
+      comments: item.stats?.comments ?? 0,
+    };
   });
+  // Écrit l'override de session (au moment du geste), et le restaure tel quel
+  // si le réseau échoue (rollback aligné sur setState(prev)).
+  const writeOverride = (o: FeedOverride) => useFeedSessionStore.getState().setOverride(itemKey, o);
+  const rollbackOverride = (prev: FeedOverride | undefined) => {
+    if (prev) useFeedSessionStore.getState().setOverride(itemKey, prev);
+    else useFeedSessionStore.getState().removeOverride(itemKey);
+  };
 
   // Portrait plein écran : l'AFFICHE (poster) est cadrée pour ce format, en haute
   // résolution et affichée ENTIÈRE (contain → aucun rognage). Un fond flouté
@@ -97,6 +119,7 @@ export function TikTokCard({
     actionPending.current = true;
     const prev = state;
     const wasLiked = prev.liked;
+    const prevOverride = useFeedSessionStore.getState().overrides[itemKey];
     setState({
       ...prev,
       liked: !wasLiked,
@@ -104,6 +127,9 @@ export function TikTokCard({
       watched: wasLiked ? prev.watched : false,
       watchedCount: prev.watchedCount - (!wasLiked && prev.watched ? 1 : 0),
     });
+    // Session : le choix survit à un remontage de la carte (même avant que la
+    // requête ne retombe).
+    writeOverride({ liked: !wasLiked, watched: wasLiked ? prev.watched : false });
     // Proposition traitée → carte suivante tout de suite (la requête continue
     // en arrière-plan). Un dé-like (toggle off) ne fait pas avancer.
     if (!wasLiked) onAdvance();
@@ -121,6 +147,7 @@ export function TikTokCard({
       onInvalidateLibrary();
     } catch {
       setState(prev);
+      rollbackOverride(prevOverride);
     } finally {
       actionPending.current = false;
     }
@@ -133,6 +160,7 @@ export function TikTokCard({
     actionPending.current = true;
     const prev = state;
     const wasWatched = prev.watched;
+    const prevOverride = useFeedSessionStore.getState().overrides[itemKey];
     setState({
       ...prev,
       watched: !wasWatched,
@@ -140,6 +168,7 @@ export function TikTokCard({
       liked: wasWatched ? prev.liked : false,
       likes: prev.likes - (!wasWatched && prev.liked ? 1 : 0),
     });
+    writeOverride({ watched: !wasWatched, liked: wasWatched ? prev.liked : false });
     if (!wasWatched) onAdvance();
     try {
       const id = await resolveMedia(item);
@@ -158,6 +187,7 @@ export function TikTokCard({
       onInvalidateLibrary();
     } catch {
       setState(prev);
+      rollbackOverride(prevOverride);
     } finally {
       actionPending.current = false;
     }

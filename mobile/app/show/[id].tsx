@@ -87,7 +87,8 @@ export default function ShowDetail() {
     // Les résultats de recherche (Explorer) affichent « ajouté » via inLibrary :
     // les invalider pour qu'au retour depuis la fiche, l'état soit déjà à jour.
     // (PAS ['explore'] : re-tirer le flux Découvrir pendant la navigation est
-    // interdit par la règle produit — il se renouvelle au changement d'onglet.)
+    // interdit par la règle produit — il ne se renouvelle QUE sur demande :
+    // pull-to-refresh, carte de fin, re-tap de l'onglet Explorer.)
     qc.invalidateQueries({ queryKey: ['search'] });
   };
 
