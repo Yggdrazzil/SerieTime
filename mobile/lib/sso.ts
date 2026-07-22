@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import { IS_DARK } from '@/lib/theme';
 
 // Aide SSO côté WEB APP : charge les SDK officiels Google/Facebook et récupère
 // un jeton à envoyer au serveur (/api/auth/oauth ou /link). Le natif (Expo Go)
@@ -51,11 +52,16 @@ export async function initGoogleButton(
     },
   });
   el.innerHTML = '';
-  const containerWidth = Math.floor(el.getBoundingClientRect().width || 300);
-  const buttonWidth = Math.max(200, Math.min(300, containerWidth));
+  // Largeur : on colle au conteneur (les boutons voisins Discord/e-mail font
+  // toute la largeur) — GSI plafonne à 400 px, donc pas plus. 300 px centré
+  // paraissait « mal fichu » à côté des autres (retour 2026-07-22).
+  const containerWidth = Math.floor(el.getBoundingClientRect().width || 320);
+  const buttonWidth = Math.max(200, Math.min(400, containerWidth));
   g.accounts.id.renderButton(el, {
     type: 'standard',
-    theme: 'outline',
+    // Thème sombre : bouton noir officiel (le thème `outline` blanc était le
+    // seul élément blanc sur la carte sombre — « bouton blanc » signalé).
+    theme: IS_DARK ? 'filled_black' : 'outline',
     size: 'large',
     text: 'continue_with',
     shape: 'pill',

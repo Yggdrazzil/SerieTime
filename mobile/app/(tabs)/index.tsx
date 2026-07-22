@@ -300,7 +300,14 @@ function QueueView() {
       })),
     }));
     if (sections.length === 0)
-      return <EmptyState title="Rien à voir pour le moment" message="Ajoutez des séries depuis Explorer ou importez vos données TV Time." />;
+      // Rien EN ATTENTE mais un historique existe = à jour (la grille n'affiche
+      // pas l'historique, réservé à la vue cartes) → ne pas dire « ajoutez des
+      // séries » à quelqu'un qui en a déjà.
+      return historyRows.length > 0 ? (
+        <EmptyState title="Tout est à jour" message="Aucune série en attente. Repassez en vue cartes pour votre historique de visionnage." />
+      ) : (
+        <EmptyState title="Rien à voir pour le moment" message="Ajoutez des séries depuis Explorer ou importez vos données TV Time." />
+      );
     return (
       <PosterGrid
         sections={sections}
@@ -1117,7 +1124,7 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
   heroFill: { height: '100%', borderRadius: RADIUS.pill },
-  heroActions: { flexDirection: 'row', alignItems: 'center', gap: SPACE.sm, marginTop: SPACE.xs },
+  heroActions: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: SPACE.sm, marginTop: SPACE.xs },
   heroBtn: {
     minHeight: 40,
     flexDirection: 'row',

@@ -112,6 +112,8 @@ export default function RootLayout() {
             <Stack.Screen name="library/games" />
             <Stack.Screen name="library/favorite-shows" />
             <Stack.Screen name="library/favorite-movies" />
+            <Stack.Screen name="library/favorite-games" />
+            <Stack.Screen name="library/reorder-favorites" />
             <Stack.Screen name="import" />
             <Stack.Screen name="trophies" />
           </Stack>

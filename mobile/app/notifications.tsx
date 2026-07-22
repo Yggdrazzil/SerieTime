@@ -95,7 +95,7 @@ export default function NotificationsScreen() {
 
   return (
     <View style={styles.screen}>
-      <PageHeader title="Notifications" />
+      <PageHeader title="Notifications" backFallback="/" />
       <View style={styles.canvas}>
         {isLoading ? (
           <Loading />

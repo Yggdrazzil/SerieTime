@@ -1,18 +1,20 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { type Href } from 'expo-router';
 import { goBack } from '@/lib/nav';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, FONTS } from '@/lib/theme';
 
-export function PageHeader({ title, right }: { title: string; right?: React.ReactNode }) {
-  const router = useRouter();
+// `backFallback` : écran de repli quand l'historique est vide (reload web / lien
+// direct). Défaut « /profile » (les écrans sociaux viennent du Profil) ; les
+// Notifications, ouvertes depuis l'Accueil, passent '/'.
+export function PageHeader({ title, right, backFallback = '/profile' }: { title: string; right?: React.ReactNode; backFallback?: Href }) {
   const insets = useSafeAreaInsets();
   return (
     <View style={[styles.wrap, { paddingTop: insets.top }]}>
       <View style={styles.bar}>
-        <Pressable style={styles.back} onPress={() => goBack('/profile')} hitSlop={8} accessibilityRole="button" accessibilityLabel="Retour">
+        <Pressable style={styles.back} onPress={() => goBack(backFallback)} hitSlop={8} accessibilityRole="button" accessibilityLabel="Retour">
           <Feather name="chevron-left" size={28} color={COLORS.black} />
         </Pressable>
         <Text style={styles.title}>{title}</Text>
