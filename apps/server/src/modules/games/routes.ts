@@ -30,13 +30,15 @@ export async function ensureGameFromIgdb(igdbId: string) {
   return created;
 }
 
-function serializeGame(m: { id: string; title: string; posterPath: string | null; year: number | null; voteAverage: number | null; igdbId: string | null; game?: { platforms: string | null } | null }, status?: { status: string; playtimeMinutes: number | null; isOwned: boolean } | null) {
+function serializeGame(m: { id: string; title: string; posterPath: string | null; backdropPath?: string | null; year: number | null; voteAverage: number | null; igdbId: string | null; game?: { platforms: string | null } | null }, status?: { status: string; playtimeMinutes: number | null; isOwned: boolean; isFavorite?: boolean } | null) {
   return {
-    id: m.id, title: m.title, posterPath: m.posterPath, year: m.year,
+    id: m.id, title: m.title, posterPath: m.posterPath, backdropPath: m.backdropPath ?? null, year: m.year,
     voteAverage: m.voteAverage, igdbId: m.igdbId,
     platforms: m.game?.platforms ?? null,
     userStatus: status?.status ?? null,
     isOwned: status?.isOwned ?? false,
+    // Exposé pour la carte « en vedette » de l'Accueil (sélection par préférence).
+    isFavorite: status?.isFavorite ?? false,
     playtimeMinutes: status?.playtimeMinutes ?? null,
   };
 }

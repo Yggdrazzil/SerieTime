@@ -31,6 +31,25 @@ const HOME_TABS: { value: HomeTab; label: string }[] = [
   { value: 'games', label: 'Jeux' },
 ];
 
+// Item « en vedette » (carte héro) choisi selon les PRÉFÉRENCES de l'utilisateur.
+// D'après les pratiques de personnalisation (cf. recherche 2026-07-22) : les
+// signaux EXPLICITES priment — un favori d'abord (le plus fort), puis la
+// meilleure note personnelle ; à égalité, l'ordre du serveur (récence/
+// pertinence = signal implicite) départage. Score nul partout → 1er de la liste.
+function pickFeaturedIndex(medias: (Pick<MediaDto, 'isFavorite' | 'rating'> | undefined)[]): number {
+  let best = 0;
+  let bestScore = -1;
+  medias.forEach((m, i) => {
+    if (!m) return;
+    const score = (m.isFavorite ? 100 : 0) + (m.rating ?? 0);
+    if (score > bestScore) {
+      bestScore = score;
+      best = i;
+    }
+  });
+  return best;
+}
+
 export default function ShowsScreen() {
   const insets = useSafeAreaInsets();
   // Re-clic sur Accueil : le remontage rejoue le scroll initial de la file.
@@ -252,11 +271,15 @@ function QueueView() {
       />
     );
 
-  // Héro « À regarder maintenant » : le tout premier épisode regardable de la
-  // file (tri serveur). Il reste DANS son groupe (« À voir » en général) — il
-  // en est juste la carte de tête, sous l'en-tête du groupe (retour Étienne
-  // 2026-07-21 : l'épisode mis en avant doit compter dans « À voir »).
-  const heroItem = (data?.items ?? []).find((it) => it.nextEpisode) ?? null;
+  // Héro « À regarder maintenant » : parmi les épisodes regardables, celui qui
+  // correspond le mieux aux PRÉFÉRENCES de l'utilisateur (favori d'abord, cf.
+  // pickFeaturedIndex). On le choisit EN PRIORITÉ dans « À voir » pour qu'il
+  // reste la carte de tête de ce groupe (retour Étienne 2026-07-21 : l'épisode
+  // mis en avant doit compter dans « À voir ») ; sinon parmi tous les regardables.
+  const regardable = (data?.items ?? []).filter((it) => it.nextEpisode);
+  const heroPool = regardable.filter((it) => it.group === 'a_voir');
+  const pool = heroPool.length ? heroPool : regardable;
+  const heroItem = pool.length ? pool[pickFeaturedIndex(pool.map((it) => it.media))]! : null;
   const groups = new Map<string, QueueItemDto[]>();
   (data?.items ?? []).forEach((it) => groups.set(it.group, [...(groups.get(it.group) ?? []), it]));
 
@@ -327,27 +350,24 @@ function QueueView() {
         return [...groups.entries()].map(([group, items]) => (
           <View key={group} style={styles.queueColumn} onLayout={registerSection(queueGroupLabel(group))}>
             <GroupHead label={queueGroupLabel(group)} count={items.length} />
-            {items.map((item) => {
-              // L'épisode mis en avant est rendu en CARTE HÉRO, en tête de son
-              // groupe (juste sous l'en-tête « À voir »).
-              if (item === heroItem && item.nextEpisode) {
-                return (
-                  <HeroCard
-                    key={item.media.id}
-                    item={item}
-                    marking={mark.isPending}
-                    onMark={() => mark.mutate(item.nextEpisode!.id)}
-                    onOpenEpisode={() =>
-                      setSheet({
-                        mediaId: item.media.id,
-                        mediaTitle: item.media.title,
-                        posterPath: item.media.posterPath,
-                        episode: item.nextEpisode!,
-                      })
-                    }
-                  />
-                );
-              }
+            {/* La carte HÉRO est HISSÉE EN TÊTE de son groupe (sous l'en-tête),
+                puis les autres séries suivent en rangées compactes. */}
+            {heroItem && items.includes(heroItem) && heroItem.nextEpisode ? (
+              <HeroCard
+                item={heroItem}
+                marking={mark.isPending}
+                onMark={() => mark.mutate(heroItem.nextEpisode!.id)}
+                onOpenEpisode={() =>
+                  setSheet({
+                    mediaId: heroItem.media.id,
+                    mediaTitle: heroItem.media.title,
+                    posterPath: heroItem.media.posterPath,
+                    episode: heroItem.nextEpisode!,
+                  })
+                }
+              />
+            ) : null}
+            {items.filter((item) => item !== heroItem).map((item) => {
               n += 1;
               return (
                 <AppearItem key={item.media.id} index={n}>
@@ -411,6 +431,8 @@ function MoviesToWatchView() {
   if (isLoading) return <QueueSkeleton />;
   if (isError && !data) return <LoadError onRetry={refetch} busy={isRefetching} />;
   const items = data?.toWatch ?? [];
+  // Film mis en avant selon les préférences (favori d'abord) — vue liste seule.
+  const heroFilm = items.length ? items[pickFeaturedIndex(items)]! : null;
   if (items.length === 0)
     return <EmptyState title="Aucun film à voir" message="Ajoutez des films depuis Explorer : ils vous attendront ici." />;
   if (gridView)
@@ -438,7 +460,20 @@ function MoviesToWatchView() {
     >
       <View style={styles.queueColumn}>
         <GroupHead label="À voir" count={items.length} unit="film" />
-        {items.map((media, i) => (
+        {/* Film « en vedette » (préférences) hissé en tête, façon héro des séries. */}
+        {heroFilm ? (
+          <FeaturedHero
+            eyebrow="EN VEDETTE"
+            title={heroFilm.title}
+            sub={heroFilm.year ? String(heroFilm.year) : null}
+            backdropPath={heroFilm.backdropPath ?? null}
+            posterPath={heroFilm.posterPath ?? null}
+            isFavorite={heroFilm.isFavorite}
+            onOpen={() => router.push(`/show/${heroFilm.id}?type=movie`)}
+            openHint="Ouvre la fiche du film"
+          />
+        ) : null}
+        {items.filter((m) => m !== heroFilm).map((media, i) => (
           <AppearItem key={media.id} index={i}>
             <ToWatchRow
               title={media.title}
@@ -456,7 +491,14 @@ function MoviesToWatchView() {
 
 // --- Sous-onglet Jeux : les jeux marqués « Voulu » (donc pas encore
 // commencés — dès qu'on y joue, le statut passe à « En cours »).
-type HomeGameDto = { id: string; title: string; posterPath: string | null; year: number | null };
+type HomeGameDto = {
+  id: string;
+  title: string;
+  posterPath: string | null;
+  backdropPath: string | null;
+  year: number | null;
+  isFavorite?: boolean;
+};
 
 function GamesWishlistView() {
   const router = useRouter();
@@ -469,6 +511,8 @@ function GamesWishlistView() {
   if (isLoading) return <QueueSkeleton />;
   if (isError && !data) return <LoadError onRetry={refetch} busy={isRefetching} />;
   const items = data?.wishlist ?? [];
+  // Jeu mis en avant selon les préférences (favori d'abord) — vue liste seule.
+  const heroGame = items.length ? items[pickFeaturedIndex(items)]! : null;
   if (items.length === 0)
     return (
       <EmptyState
@@ -501,7 +545,20 @@ function GamesWishlistView() {
     >
       <View style={styles.queueColumn}>
         <GroupHead label="Voulus" count={items.length} unit="jeu" unitPlural="jeux" />
-        {items.map((game, i) => (
+        {/* Jeu « en vedette » (préférences) hissé en tête, façon héro des séries. */}
+        {heroGame ? (
+          <FeaturedHero
+            eyebrow="EN VEDETTE"
+            title={heroGame.title}
+            sub={heroGame.year ? String(heroGame.year) : null}
+            backdropPath={heroGame.backdropPath}
+            posterPath={heroGame.posterPath}
+            isFavorite={heroGame.isFavorite}
+            onOpen={() => router.push(`/game/${heroGame.id}`)}
+            openHint="Ouvre la fiche du jeu"
+          />
+        ) : null}
+        {items.filter((g) => g !== heroGame).map((game, i) => (
           <AppearItem key={game.id} index={i}>
             <ToWatchRow
               title={game.title}
@@ -663,6 +720,62 @@ function HeroCard({
               +{item.remainingCount}
             </Text>
           ) : null}
+        </View>
+      </View>
+    </Pressable>
+  );
+}
+
+// Carte « en vedette » des sous-onglets Films et Jeux : MÊME format que le héro
+// des séries (backdrop + dégradé + grand titre), sans épisode ni progression —
+// l'item est choisi selon les préférences (pickFeaturedIndex). Tap → fiche.
+function FeaturedHero({
+  eyebrow,
+  title,
+  sub,
+  backdropPath,
+  posterPath,
+  isFavorite,
+  onOpen,
+  openHint,
+}: {
+  eyebrow: string;
+  title: string;
+  sub: string | null;
+  backdropPath: string | null;
+  posterPath: string | null;
+  isFavorite?: boolean;
+  onOpen: () => void;
+  openHint: string;
+}) {
+  const backdrop = tmdbImage(backdropPath, 'w780') ?? tmdbImage(posterPath, 'w342');
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.hero, pressed && styles.heroPressed]}
+      onPress={onOpen}
+      accessibilityRole="button"
+      accessibilityLabel={`${eyebrow} : ${title}${sub ? ', ' + sub : ''}`}
+      accessibilityHint={openHint}
+    >
+      {backdrop ? (
+        <Image source={{ uri: backdrop }} style={StyleSheet.absoluteFill} resizeMode="cover" accessible={false} />
+      ) : (
+        <View style={[StyleSheet.absoluteFill, styles.heroFallback]} />
+      )}
+      <LinearGradient colors={['rgba(23,15,45,0.16)', 'rgba(15,9,32,0.90)']} style={StyleSheet.absoluteFill} />
+      <View style={styles.heroContent}>
+        <View style={styles.heroEyebrowRow}>
+          <Text style={styles.heroEyebrow}>{eyebrow}</Text>
+          {isFavorite ? <Feather name="heart" size={12} color={COLORS.secondary} /> : null}
+        </View>
+        <Text style={styles.heroTitle} numberOfLines={2}>{title}</Text>
+        {sub ? <Text style={styles.heroEp} numberOfLines={1}>{sub}</Text> : null}
+        <View style={styles.heroActions}>
+          {/* Affordance visuelle (le tap sur la carte entière ouvre la fiche). */}
+          <View style={styles.heroBtn}>
+            <Feather name="arrow-right" size={17} color={COLORS.onPrimary} />
+            <Text style={styles.heroBtnText}>Voir la fiche</Text>
+          </View>
         </View>
       </View>
     </Pressable>
@@ -976,9 +1089,10 @@ const styles = StyleSheet.create({
   },
   groupHeadLabel: { flexShrink: 1, color: COLORS.text, fontSize: 20, lineHeight: 26, fontFamily: FONTS.extraBold },
   groupHeadCount: { flexShrink: 0, color: COLORS.textMuted, fontSize: 13, fontFamily: FONTS.semiBold },
-  // Carte héro « À regarder maintenant ».
+  // Carte héro « À regarder maintenant » — compacte (retour Étienne 22/07 :
+  // prenait trop de place). Format décliné aux sous-onglets Films et Jeux.
   hero: {
-    minHeight: 220,
+    minHeight: 148,
     marginHorizontal: SPACE.md,
     marginTop: SPACE.sm,
     marginBottom: SPACE.xs,
@@ -990,21 +1104,22 @@ const styles = StyleSheet.create({
   },
   heroPressed: { opacity: 0.92 },
   heroFallback: { backgroundColor: '#241B3D' },
-  heroContent: { padding: SPACE.md, gap: 6 },
-  heroEyebrow: { color: 'rgba(255,255,255,0.78)', fontSize: 11, letterSpacing: 1.2, fontFamily: FONTS.bold },
-  heroTitle: { color: '#FFFFFF', fontSize: 26, lineHeight: 32, fontFamily: FONTS.extraBold },
-  heroEp: { color: 'rgba(255,255,255,0.86)', fontSize: 14, lineHeight: 19, fontFamily: FONTS.medium },
+  heroContent: { padding: SPACE.sm, gap: 4 },
+  heroEyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  heroEyebrow: { color: 'rgba(255,255,255,0.78)', fontSize: 10.5, letterSpacing: 1.1, fontFamily: FONTS.bold },
+  heroTitle: { color: '#FFFFFF', fontSize: 21, lineHeight: 26, fontFamily: FONTS.extraBold },
+  heroEp: { color: 'rgba(255,255,255,0.86)', fontSize: 13, lineHeight: 18, fontFamily: FONTS.medium },
   heroTrack: {
-    height: 7,
+    height: 6,
     borderRadius: RADIUS.pill,
     backgroundColor: 'rgba(255,255,255,0.24)',
     overflow: 'hidden',
-    marginTop: 4,
+    marginTop: 3,
   },
   heroFill: { height: '100%', borderRadius: RADIUS.pill },
   heroActions: { flexDirection: 'row', alignItems: 'center', gap: SPACE.sm, marginTop: SPACE.xs },
   heroBtn: {
-    minHeight: SIZES.touch,
+    minHeight: 40,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

@@ -6,6 +6,7 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
+Dernière mise à jour : **2026-07-22** (Claude/Étienne) — Accueil : carte héro compacte + déclinée aux sous-onglets Films/Jeux, item « en vedette » choisi selon les préférences (favori d'abord)
 Dernière mise à jour : **2026-07-22** (Claude/Étienne) — Explorer : clavier conservé au changement de catégorie ; fiche jeu : « Temps de jeu » dédoublonné + bouton refondu (icône chrono, sans sous-titre) ; recherche jeux : plateformes resynchronisées durablement en base
 Dernière mise à jour : **2026-07-22** (Claude/Étienne) — Recherche jeux : plateformes enrichies depuis IGDB sur les jeux locaux hérités (filtre « Plateforme » de nouveau exploitable)
 Dernière mise à jour : **2026-07-22** (Claude/Benjamin) — écran bibliothèque Jeux (`/games`, ouvert depuis le Profil) : retrait des carrousels « Découverte » Populaires/À venir (redondants avec l'Explorer qui a déjà recherche + tri « Populaires ») ; l'état vide redirige vers l'Explorer. « Sorties à venir » (jeux suivis) conservé. −83 lignes, typecheck clean.
@@ -96,6 +97,29 @@ la migration visuelle doit encore être exécutée sans modifier la logique mét
 6. Publication native optionnelle (EAS Build APK, puis stores).
 
 ## Journal des modifications
+
+### 2026-07-22 — Claude/Étienne : Accueil — carte héro compacte, déclinée Films/Jeux, choisie par préférences
+- **Carte héro réduite** (`mobile/app/(tabs)/index.tsx`) : elle prenait trop de
+  place (retour Étienne). `minHeight 220 → 148`, titre `26 → 21`, paddings et
+  barre de progression resserrés.
+- **Format décliné aux sous-onglets Films et Jeux** : nouveau composant
+  `FeaturedHero` (même coquille backdrop + dégradé + grand titre que le héro des
+  séries, sans épisode/progression) hissé en tête des listes Films et Jeux ;
+  tap → fiche, badge ♥ si favori. Vue grille inchangée (héro = vue liste).
+- **Item « en vedette » choisi selon les PRÉFÉRENCES** (`pickFeaturedIndex`) :
+  d'après les pratiques de personnalisation (recherche 2026-07-22), les signaux
+  **explicites** priment — un **favori** d'abord (score fort), puis la meilleure
+  **note perso** ; à égalité, l'ordre serveur (récence/pertinence) départage.
+  Appliqué aux 3 sous-onglets. Séries : le héro est choisi en priorité dans
+  « À voir » (reste la carte de tête du groupe) et hissé en tête.
+- **Serveur** : `serializeGame` expose désormais `backdropPath` + `isFavorite`
+  (nécessaires au héro Jeux) ; Films/Séries les avaient déjà via `serializeMedia`.
+- **Vérifié** (Playwright web) : Films et Jeux affichent la carte compacte avec le
+  **favori** en vedette (« Bravo », alors que « Charlie » est 1er en liste →
+  preuve que la préférence prime) + ♥. Suite jeux verte (12 tests), typecheck
+  mobile+serveur 0 erreur.
+- **NB déploiement** : `serializeGame` = correctif **serveur** → redémarrage API
+  sur le VPS requis pour le héro Jeux ; le reste suit le rebuild web.
 
 ### 2026-07-22 — Claude/Étienne : Explorer (clavier) + fiche jeu (Temps de jeu) + plateformes durables
 - **Explorer — clavier conservé** (`mobile/app/(tabs)/explore.tsx`) : changer de
