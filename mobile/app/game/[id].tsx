@@ -260,7 +260,6 @@ export default function GameDetail() {
   if (!detail.data) return <LoadError onRetry={detail.refetch} busy={detail.isRefetching} />;
   const game = detail.data;
   const posterUri = tmdbImage(game.posterPath, 'w342');
-  const heroMeta = [game.year, game.platforms?.split(',')[0]?.trim()].filter(Boolean).join(' · ');
   const trackingBusy =
     trackingLock.current ||
     setStatus.isPending ||
@@ -335,58 +334,68 @@ export default function GameDetail() {
                 <Text style={styles.heroEyebrow}>JEU VIDÉO</Text>
               </View>
               <Text style={styles.heroTitle} numberOfLines={2}>{game.title}</Text>
-              {heroMeta ? <Text style={styles.heroMeta} numberOfLines={1}>{heroMeta}</Text> : null}
             </View>
           </View>
 
           <View style={styles.body}>
+          {/* Carte d'identité + infos AGRÉGÉES en une seule section SANS titre :
+              jaquette + titre + Genre/Sortie/notes en tête, puis Plateformes /
+              Développeur / Éditeur / Modes / Temps de jeu (ex-« Informations »
+              fusionnée ici — pas de doublon, ordre logique). */}
+          {/* Carte d'identité + fiche technique en UN SEUL bloc, sans titre
+              (le titre vit dans la bannière). Deux zones nettes : à côté de la
+              jaquette le « verdict » (genres en tags + notes), puis dessous
+              TOUTES les infos dans un seul format libellé / valeur. */}
           <View style={styles.identityCard}>
-          {posterUri ? (
-            <Image source={{ uri: posterUri }} style={styles.poster} resizeMode="cover" accessibilityLabel={'Affiche de ' + game.title} />
-          ) : (
-            <View style={[styles.poster, styles.posterEmpty]}>
-              <Ionicons name="game-controller-outline" size={32} color={COLORS.textSoft} />
-            </View>
-          )}
-          <View style={styles.identityCopy}>
-            {/* 1 ligne comme la fiche série : la 2e ligne tomberait en blanc
-                sur fond blanc (le bloc chevauche la bannière). */}
-            <Text style={styles.title} numberOfLines={2}>{game.title}</Text>
-            {/* Infos compactes À CÔTÉ de la jaquette (remplit le vide à droite).
-                Deux notes DISTINCTES sur le MÊME barème /100 (décision 2026-07-17,
-                façon jv.com) — plus d'étoiles combinées en doublon. */}
-            <View style={styles.headFacts}>
-              {game.genres ? (
-                <Text style={styles.headFact} numberOfLines={2}><Text style={styles.factLabel}>Genre : </Text>{game.genres}</Text>
-              ) : null}
-              {game.releaseDate ? (
-                <Text style={styles.headFact}><Text style={styles.factLabel}>Sortie le </Text>{shortDateFr(game.releaseDate)}</Text>
-              ) : null}
-              {game.playerScore || game.criticScore ? (
-                <View style={styles.scoreRow}>
-                  {game.playerScore ? (
-                    <View style={styles.scorePill}>
-                      <Feather name="users" size={14} color={COLORS.primary} />
-                      <View>
-                        <Text style={styles.scoreValue}>{game.playerScore}/100</Text>
-                        <Text style={styles.scoreLabel}>Joueurs</Text>
-                      </View>
-                    </View>
-                  ) : null}
-                  {game.criticScore ? (
-                    <View style={styles.scorePill}>
-                      <Feather name="award" size={14} color={COLORS.secondary} />
-                      <View>
-                        <Text style={styles.scoreValue}>{game.criticScore}/100</Text>
-                        <Text style={styles.scoreLabel}>Presse</Text>
-                      </View>
-                    </View>
-                  ) : null}
+            <View style={styles.identityHead}>
+              {posterUri ? (
+                <Image source={{ uri: posterUri }} style={styles.poster} resizeMode="cover" accessibilityLabel={'Affiche de ' + game.title} />
+              ) : (
+                <View style={[styles.poster, styles.posterEmpty]}>
+                  <Ionicons name="game-controller-outline" size={32} color={COLORS.textSoft} />
                 </View>
+              )}
+              <View style={styles.headMain}>
+                {game.genres ? (
+                  <View style={styles.genreRow}>
+                    {game.genres.split(',').map((g) => g.trim()).filter(Boolean).map((g) => (
+                      <View key={g} style={styles.genreChip}>
+                        <Text style={styles.genreChipText}>{g}</Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
+                {game.playerScore || game.criticScore ? (
+                  <View style={styles.ratingRow}>
+                    {game.playerScore ? (
+                      <RatingTile colors={['#41288A', '#6D4ED1']} icon="users" value={game.playerScore} label="Joueurs" />
+                    ) : null}
+                    {game.criticScore ? (
+                      <RatingTile colors={['#6D4ED1', '#EF5BA8']} icon="award" value={game.criticScore} label="Presse" />
+                    ) : null}
+                  </View>
+                ) : null}
+              </View>
+            </View>
+
+            <View style={styles.specList}>
+              {game.releaseDate ? <SpecRow label="Sortie" value={shortDateFr(game.releaseDate)} /> : null}
+              {game.platforms ? <SpecRow label="Plateformes" value={game.platforms} /> : null}
+              {game.developer ? <SpecRow label="Développeur" value={game.developer} /> : null}
+              {game.publisher ? <SpecRow label="Éditeur" value={game.publisher} /> : null}
+              {game.gameModes ? <SpecRow label="Modes" value={game.gameModes} /> : null}
+              {game.userStatus ? (
+                // Jeu suivi : le temps de jeu est déclaratif et ÉDITABLE ici.
+                <SpecRow
+                  label="Temps de jeu"
+                  value={game.playtimeMinutes ? formatPlaytime(game.playtimeMinutes) : 'Ajouter mes heures'}
+                  onPress={() => setPlaytimeOpen(true)}
+                />
+              ) : game.playtimeMinutes ? (
+                <SpecRow label="Temps de jeu" value={formatPlaytime(game.playtimeMinutes)} />
               ) : null}
             </View>
           </View>
-        </View>
 
         {/* Suivi REMONTÉ juste sous la jaquette/titre (avant le trailer) :
             bloc COMPACT (demande produit 2026-07-20) — petit titre discret et
@@ -438,62 +447,6 @@ export default function GameDetail() {
         </View>
 
         {game.videoId ? <TrailerPreview videoId={game.videoId} /> : null}
-
-        {/* Fiche d'identité complète (Genre/Sortie/Note presse vivent à côté de
-            la jaquette) : Plateformes / Développeur / Éditeur / Modes / Temps
-            de jeu — l'ancienne section « Informations » est fusionnée ici. */}
-        {game.platforms || game.developer || game.publisher || game.gameModes || game.playtimeMinutes || game.userStatus ? (
-          <View style={[styles.section, styles.factList]}>
-            <View style={styles.sectionHeading}>
-              <View style={styles.sectionIcon}>
-                <Feather name="info" size={18} color={COLORS.primary} />
-              </View>
-              <View style={styles.sectionHeadingCopy}>
-                <Text style={styles.sectionTitle}>Informations</Text>
-              </View>
-            </View>
-            {game.platforms ? (
-              <FactRow icon="monitor" label="Plateformes" value={game.platforms} />
-            ) : null}
-            {game.developer ? (
-              <FactRow icon="code" label="Développeur" value={game.developer} />
-            ) : null}
-            {game.publisher ? (
-              <FactRow icon="briefcase" label="Éditeur" value={game.publisher} />
-            ) : null}
-            {game.gameModes ? (
-              <FactRow icon="users" label="Modes" value={game.gameModes} />
-            ) : null}
-            {game.userStatus ? (
-              // Jeu suivi : le temps de jeu est déclaratif et ÉDITABLE ici.
-              <Pressable
-                style={({ pressed }) => pressed && { opacity: 0.7 }}
-                onPress={() => setPlaytimeOpen(true)}
-                accessibilityRole="button"
-                accessibilityLabel={
-                  game.playtimeMinutes
-                    ? `Temps de jeu : ${formatPlaytime(game.playtimeMinutes)} — modifier`
-                    : 'Déclarer ton temps de jeu'
-                }
-              >
-                <View style={styles.factRow}>
-                  <View style={styles.factIcon}>
-                    <Feather name="clock" size={17} color={COLORS.primary} />
-                  </View>
-                  <View style={styles.factCopy}>
-                    <Text style={styles.factLabel}>Temps de jeu</Text>
-                    <Text style={styles.fact}>
-                      {game.playtimeMinutes ? formatPlaytime(game.playtimeMinutes) : 'Ajouter mes heures'}
-                    </Text>
-                  </View>
-                  <Feather name="edit-3" size={16} color={COLORS.textMuted} />
-                </View>
-              </Pressable>
-            ) : game.playtimeMinutes ? (
-              <FactRow icon="clock" label="Temps de jeu" value={formatPlaytime(game.playtimeMinutes)} />
-            ) : null}
-          </View>
-        ) : null}
 
         {game.overview ? (
           <View style={[styles.section, styles.overviewCard]}>
@@ -653,25 +606,65 @@ function OwnedToggle({ on, disabled, onToggle }: { on: boolean; disabled?: boole
   );
 }
 
-function FactRow({
+// Tuile de note (Joueurs / Presse) : dégradé vif façon carte « Temps devant des
+// séries » des Statistiques (indigo → violet → rose), halo lumineux et texte
+// blanc — plus vivant que l'ancien fond gris. Joueurs sur la moitié fraîche,
+// Presse sur la moitié chaude : côte à côte, elles balaient tout le dégradé.
+function RatingTile({
+  colors,
   icon,
-  label,
   value,
+  label,
 }: {
+  colors: readonly [string, string, ...string[]];
   icon: keyof typeof Feather.glyphMap;
+  value: number;
   label: string;
-  value: string;
 }) {
   return (
-    <View style={styles.factRow}>
-      <View style={styles.factIcon}>
-        <Feather name={icon} size={17} color={COLORS.primary} />
+    <View style={styles.ratingTile}>
+      <LinearGradient colors={colors} start={{ x: 0, y: 0 }} end={{ x: 1.1, y: 1.2 }} style={StyleSheet.absoluteFill} />
+      <View style={styles.ratingOrb} />
+      <View style={styles.ratingValueRow}>
+        <Text style={styles.ratingValue}>{value}</Text>
+        <Text style={styles.ratingMax}>/100</Text>
       </View>
-      <View style={styles.factCopy}>
-        <Text style={styles.factLabel}>{label}</Text>
-        <Text style={styles.fact}>{value}</Text>
+      <View style={styles.ratingLabelRow}>
+        <Feather name={icon} size={12} color="#FFFFFF" />
+        <Text style={styles.ratingLabel}>{label}</Text>
       </View>
     </View>
+  );
+}
+
+// Ligne de fiche technique : libellé discret à gauche, valeur à droite — UN
+// SEUL format pour toutes les infos. `onPress` la rend éditable (temps de jeu).
+function SpecRow({
+  label,
+  value,
+  onPress,
+}: {
+  label: string;
+  value: string;
+  onPress?: () => void;
+}) {
+  const inner = (
+    <View style={styles.specRow}>
+      <Text style={styles.specLabel}>{label}</Text>
+      <Text style={styles.specValue}>{value}</Text>
+      {onPress ? <Feather name="edit-3" size={15} color={COLORS.textMuted} style={styles.specEdit} /> : null}
+    </View>
+  );
+  if (!onPress) return inner;
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => (pressed ? { opacity: 0.6 } : null)}
+      accessibilityRole="button"
+      accessibilityLabel={`${label} : ${value} — modifier`}
+    >
+      {inner}
+    </Pressable>
   );
 }
 // Feuille « Temps de jeu » (déclaratif) : proposée à la bascule de statut,
@@ -1560,30 +1553,32 @@ const styles = StyleSheet.create({
     fontSize: 31,
     lineHeight: 35,
     letterSpacing: -0.5,
-  },
-  heroMeta: {
-    marginTop: SPACE.xs,
-    color: 'rgba(255,255,255,0.86)',
-    fontFamily: FONTS.semiBold,
-    fontSize: 14,
+    // Ombre portée : garde le titre lisible quelle que soit la couleur de la
+    // bannière (image claire comme sombre), en plus du dégradé du bas.
+    textShadowColor: 'rgba(0,0,0,0.55)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 12,
   },
   body: {
     marginTop: -SPACE.xl,
     paddingBottom: SPACE.sm,
   },
   identityCard: {
-    minHeight: 174,
     marginHorizontal: SPACE.md,
     marginBottom: SPACE.sm,
-    padding: SPACE.sm,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: SPACE.md,
+    padding: SPACE.md,
     borderRadius: RADIUS.card,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: COLORS.borderLight,
     backgroundColor: COLORS.surface,
     ...SHADOW.card,
+  },
+  // Zone « verdict » : jaquette à gauche, genres + notes à droite (centrés
+  // verticalement pour longer la jaquette sans « flotter » en haut).
+  identityHead: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: SPACE.md,
   },
   poster: {
     width: 108,
@@ -1595,52 +1590,109 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  identityCopy: {
+  headMain: {
     flex: 1,
     minWidth: 0,
-    paddingVertical: SPACE.xxs,
+    justifyContent: 'center',
+    gap: SPACE.sm,
   },
-  title: {
-    color: COLORS.text,
-    fontFamily: FONTS.extraBold,
-    fontSize: 21,
-    lineHeight: 25,
-  },
-  headFacts: {
-    marginTop: SPACE.xs,
-    gap: SPACE.xxs,
-  },
-  headFact: {
-    color: COLORS.textMuted,
-    fontFamily: FONTS.regular,
-    fontSize: 12.5,
-    lineHeight: 17,
-  },
-  scoreRow: {
-    marginTop: SPACE.xxs,
+  // Genres = tags (données catégorielles) ; seul format « pilule » de la carte.
+  genreRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    gap: SPACE.xxs,
+  },
+  genreChip: {
+    paddingHorizontal: SPACE.sm,
+    paddingVertical: 5,
+    borderRadius: RADIUS.pill,
+    backgroundColor: COLORS.primarySoft,
+  },
+  genreChipText: {
+    color: COLORS.primary,
+    fontFamily: FONTS.bold,
+    fontSize: 12,
+  },
+  ratingRow: {
+    flexDirection: 'row',
     gap: SPACE.xs,
   },
-  scorePill: {
-    minHeight: SIZES.touch,
+  ratingTile: {
+    flex: 1,
+    minWidth: 0,
+    overflow: 'hidden',
+    paddingVertical: SPACE.sm,
+    paddingHorizontal: SPACE.sm,
+    borderRadius: RADIUS.control,
+  },
+  // Halo lumineux en coin (clippé) : la « vie » du dégradé, comme la carte stats.
+  ratingOrb: {
+    position: 'absolute',
+    width: 82,
+    height: 82,
+    borderRadius: 41,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    right: -20,
+    top: -26,
+  },
+  ratingValueRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 2,
+  },
+  ratingValue: {
+    color: '#FFFFFF',
+    fontFamily: FONTS.extraBold,
+    fontSize: 20,
+    lineHeight: 24,
+  },
+  ratingMax: {
+    color: 'rgba(255,255,255,0.82)',
+    fontFamily: FONTS.semiBold,
+    fontSize: 11,
+  },
+  ratingLabelRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACE.xs,
-    paddingHorizontal: SPACE.sm,
-    paddingVertical: SPACE.xs,
-    borderRadius: RADIUS.control,
-    backgroundColor: COLORS.surfaceMuted,
+    gap: 4,
+    marginTop: 3,
   },
-  scoreValue: {
-    color: COLORS.text,
-    fontFamily: FONTS.extraBold,
-    fontSize: 13,
+  ratingLabel: {
+    color: 'rgba(255,255,255,0.92)',
+    fontFamily: FONTS.semiBold,
+    fontSize: 11,
   },
-  scoreLabel: {
+  // Fiche technique : un seul format libellé / valeur, séparateurs discrets et
+  // UNIFORMES (le 1er trait sert aussi de séparation avec la zone du haut).
+  specList: {
+    marginTop: SPACE.md,
+  },
+  specRow: {
+    minHeight: SIZES.touch,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: SPACE.sm,
+    paddingVertical: SPACE.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: COLORS.borderLight,
+  },
+  specLabel: {
+    width: 116,
     color: COLORS.textMuted,
-    fontFamily: FONTS.regular,
-    fontSize: 10.5,
+    fontFamily: FONTS.semiBold,
+    fontSize: 13,
+    lineHeight: 20,
+  },
+  specValue: {
+    flex: 1,
+    minWidth: 0,
+    color: COLORS.text,
+    fontFamily: FONTS.medium,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  specEdit: {
+    marginTop: 2,
   },
   section: {
     marginHorizontal: SPACE.md,
@@ -1738,9 +1790,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     ...SHADOW.card,
   },
-  factList: {
-    gap: SPACE.xs,
-  },
   // Bouton « Temps de jeu » du bloc suivi (visible dès que le jeu est suivi).
   playtimeBtn: {
     minHeight: SIZES.touchComfortable,
@@ -1762,39 +1811,6 @@ const styles = StyleSheet.create({
   },
   playtimeLabel: { color: COLORS.textMuted, fontSize: 11.5, fontFamily: FONTS.bold, letterSpacing: 0.3, textTransform: 'uppercase' },
   playtimeValue: { color: COLORS.text, fontSize: 15, fontFamily: FONTS.bold, marginTop: 1 },
-  factRow: {
-    minHeight: 52,
-    paddingVertical: SPACE.xs,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACE.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: COLORS.borderLight,
-  },
-  factIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: RADIUS.control,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.primarySoft,
-  },
-  factCopy: {
-    flex: 1,
-    minWidth: 0,
-  },
-  fact: {
-    marginTop: 1,
-    color: COLORS.textMuted,
-    fontFamily: FONTS.regular,
-    fontSize: 14,
-    lineHeight: 19,
-  },
-  factLabel: {
-    color: COLORS.text,
-    fontFamily: FONTS.bold,
-    fontSize: 12.5,
-  },
   overview: {
     color: COLORS.text,
     fontFamily: FONTS.regular,

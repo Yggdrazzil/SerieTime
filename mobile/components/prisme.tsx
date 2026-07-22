@@ -94,9 +94,10 @@ export function ScreenHeader({ title, eyebrow, subtitle, leading, trailing, styl
 // En-tête compact des ONGLETS (décision design 2026-07-20) : titre seul,
 // centré, petit — ni eyebrow ni sous-titre. Les grands ScreenHeader restent
 // pour les écrans poussés (avec bouton retour / contexte).
-export function TabHeader({ title, trailing }: { title: string; trailing?: React.ReactNode }) {
+export function TabHeader({ title, leading, trailing }: { title: string; leading?: React.ReactNode; trailing?: React.ReactNode }) {
   return (
     <View style={styles.tabHeader}>
+      {leading ? <View style={styles.tabHeaderLeading}>{leading}</View> : null}
       <Text accessibilityRole="header" style={styles.tabHeaderTitle} numberOfLines={1}>
         {title}
       </Text>
@@ -335,6 +336,8 @@ const styles = StyleSheet.create({
   // Collé au bord droit du padding de l'écran (l'icône affleure à ~16 dp du
   // bord physique, comme Instagram) — le bouton gère lui-même sa cible 44 px.
   tabHeaderTrailing: { position: 'absolute', right: 0, height: '100%', justifyContent: 'center' },
+  // Symétrique de trailing : action à gauche (le glyphe affleure le padding).
+  tabHeaderLeading: { position: 'absolute', left: 0, height: '100%', justifyContent: 'center' },
   eyebrow: {
     color: COLORS.primary,
     fontFamily: FONTS.bold,
