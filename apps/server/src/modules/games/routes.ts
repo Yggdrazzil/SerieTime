@@ -69,6 +69,12 @@ export async function gamesRoutes(app: FastifyInstance): Promise<void> {
     const seen = new Set(local.map((m) => m.igdbId).filter(Boolean));
     const allowAdult = await allowsAdultContent(request.userId);
     const games = await igdbSearch(needle, allowAdult).catch(() => []);
+    // Résultats IGDB indexés par id : sert à ENRICHIR un jeu local dont les
+    // plateformes/notes n'ont pas été mises en cache (données héritées, jeu
+    // importé, cache antérieur à l'ajout du champ platforms). Sans ça, le
+    // doublon IGDB — pourtant riche — était écarté par la déduplication et le
+    // filtre « Plateforme » restait vide pour ces jeux (retour Étienne 22/07).
+    const igdbById = new Map(games.map((g) => [String(g.id), g]));
     // `platforms` renvoyé en tableau (filtre côté client) : local = string
     // « Plateforme A, Plateforme B » à découper ; IGDB = objets {name}.
     const splitPlatforms = (s: string | null | undefined) =>
@@ -80,17 +86,23 @@ export async function gamesRoutes(app: FastifyInstance): Promise<void> {
       voteAverage: number | null; voteCount: number | null; platforms: string[];
     };
     const results: GameResult[] = [
-      ...local.map((m) => ({
-        id: m.id,
-        igdbId: m.igdbId,
-        title: m.localizedTitle ?? m.title,
-        year: m.year,
-        posterPath: m.posterPath,
-        inLibrary: m.statuses.length > 0,
-        voteAverage: m.voteAverage,
-        voteCount: m.voteCount,
-        platforms: splitPlatforms(m.game?.platforms),
-      })),
+      ...local.map((m) => {
+        const ig = m.igdbId ? igdbById.get(m.igdbId) : undefined;
+        const localPlatforms = splitPlatforms(m.game?.platforms);
+        return {
+          id: m.id,
+          igdbId: m.igdbId,
+          title: m.localizedTitle ?? m.title,
+          year: m.year,
+          posterPath: m.posterPath,
+          inLibrary: m.statuses.length > 0,
+          // Repli sur IGDB quand la valeur locale manque (jamais l'inverse : la
+          // donnée locale, éventuellement corrigée, reste prioritaire).
+          voteAverage: m.voteAverage ?? (typeof ig?.total_rating === 'number' ? ig.total_rating / 10 : null),
+          voteCount: m.voteCount ?? (typeof ig?.total_rating_count === 'number' ? ig.total_rating_count : null),
+          platforms: localPlatforms.length ? localPlatforms : (ig?.platforms?.map((p) => p.name) ?? []),
+        };
+      }),
       ...games
         .filter((g) => !seen.has(String(g.id)))
         .map((g) => ({

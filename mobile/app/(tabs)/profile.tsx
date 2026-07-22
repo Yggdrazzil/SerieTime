@@ -194,6 +194,12 @@ function ProfileScreenInner() {
             </View>
             <StatsSummary stats={stats} />
 
+            {/* Titre délimiteur : sépare les statistiques brutes de la zone
+                gamifiée (trophées, badges, défis du mois, classement). */}
+            <View style={[styles.sectHead, styles.rewardsHead]}>
+              <Text accessibilityRole="header" style={styles.sectTitle}>Récompenses</Text>
+            </View>
+
             {/* Streak (gamification) : accès aux Trophées, façon maquette. */}
             <Pressable
               style={({ pressed }) => [styles.streakCard, pressed && styles.cardPressed]}
@@ -341,7 +347,7 @@ function StatsSummary({ stats }: { stats: ProfileStatsDto }) {
       count: stats.gamesPlayed.toLocaleString('fr-FR'),
       countLabel: 'Joués',
       minutes: stats.gamePlaytimeMinutes ?? 0,
-      durationLabel: 'Temps déclaré',
+      durationLabel: 'Temps de jeu',
     },
   ];
 
@@ -653,6 +659,9 @@ const styles = StyleSheet.create({
   cardPressed: { opacity: 0.86, transform: [{ scale: 0.99 }] },
   section: { paddingVertical: SPACE.sm },
   sectHead: { minHeight: SIZES.touch, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: SPACE.sm, marginBottom: SPACE.xs },
+  // Titre délimiteur « Récompenses » : espace au-dessus (séparation d'avec les
+  // statistiques) ; la carte Trophées qui suit apporte son propre marginTop.
+  rewardsHead: { marginTop: SPACE.md, marginBottom: 0 },
   sectHeadPressed: { opacity: 0.8 },
   sectTitle: { flexShrink: 1, color: COLORS.text, fontSize: 19, lineHeight: 25, fontFamily: FONTS.extraBold },
   sectAction: { flexDirection: 'row', alignItems: 'center', gap: 2, flexShrink: 0 },
