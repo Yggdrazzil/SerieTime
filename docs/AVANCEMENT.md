@@ -6,7 +6,7 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
-Dernière mise à jour : **2026-07-22** (Claude/Étienne) — fiche jeu : refonte UX/UI de la carte d'identité (skill impeccable) — un seul format libellé/valeur, genres en tags + notes en tuiles, titre retiré du corps (bannière lisible sur tout fond)
+Dernière mise à jour : **2026-07-22** (Claude/Étienne) — fiche jeu : refonte UX/UI de la carte d'identité (skill impeccable) — un seul format libellé/valeur, genres en tags + notes en **tuiles à dégradé vif** (façon carte « Temps devant des séries »), titre retiré du corps (bannière lisible sur tout fond)
 
 ---
 
@@ -105,9 +105,13 @@ dans la bannière. Refonte guidée par le skill `impeccable` (références
   balade ».
 - **Deux zones nettes** : à côté de la jaquette, le « verdict » — **genres en
   tags** (seul usage de pilule, données catégorielles) + **notes en tuiles**
-  (score en gros + /100 + petit pictogramme teinté Joueurs/Presse), centré
-  verticalement le long de la jaquette. Puis, sous un premier trait, la fiche
-  technique.
+  (score en gros + /100 + pictogramme Joueurs/Presse), centré verticalement le
+  long de la jaquette. Puis, sous un premier trait, la fiche technique.
+- **Tuiles de notes vivifiées** (retour Étienne : le fond gris faisait terne) :
+  dégradé vif **indigo → violet → rose** repris de la carte « Temps devant des
+  séries » des Statistiques (`#41288A`/`#6D4ED1`/`#EF5BA8`) + halo lumineux en
+  coin + texte blanc. Joueurs sur la moitié fraîche, Presse sur la moitié
+  chaude → côte à côte elles balaient tout le dégradé signature de l'app.
 - **Titre retiré du corps** : il ne vit plus que dans la bannière (plus de
   doublon). Ombre portée ajoutée au titre pour rester **lisible quelle que soit
   la couleur de la bannière** (en plus du dégradé du bas).

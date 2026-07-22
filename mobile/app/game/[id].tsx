@@ -368,10 +368,10 @@ export default function GameDetail() {
                 {game.playerScore || game.criticScore ? (
                   <View style={styles.ratingRow}>
                     {game.playerScore ? (
-                      <RatingTile icon="users" tint={COLORS.primary} value={game.playerScore} label="Joueurs" />
+                      <RatingTile colors={['#41288A', '#6D4ED1']} icon="users" value={game.playerScore} label="Joueurs" />
                     ) : null}
                     {game.criticScore ? (
-                      <RatingTile icon="award" tint={COLORS.secondary} value={game.criticScore} label="Presse" />
+                      <RatingTile colors={['#6D4ED1', '#EF5BA8']} icon="award" value={game.criticScore} label="Presse" />
                     ) : null}
                   </View>
                 ) : null}
@@ -606,27 +606,31 @@ function OwnedToggle({ on, disabled, onToggle }: { on: boolean; disabled?: boole
   );
 }
 
-// Tuile de note (Joueurs / Presse) : le score en gros, le barème /100 discret,
-// un petit pictogramme teinté pour distinguer les deux d'un coup d'œil.
+// Tuile de note (Joueurs / Presse) : dégradé vif façon carte « Temps devant des
+// séries » des Statistiques (indigo → violet → rose), halo lumineux et texte
+// blanc — plus vivant que l'ancien fond gris. Joueurs sur la moitié fraîche,
+// Presse sur la moitié chaude : côte à côte, elles balaient tout le dégradé.
 function RatingTile({
+  colors,
   icon,
-  tint,
   value,
   label,
 }: {
+  colors: readonly [string, string, ...string[]];
   icon: keyof typeof Feather.glyphMap;
-  tint: string;
   value: number;
   label: string;
 }) {
   return (
     <View style={styles.ratingTile}>
+      <LinearGradient colors={colors} start={{ x: 0, y: 0 }} end={{ x: 1.1, y: 1.2 }} style={StyleSheet.absoluteFill} />
+      <View style={styles.ratingOrb} />
       <View style={styles.ratingValueRow}>
         <Text style={styles.ratingValue}>{value}</Text>
         <Text style={styles.ratingMax}>/100</Text>
       </View>
       <View style={styles.ratingLabelRow}>
-        <Feather name={icon} size={12} color={tint} />
+        <Feather name={icon} size={12} color="#FFFFFF" />
         <Text style={styles.ratingLabel}>{label}</Text>
       </View>
     </View>
@@ -1587,10 +1591,20 @@ const styles = StyleSheet.create({
   ratingTile: {
     flex: 1,
     minWidth: 0,
-    paddingVertical: SPACE.xs,
+    overflow: 'hidden',
+    paddingVertical: SPACE.sm,
     paddingHorizontal: SPACE.sm,
     borderRadius: RADIUS.control,
-    backgroundColor: COLORS.surfaceMuted,
+  },
+  // Halo lumineux en coin (clippé) : la « vie » du dégradé, comme la carte stats.
+  ratingOrb: {
+    position: 'absolute',
+    width: 82,
+    height: 82,
+    borderRadius: 41,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    right: -20,
+    top: -26,
   },
   ratingValueRow: {
     flexDirection: 'row',
@@ -1598,13 +1612,13 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   ratingValue: {
-    color: COLORS.text,
+    color: '#FFFFFF',
     fontFamily: FONTS.extraBold,
     fontSize: 20,
     lineHeight: 24,
   },
   ratingMax: {
-    color: COLORS.textMuted,
+    color: 'rgba(255,255,255,0.82)',
     fontFamily: FONTS.semiBold,
     fontSize: 11,
   },
@@ -1612,11 +1626,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginTop: 2,
+    marginTop: 3,
   },
   ratingLabel: {
-    color: COLORS.textMuted,
-    fontFamily: FONTS.medium,
+    color: 'rgba(255,255,255,0.92)',
+    fontFamily: FONTS.semiBold,
     fontSize: 11,
   },
   // Fiche technique : un seul format libellé / valeur, séparateurs discrets et
