@@ -94,7 +94,7 @@ function ExploreScreenInner() {
                 active={tab === 'media'}
                 onPress={() => setTab('media')}
               />
-              <SearchTab icon="command" label="JEUX" active={tab === 'games'} onPress={() => setTab('games')} />
+              <SearchTab icon="game-controller-outline" label="JEUX" active={tab === 'games'} onPress={() => setTab('games')} />
               <SearchTab
                 icon="users"
                 label={compact ? 'PROFILS' : 'UTILISATEURS'}
@@ -169,7 +169,7 @@ function SearchTab({
   active,
   onPress,
 }: {
-  icon: keyof typeof Feather.glyphMap;
+  icon: keyof typeof Feather.glyphMap | 'game-controller-outline';
   label: string;
   active: boolean;
   onPress: () => void;
@@ -181,7 +181,11 @@ function SearchTab({
       accessibilityRole="tab"
       accessibilityState={{ selected: active }}
     >
-      <Feather name={icon} size={15} color={active ? COLORS.onPrimary : COLORS.textMuted} />
+      {icon === 'game-controller-outline' ? (
+        <Ionicons name={icon} size={17} color={active ? COLORS.onPrimary : COLORS.textMuted} />
+      ) : (
+        <Feather name={icon} size={15} color={active ? COLORS.onPrimary : COLORS.textMuted} />
+      )}
       <Text style={[styles.tabText, active && styles.tabTextActive]} numberOfLines={1}>
         {label}
       </Text>
