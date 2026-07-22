@@ -1160,15 +1160,11 @@ function useOpenRec(type: 'show' | 'movie') {
   };
   return { open, busyId };
 }
-// « Où regarder » : pastilles noires horizontales (une par plateforme), rouage
-// à droite — cotes TV Time.
+// « Où regarder » : pastilles horizontales (une par plateforme de streaming).
 function WhereToWatch({ providers }: { providers: { name: string }[] }) {
   return (
     <View style={styles.section}>
-      <View style={styles.sectionHeadRowTight}>
-        <Text accessibilityRole="header" style={styles.sectionTitle}>Où regarder</Text>
-        <Feather name="settings" size={18} color={COLORS.black} />
-      </View>
+      <Text accessibilityRole="header" style={styles.sectionTitle}>Où regarder</Text>
       {providers.length === 0 ? (
         <Text style={styles.muted}>Non disponible</Text>
       ) : (
@@ -2028,7 +2024,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACE.lg,
     marginBottom: SPACE.sm,
   },
-  sectionHeadRowTight: { minHeight: 32, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   // Petit titre discret de la ligne de suivi (même recette que la fiche jeu).
   trackingTitle: {
     color: COLORS.textMuted,
