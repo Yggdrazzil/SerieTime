@@ -14,6 +14,7 @@ import { shareMedia } from '@/lib/share';
 import { FicheSkeleton } from '@/components/FicheSkeleton';
 import { StatusLine } from '@/components/StatusLine';
 import { ReportModal } from '@/components/ReportModal';
+import { useFeedSessionStore } from '@/components/explore/feedSession';
 import { shortDateFr } from '@/lib/format';
 import { useReduceMotion } from '@/lib/useReduceMotion';
 
@@ -123,6 +124,10 @@ export default function GameDetail() {
     // La recherche de jeux (Explorer > JEUX) affiche « ajouté » via inLibrary :
     // l'invalider pour que le retour depuis la fiche soit déjà à jour.
     qc.invalidateQueries({ queryKey: ['games', 'search'] });
+    // Sorties à venir (bibliothèque Jeux + Agenda) : un changement de statut /
+    // retrait de suivi doit s'y refléter aussi (sinon reste figé jusqu'à un
+    // pull-to-refresh manuel).
+    qc.invalidateQueries({ queryKey: ['games', 'upcoming'] });
     qc.invalidateQueries({ queryKey: ['profile'] });
     qc.invalidateQueries({ queryKey: ['gamification'] }); // XP/badges/streak (spec 2026-07-16 §10)
   };
@@ -255,6 +260,19 @@ export default function GameDetail() {
       showToast('Signalement impossible. Réessaie.');
     }
   };
+
+  // Explorer (catégorie Jeux) : marquer « suivi cette session » dès qu'un statut
+  // est posé (déjà vu / en cours / voulu…) pour retirer le jeu du deck figé —
+  // même marqué ici (retrait du suivi → ré-autorisé). Clé alignée sur feedItemKey.
+  const feedIgdbId = detail.data?.igdbId;
+  const feedStatus = detail.data?.userStatus;
+  useEffect(() => {
+    if (!feedIgdbId) return;
+    const key = `game:${feedIgdbId}`;
+    const store = useFeedSessionStore.getState();
+    if (feedStatus) store.markTracked([key]);
+    else store.unmarkTracked([key]);
+  }, [feedIgdbId, feedStatus]);
 
   if (detail.isLoading) return <FicheSkeleton heroHeight={288} />;
   if (!detail.data) return <LoadError onRetry={detail.refetch} busy={detail.isRefetching} />;

@@ -13,6 +13,7 @@ import { episodeCode } from '@/lib/format';
 import { COLORS, RADIUS, SHADOW, FONTS, STATUS_BAR, SIZES, SPACE } from '@/lib/theme';
 import { CheckCircle, Loading, LoadError, EmptyState } from '@/components/ui';
 import { SegmentedFilter } from '@/components/prisme';
+import { useFeedSessionStore } from '@/components/explore/feedSession';
 import { AnimatedFill, Pop, SlideUpBar, FadeSwitch, PressableScale } from '@/components/anim';
 import { Stars } from '@/components/Stars';
 import { MarkPreviousPopup, hasUnwatchedPrevious } from '@/components/MarkPreviousPopup';
@@ -285,6 +286,21 @@ export default function ShowDetail() {
   const scrollY = useRef(new Animated.Value(0)).current;
 
   const responsiveHeroHeight = width >= 700 ? 300 : width < 380 ? 236 : 260;
+
+  // Explorer : dès que ce titre a un statut (déjà vu / à voir / en cours…), le
+  // marquer « suivi cette session » pour que le deck figé de l'Explorer cesse
+  // de le proposer — même marqué ici, fiche ouverte depuis la liste d'un ami
+  // (retrait du suivi → on le ré-autorise). Clé alignée sur feedItemKey.
+  const feedTmdbId = detail.data?.media?.tmdbId;
+  const feedStatus = detail.data?.media?.userStatus;
+  useEffect(() => {
+    if (!feedTmdbId) return;
+    const key = `${isMovie ? 'movie' : 'show'}:${feedTmdbId}`;
+    const store = useFeedSessionStore.getState();
+    if (feedStatus) store.markTracked([key]);
+    else store.unmarkTracked([key]);
+  }, [feedTmdbId, feedStatus, isMovie]);
+
   if (detail.isLoading) return <FicheSkeleton heroHeight={responsiveHeroHeight} />;
   if (!detail.data) return <View style={styles.fullState}><LoadError onRetry={detail.refetch} busy={detail.isRefetching} /></View>;
   const media: MediaDto = detail.data.media;

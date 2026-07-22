@@ -46,14 +46,10 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
     <View pointerEvents="box-none" style={[styles.shell, { paddingBottom: Math.max(insets.bottom, 4) }]}>
       <View style={styles.bar}>
         {visibleRoutes.map((route) => {
-          const actuallyFocused = activeRouteName === route.name;
-          const focused =
-            actuallyFocused ||
-            // Jeux (onglet masqué) vit dans les collections du Profil.
-            (route.name === 'profile' && activeRouteName === 'games');
+          const focused = activeRouteName === route.name;
           const onPress = () => {
             const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
-            if (!actuallyFocused && !event.defaultPrevented) {
+            if (!focused && !event.defaultPrevented) {
               navigation.navigate(route.name);
               // NE PAS invalider ['explore'] ici : le deck de l'Explorer est
               // FIGÉ pendant la session de l'onglet (règle produit) — l'écran
@@ -62,7 +58,7 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
               // (position perdue + choix ❤️/👁 « oubliés »). Renouvellement
               // uniquement via pull-to-refresh, carte de fin, ou re-tap ci-dessous.
             }
-            if (actuallyFocused) {
+            if (focused) {
               // Re-tap = rafraîchir l'onglet COURANT. Le deck Explorer (clés
               // ['explore', …]) est figé et son écran reste monté (donc actif) :
               // on ne l'invalide que si c'est bien l'onglet Explorer qu'on

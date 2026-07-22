@@ -1,12 +1,13 @@
 import React from 'react';
-import { View, Text, ScrollView, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import type { Href } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { api, tmdbImage } from '@/lib/api';
+import { shortDateFr } from '@/lib/format';
 import { COLORS, FONTS, SPACE, SIZES } from '@/lib/theme';
 import { EmptyState, LoadError, Poster } from '@/components/ui';
-import { ScreenShell, SectionHeader, PrismeCard } from '@/components/prisme';
+import { ScreenShell, SectionHeader } from '@/components/prisme';
 import { LibHeader } from '@/components/library';
 import { AppearItem } from '@/components/anim';
 import { PullToRefresh } from '@/components/PullToRefresh';
@@ -96,14 +97,19 @@ export default function GamesLibraryScreen() {
     </View>
   );
 
-  // Carrousel horizontal des sorties à venir (jeux déjà suivis) : ouvre
-  // directement la fiche, pas d'ajout.
-  const upcomingRow = (items: GameUpcomingItemDto[]) => (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.carousel}>
+  // Sorties à venir (jeux déjà suivis) : même gabarit que les autres sections
+  // de la bibliothèque (grille d'affiches), avec la DATE de sortie sous chaque
+  // jaquette — cohérent avec les catégories voisines et l'Agenda (où « Sorties
+  // à venir » affiche déjà la date). Taper ouvre la fiche.
+  const upcomingGrid = (items: GameUpcomingItemDto[]) => (
+    <View style={styles.grid}>
       {items.map((it) => (
-        <Poster key={it.id} title={it.title} uri={tmdbImage(it.posterPath)} width={118} onPress={() => router.push(`/game/${it.id}` as Href)} />
+        <View key={it.id} style={{ width: posterWidth }}>
+          <Poster title={it.title} uri={tmdbImage(it.posterPath)} width={posterWidth} onPress={() => router.push(`/game/${it.id}` as Href)} />
+          <Text style={styles.upcomingDate} numberOfLines={1}>{shortDateFr(it.releaseDate)}</Text>
+        </View>
       ))}
-    </ScrollView>
+    </View>
   );
 
   return (
@@ -156,15 +162,13 @@ export default function GamesLibraryScreen() {
                     jamais affiché quand la bibliothèque est vide). */}
                 {upcoming.data && upcoming.data.groups.length > 0 ? (
                   <View onLayout={registerSection('Sorties à venir')}>
-                    <PrismeCard elevated style={styles.sectionCard}>
-                      <SectionHeader title="Sorties à venir" />
-                      {upcoming.data.groups.map((g) => (
-                        <View key={g.label} style={styles.upcomingGroup}>
-                          <Text style={styles.groupLabel}>{g.label.toUpperCase()}</Text>
-                          {upcomingRow(g.items)}
-                        </View>
-                      ))}
-                    </PrismeCard>
+                    <SectionHeader title="Sorties à venir" />
+                    {upcoming.data.groups.map((g) => (
+                      <View key={g.label} style={styles.upcomingGroup}>
+                        <Text style={styles.groupLabel}>{g.label.toUpperCase()}</Text>
+                        {upcomingGrid(g.items)}
+                      </View>
+                    ))}
                   </View>
                 ) : null}
               </>
@@ -183,10 +187,9 @@ const styles = StyleSheet.create({
   body: { flex: 1 },
   scrollContent: { paddingTop: SPACE.xs, paddingBottom: SIZES.tabBar + SPACE.lg },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACE.sm },
-  carousel: { gap: SPACE.xs },
-  // Carte Prisme regroupant la découverte / les sorties à venir.
-  sectionCard: { marginTop: SPACE.sm },
   upcomingGroup: { paddingBottom: SPACE.xs },
-  // Sous-titre de groupe (mois) au-dessus d'un carrousel « Sorties à venir ».
+  // Sous-titre de groupe (mois) au-dessus d'une grille « Sorties à venir ».
   groupLabel: { fontFamily: FONTS.bold, fontSize: 13, color: COLORS.textMuted, marginBottom: 6, letterSpacing: 0.4 },
+  // Date de sortie sous chaque jaquette « Sorties à venir ».
+  upcomingDate: { fontFamily: FONTS.semiBold, fontSize: 11.5, color: COLORS.textMuted, marginTop: 4 },
 });
