@@ -6,6 +6,9 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
+Dernière mise à jour : **2026-07-22** (Claude/Benjamin) — Fix navigation Jeux : la bibliothèque Jeux devient un écran de **pile `/library/games`** (comme Séries/Films) au lieu d'un onglet caché `href:null`. Corrige le bug « retour depuis une fiche jeu (bouton **et** swipe) ramenait à l'Explorer » — expo-router ne pouvait pas restaurer l'onglet caché et retombait sur l'onglet voisin. En-tête « Ma collection » + retour (`LibHeader`).
+Dernière mise à jour : **2026-07-22** (Claude/Étienne) — Accueil : carte héro compacte + déclinée aux sous-onglets Films/Jeux, item « en vedette » choisi selon les préférences (favori d'abord)
+Dernière mise à jour : **2026-07-22** (Claude/Étienne) — Explorer : clavier conservé au changement de catégorie ; fiche jeu : « Temps de jeu » dédoublonné + bouton refondu (icône chrono, sans sous-titre) ; recherche jeux : plateformes resynchronisées durablement en base
 Dernière mise à jour : **2026-07-22** (Claude/Étienne) — Recherche jeux : plateformes enrichies depuis IGDB sur les jeux locaux hérités (filtre « Plateforme » de nouveau exploitable)
 Dernière mise à jour : **2026-07-22** (Claude/Benjamin) — écran bibliothèque Jeux (`/games`, ouvert depuis le Profil) : retrait des carrousels « Découverte » Populaires/À venir (redondants avec l'Explorer qui a déjà recherche + tri « Populaires ») ; l'état vide redirige vers l'Explorer. « Sorties à venir » (jeux suivis) conservé. −83 lignes, typecheck clean.
 Dernière mise à jour : **2026-07-22** (Claude/Étienne) — Profil : « Temps déclaré » → « Temps de jeu » et titre de section « Récompenses » au-dessus de la carte Trophées
@@ -95,6 +98,52 @@ la migration visuelle doit encore être exécutée sans modifier la logique mét
 6. Publication native optionnelle (EAS Build APK, puis stores).
 
 ## Journal des modifications
+
+### 2026-07-22 — Claude/Étienne : Accueil — carte héro compacte, déclinée Films/Jeux, choisie par préférences
+- **Carte héro réduite** (`mobile/app/(tabs)/index.tsx`) : elle prenait trop de
+  place (retour Étienne). `minHeight 220 → 148`, titre `26 → 21`, paddings et
+  barre de progression resserrés.
+- **Format décliné aux sous-onglets Films et Jeux** : nouveau composant
+  `FeaturedHero` (même coquille backdrop + dégradé + grand titre que le héro des
+  séries, sans épisode/progression) hissé en tête des listes Films et Jeux ;
+  tap → fiche, badge ♥ si favori. Vue grille inchangée (héro = vue liste).
+- **Item « en vedette » choisi selon les PRÉFÉRENCES** (`pickFeaturedIndex`) :
+  d'après les pratiques de personnalisation (recherche 2026-07-22), les signaux
+  **explicites** priment — un **favori** d'abord (score fort), puis la meilleure
+  **note perso** ; à égalité, l'ordre serveur (récence/pertinence) départage.
+  Appliqué aux 3 sous-onglets. Séries : le héro est choisi en priorité dans
+  « À voir » (reste la carte de tête du groupe) et hissé en tête.
+- **Serveur** : `serializeGame` expose désormais `backdropPath` + `isFavorite`
+  (nécessaires au héro Jeux) ; Films/Séries les avaient déjà via `serializeMedia`.
+- **Vérifié** (Playwright web) : Films et Jeux affichent la carte compacte avec le
+  **favori** en vedette (« Bravo », alors que « Charlie » est 1er en liste →
+  preuve que la préférence prime) + ♥. Suite jeux verte (12 tests), typecheck
+  mobile+serveur 0 erreur.
+- **NB déploiement** : `serializeGame` = correctif **serveur** → redémarrage API
+  sur le VPS requis pour le héro Jeux ; le reste suit le rebuild web.
+
+### 2026-07-22 — Claude/Étienne : Explorer (clavier) + fiche jeu (Temps de jeu) + plateformes durables
+- **Explorer — clavier conservé** (`mobile/app/(tabs)/explore.tsx`) : changer de
+  catégorie (Médias / Jeux / Profils) faisait perdre le focus au champ → le
+  clavier se rétractait. Le sélecteur d'onglet re-focalise désormais le champ
+  (`selectTab`), le clavier reste ouvert.
+- **Fiche jeu — « Temps de jeu » dédoublonné** (`mobile/app/game/[id].tsx`) : la
+  ligne « Temps de jeu » de la carte Informations est retirée ; seul le **bouton
+  dédié** sous « Je possède » subsiste. Bouton **refondu** : icône chronomètre
+  (`Ionicons stopwatch`, plus parlante que l'horloge), libellé « Temps de jeu »
+  seul (sous-titre « Déclarer mes heures » supprimé — l'icône crayon suffit). Le
+  bouton apparaît aussi si un temps existe sans suivi (import Steam).
+- **Recherche jeux — plateformes DURABLES** (`apps/server/.../games/routes.ts`) :
+  en plus de l'enrichissement de la réponse, un jeu local hérité sans plateformes
+  est **resynchronisé EN BASE** (plateformes, studios, modes) à partir du résultat
+  IGDB déjà récupéré par la recherche — sans appel réseau supplémentaire,
+  idempotent. Les badges plateformes s'affichent alors sur les cartes de résultats
+  **et** persistent pour la fiche/bibliothèque. Test étendu (persistance vérifiée).
+- **Vérifié** (Playwright web) : focus conservé au clic sur « Jeux » ; badges
+  plateformes visibles sur les cartes ; fiche sans doublon « Temps de jeu », bouton
+  refondu. Suite jeux+recherche verte (14 tests), typecheck mobile+serveur 0 erreur.
+- **NB déploiement** : la partie serveur (persist plateformes) exige le **redémarrage
+  de l'API** sur le VPS ; la partie mobile suit le rebuild web habituel.
 
 ### 2026-07-22 — Claude/Étienne : recherche jeux — filtre « Plateforme » réparé (enrichissement IGDB)
 - **Symptôme** (retour Étienne) : à la recherche de jeux, le filtre « Plateforme »

@@ -17,3 +17,6 @@ mobile/ios/
 mobile/.expo/
 coverage/
 apps/server/prisma/data/
+
+# Réglages Claude Code locaux (hooks Impeccable, etc.) — personnels
+.claude/settings.local.json

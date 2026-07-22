@@ -95,6 +95,13 @@ function ExploreScreenInner() {
     setQuery('');
     inputRef.current?.focus();
   };
+  // Changement de catégorie (Médias / Jeux / Profils) : le tap sur l'onglet
+  // retire le focus du champ → le clavier se rétractait. On le re-focalise
+  // aussitôt pour le garder ouvert (retour Étienne).
+  const selectTab = (t: typeof tab) => {
+    setTab(t);
+    inputRef.current?.focus();
+  };
   // Fermeture réelle (bouton « retour » système) : vide et revient au feed.
   const closeSearch = () => {
     setSearchOpen(false);
@@ -118,14 +125,14 @@ function ExploreScreenInner() {
                 icon="film"
                 label={compact ? 'MÉDIAS' : 'SÉRIES & FILMS'}
                 active={tab === 'media'}
-                onPress={() => setTab('media')}
+                onPress={() => selectTab('media')}
               />
-              <SearchTab icon="game-controller-outline" label="JEUX" active={tab === 'games'} onPress={() => setTab('games')} />
+              <SearchTab icon="game-controller-outline" label="JEUX" active={tab === 'games'} onPress={() => selectTab('games')} />
               <SearchTab
                 icon="users"
                 label={compact ? 'PROFILS' : 'UTILISATEURS'}
                 active={tab === 'users'}
-                onPress={() => setTab('users')}
+                onPress={() => selectTab('users')}
               />
             </View>
             {!searching ? (

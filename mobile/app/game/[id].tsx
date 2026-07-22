@@ -292,7 +292,7 @@ export default function GameDetail() {
             <View style={[styles.heroBtns, { top: insets.top + SPACE.sm }]}>
               <PressableScale
                 style={styles.heroAction}
-                onPress={() => goBack('/games')}
+                onPress={() => goBack('/library/games')}
                 accessibilityRole="button"
                 accessibilityLabel="Retour aux jeux"
                 accessibilityHint="Revient à l’écran précédent"
@@ -384,16 +384,8 @@ export default function GameDetail() {
               {game.developer ? <SpecRow label="Développeur" value={game.developer} /> : null}
               {game.publisher ? <SpecRow label="Éditeur" value={game.publisher} /> : null}
               {game.gameModes ? <SpecRow label="Modes" value={game.gameModes} /> : null}
-              {game.userStatus ? (
-                // Jeu suivi : le temps de jeu est déclaratif et ÉDITABLE ici.
-                <SpecRow
-                  label="Temps de jeu"
-                  value={game.playtimeMinutes ? formatPlaytime(game.playtimeMinutes) : 'Ajouter mes heures'}
-                  onPress={() => setPlaytimeOpen(true)}
-                />
-              ) : game.playtimeMinutes ? (
-                <SpecRow label="Temps de jeu" value={formatPlaytime(game.playtimeMinutes)} />
-              ) : null}
+              {/* « Temps de jeu » n'est PAS répété ici : il vit dans le bloc Suivi
+                  (bouton dédié sous « Je possède »). */}
             </View>
           </View>
 
@@ -418,10 +410,10 @@ export default function GameDetail() {
             disabled={trackingBusy}
             onToggle={changeOwned}
           />
-          {/* Temps de jeu : bouton BIEN VISIBLE dès que le jeu est suivi
-              (peu importe le statut) — retour Étienne 2026-07-20 : plus besoin
-              de re-basculer un statut pour rouvrir la feuille. */}
-          {game.userStatus ? (
+          {/* Temps de jeu : seul point d'entrée (le doublon de la carte Infos a
+              été retiré). Visible dès que le jeu est suivi OU qu'un temps existe
+              déjà (import Steam sans suivi). Chrono = temps passé, pas l'heure. */}
+          {game.userStatus || game.playtimeMinutes ? (
             <Pressable
               style={({ pressed }) => [styles.playtimeBtn, pressed && styles.playtimeBtnPressed]}
               onPress={() => setPlaytimeOpen(true)}
@@ -429,17 +421,21 @@ export default function GameDetail() {
               accessibilityLabel={
                 game.playtimeMinutes
                   ? `Temps de jeu : ${formatPlaytime(game.playtimeMinutes)} — modifier`
-                  : 'Déclarer mon temps de jeu'
+                  : 'Temps de jeu — déclarer'
               }
             >
               <View style={styles.playtimeIcon}>
-                <Feather name="clock" size={16} color={COLORS.onAccent} />
+                <Ionicons name="stopwatch" size={18} color={COLORS.onAccent} />
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={styles.playtimeLabel}>Temps de jeu</Text>
-                <Text style={styles.playtimeValue} numberOfLines={1}>
-                  {game.playtimeMinutes ? formatPlaytime(game.playtimeMinutes) : 'Déclarer mes heures'}
-                </Text>
+                {game.playtimeMinutes ? (
+                  <>
+                    <Text style={styles.playtimeLabel}>Temps de jeu</Text>
+                    <Text style={styles.playtimeValue} numberOfLines={1}>{formatPlaytime(game.playtimeMinutes)}</Text>
+                  </>
+                ) : (
+                  <Text style={styles.playtimeCta}>Temps de jeu</Text>
+                )}
               </View>
               <Feather name="edit-3" size={17} color={COLORS.primary} />
             </Pressable>
@@ -1811,6 +1807,9 @@ const styles = StyleSheet.create({
   },
   playtimeLabel: { color: COLORS.textMuted, fontSize: 11.5, fontFamily: FONTS.bold, letterSpacing: 0.3, textTransform: 'uppercase' },
   playtimeValue: { color: COLORS.text, fontSize: 15, fontFamily: FONTS.bold, marginTop: 1 },
+  // État « aucune heure déclarée » : libellé unique, direct (l'icône crayon
+  // suffit à signaler l'action — pas de sous-titre « déclarer mes heures »).
+  playtimeCta: { color: COLORS.text, fontSize: 15, fontFamily: FONTS.bold },
   overview: {
     color: COLORS.text,
     fontFamily: FONTS.regular,

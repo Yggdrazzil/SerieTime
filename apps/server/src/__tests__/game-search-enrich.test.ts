@@ -87,4 +87,12 @@ describe('Recherche jeux : enrichissement des plateformes locales manquantes', (
     expect(naruto[0]!.platforms.sort()).toEqual(['PC (Microsoft Windows)', 'PlayStation 5']);
     expect(naruto[0]!.voteAverage).toBeCloseTo(8.2);
   });
+
+  it('persiste DURABLEMENT les plateformes en base (réparation une bonne fois)', async () => {
+    const { prisma } = await import('../db/client.js');
+    // Le persist est fire-and-forget : on laisse la tâche de fond se terminer.
+    await new Promise((r) => setTimeout(r, 300));
+    const row = await prisma.media.findFirst({ where: { igdbId: '500' }, include: { game: true } });
+    expect(row?.game?.platforms).toBe('PlayStation 5, PC (Microsoft Windows)');
+  });
 });

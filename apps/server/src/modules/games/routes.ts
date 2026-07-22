@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../../db/client.js';
 import { requireAuth } from '../auth/routes.js';
-import { igdbGame, igdbRelated, igdbSearch, igdbToMedia, igdbImageUrl, isMainGame } from '../../services/igdb/index.js';
+import { igdbGame, igdbRelated, igdbSearch, igdbToMedia, igdbImageUrl, isMainGame, type IgdbGame } from '../../services/igdb/index.js';
 import { nextFavoriteOrder } from '../media/favorites.js';
 import { isAllowedImageUrl } from '../media/imageUrl.js';
 import { scheduleRecompute } from '../gamification/service.js';
@@ -30,15 +30,36 @@ export async function ensureGameFromIgdb(igdbId: string) {
   return created;
 }
 
-function serializeGame(m: { id: string; title: string; posterPath: string | null; year: number | null; voteAverage: number | null; igdbId: string | null; game?: { platforms: string | null } | null }, status?: { status: string; playtimeMinutes: number | null; isOwned: boolean } | null) {
+function serializeGame(m: { id: string; title: string; posterPath: string | null; backdropPath?: string | null; year: number | null; voteAverage: number | null; igdbId: string | null; game?: { platforms: string | null } | null }, status?: { status: string; playtimeMinutes: number | null; isOwned: boolean; isFavorite?: boolean } | null) {
   return {
-    id: m.id, title: m.title, posterPath: m.posterPath, year: m.year,
+    id: m.id, title: m.title, posterPath: m.posterPath, backdropPath: m.backdropPath ?? null, year: m.year,
     voteAverage: m.voteAverage, igdbId: m.igdbId,
     platforms: m.game?.platforms ?? null,
     userStatus: status?.status ?? null,
     isOwned: status?.isOwned ?? false,
+    // Exposé pour la carte « en vedette » de l'Accueil (sélection par préférence).
+    isFavorite: status?.isFavorite ?? false,
     playtimeMinutes: status?.playtimeMinutes ?? null,
   };
+}
+
+// Resync EN BASE des jeux locaux dont les plateformes manquent (données
+// héritées), à partir des résultats IGDB DÉJÀ récupérés par la recherche — donc
+// sans nouvel appel réseau. Idempotent : le garde `platforms` déjà rempli fait
+// que chaque jeu n'est réparé qu'une fois. Silencieux (best-effort en fond).
+async function persistMissingGameMetadata(
+  local: { id: string; igdbId: string | null; game: { platforms: string | null } | null }[],
+  igdbById: Map<string, IgdbGame>,
+): Promise<void> {
+  for (const m of local) {
+    if (m.game?.platforms) continue; // déjà renseigné
+    const ig = m.igdbId ? igdbById.get(m.igdbId) : undefined;
+    if (!ig?.platforms?.length) continue;
+    const { game } = igdbToMedia(ig);
+    await prisma.game
+      .upsert({ where: { mediaId: m.id }, create: { mediaId: m.id, ...game }, update: game })
+      .catch(() => {});
+  }
 }
 
 export async function gamesRoutes(app: FastifyInstance): Promise<void> {
@@ -129,6 +150,15 @@ export async function gamesRoutes(app: FastifyInstance): Promise<void> {
       (b.year ?? 0) - (a.year ?? 0) ||
       a.title.localeCompare(b.title, 'fr'),
     );
+
+    // Réparation DURABLE (une bonne fois) : un jeu local hérité, sans
+    // plateformes en base, dont le résultat IGDB frais en porte, voit sa fiche
+    // (plateformes, studios, modes, notes) resynchronisée EN BASE à partir du
+    // résultat déjà en main — zéro appel réseau de plus. La fiche, la
+    // bibliothèque et les prochaines recherches l'affichent alors sans dépendre
+    // d'IGDB. Fire-and-forget : n'allonge pas la réponse (demande Étienne 22/07).
+    void persistMissingGameMetadata(local, igdbById);
+
     return { results };
   });
 

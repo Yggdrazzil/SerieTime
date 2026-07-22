@@ -1,8 +1,12 @@
-# $impeccable hooks
+# /impeccable hooks
 
 Manage the **design detector hook** for the current project.
 
 The hook runs the impeccable design detector on direct file edits to design-relevant files (`.tsx`, `.jsx`, `.html`, `.vue`, `.svelte`, `.astro`, `.css`, `.scss`, `.sass`, `.less`, `.ts`, `.js`). Claude Code, Codex, and GitHub Copilot use a post-tool-use hook and push a short system reminder into the agent's context after the edit; findings get a correction prompt, pending issues get a re-nudge, and clean UI-ish files get a short ack unless quiet mode is on (`hook.quiet` in config). Plain `.ts` and `.js` files are still scanned, but stay quiet unless the detector finds something. Cursor uses `preToolUse` to block bad proposed writes before they land and stays silent when it allows a clean write.
+
+The detector rules run in two tiers. The per-edit hook surfaces only the immediate tier: mechanical, unambiguous problems worth interrupting an edit for, such as broken images, overflowing or clipped content, contrast and legibility failures, gradient text, glow shadows, and design-system drift. Everything else (copy cadence, palette and typography taste, layout rhythm) is deferred to a deep pass on the `Stop` hook event, which runs the full rule set over every UI file touched in the session and surfaces the remaining findings once, deduplicated against what the per-edit pass already reported. A session with nothing left to report stops silently. Set `hook.perEditRules` to `"all"` in `.impeccable/config.json` to restore the full rule set on every edit. The Stop deep pass is wired for Claude Code and Codex, which both dispatch a native `Stop` hook event. Cursor does not get one (its stop hook is not consistently dispatched; the pre-write gate covers it), and GitHub Copilot's stop-style events do not feed context back to the model, so they keep the full detector per edit.
+
+Every hook is a mechanical pass. The reflexes no scanner catches live in [craft-floor.md](craft-floor.md), which the skill loads before it edits UI, so they apply whether or not a hook is wired. A session with no automatic hook gets one `MANUAL_DETECTOR_REQUIRED` directive from `context.mjs` asking for a single detector run at the end.
 
 This command toggles the hook **per project** by editing `.impeccable/config.json` (the unified Impeccable config; hook runtime settings live under its `hook` key, and shared detector ignores live under `detector`). Per-developer overrides, including the install consent decision (`hook.consent`) the CLI records, live in the gitignored `.impeccable/config.local.json`. Set `hook.enabled: false` to turn the hook off, `hook.quiet: true` to silence the clean/pending acks, or `hook.auditLog` to a file path for an NDJSON log. The legacy `IMPECCABLE_HOOK_DISABLED`, `IMPECCABLE_HOOK_QUIET`, and `IMPECCABLE_HOOK_LOG` env vars are still honored and override these config values when set.
 
@@ -36,10 +40,10 @@ The first argument is the action. Defaults to `status`.
 2. Invoke the admin script and pass the user's output through verbatim:
 
    ```bash
-   node .agents/skills/impeccable/scripts/hook-admin.mjs <action> [args...]
+   node .claude/skills/impeccable/scripts/hook-admin.mjs <action> [args...]
    ```
 
-3. If `<action>` is `off`, follow up with a one-line note: "Done. New edits will not trigger the design hook in this project until you run `$impeccable hooks on`."
+3. If `<action>` is `off`, follow up with a one-line note: "Done. New edits will not trigger the design hook in this project until you run `/impeccable hooks on`."
 4. If `<action>` is `on`, follow up with: "Done. The design hook will fire after the next Edit/Write/MultiEdit on a UI file."
 5. If `<action>` is `ignore-value`, `ignore-file`, or `ignore-rule`, just print the script output. The default scope is shared `.impeccable/config.json`; add `--local` only when the user explicitly asks for a private exception.
 6. If `<action>` is `status`, just print the script output. Do not add commentary unless the user asked a follow-up question.
@@ -60,32 +64,32 @@ Prefer the narrowest exception:
 Example value-specific exception:
 
 ```bash
-node .agents/skills/impeccable/scripts/hook-admin.mjs ignore-value overused-font Inter --shared --reason "User confirmed Inter is intentional"
+node .claude/skills/impeccable/scripts/hook-admin.mjs ignore-value overused-font Inter --shared --reason "User confirmed Inter is intentional"
 ```
 
 Example intentional motion exception:
 
 ```bash
-node .agents/skills/impeccable/scripts/hook-admin.mjs ignore-value bounce-easing bounce-ball --shared --reason "User confirmed ball bounce animation is intentional"
+node .claude/skills/impeccable/scripts/hook-admin.mjs ignore-value bounce-easing bounce-ball --shared --reason "User confirmed ball bounce animation is intentional"
 ```
 
 Example whole-rule font exception:
 
 ```bash
-node .agents/skills/impeccable/scripts/hook-admin.mjs ignore-rule overused-font --all-values --reason "User asked to ignore overused fonts generally"
+node .claude/skills/impeccable/scripts/hook-admin.mjs ignore-rule overused-font --all-values --reason "User asked to ignore overused fonts generally"
 ```
 
 Example one-rule-in-one-file exception, for a file that is still worth reviewing
 for everything else:
 
 ```bash
-node .agents/skills/impeccable/scripts/hook-admin.mjs ignore-value design-system-font-size "*" --file "src/overlay/widget.js" --reason "Injected widget builds its own type scale; DESIGN.md's ramp describes the site"
+node .claude/skills/impeccable/scripts/hook-admin.mjs ignore-value design-system-font-size "*" --file "src/overlay/widget.js" --reason "Injected widget builds its own type scale; DESIGN.md's ramp describes the site"
 ```
 
 Example whole-file exception, for a file that is out of scope entirely:
 
 ```bash
-node .agents/skills/impeccable/scripts/hook-admin.mjs ignore-file "src/legacy/Card.tsx"
+node .claude/skills/impeccable/scripts/hook-admin.mjs ignore-file "src/legacy/Card.tsx"
 ```
 
 ## Constraints
@@ -98,4 +102,4 @@ node .agents/skills/impeccable/scripts/hook-admin.mjs ignore-file "src/legacy/Ca
 ## Failure modes
 
 - If `.impeccable/config.json` or `.impeccable/config.local.json` is unreadable or malformed, the hook ignores that file and uses the remaining valid config/defaults. `hook-admin.mjs status` will show malformed files as ignored.
-- If the user asks to "disable the hook" globally, lead with `$impeccable hooks off` (persistent for this project; writes `hook.enabled: false` to config). The legacy `IMPECCABLE_HOOK_DISABLED=1` env var also works as a one-shot override that follows the shell.
+- If the user asks to "disable the hook" globally, lead with `/impeccable hooks off` (persistent for this project; writes `hook.enabled: false` to config). The legacy `IMPECCABLE_HOOK_DISABLED=1` env var also works as a one-shot override that follows the shell.

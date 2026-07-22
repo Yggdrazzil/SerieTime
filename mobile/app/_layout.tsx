@@ -109,6 +109,7 @@ export default function RootLayout() {
             <Stack.Screen name="profile/cover" options={{ animation: 'slide_from_bottom' }} />
             <Stack.Screen name="library/shows" />
             <Stack.Screen name="library/movies" />
+            <Stack.Screen name="library/games" />
             <Stack.Screen name="library/favorite-shows" />
             <Stack.Screen name="library/favorite-movies" />
             <Stack.Screen name="import" />
