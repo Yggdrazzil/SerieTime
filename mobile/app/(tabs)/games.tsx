@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, ActivityIndicator, useWindowDimensions } from 'react-native';
+import React from 'react';
+import { View, Text, ScrollView, StyleSheet, useWindowDimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import type { Href } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { api, tmdbImage } from '@/lib/api';
-import { COLORS, FONTS, RADIUS, SPACE, SIZES } from '@/lib/theme';
+import { COLORS, FONTS, SPACE, SIZES } from '@/lib/theme';
 import { EmptyState, LoadError, Poster } from '@/components/ui';
 import { ScreenShell, SectionHeader, PrismeCard, TabHeader } from '@/components/prisme';
 import { AppearItem } from '@/components/anim';
@@ -34,9 +34,6 @@ type GamesLibraryResponse = {
   completed: GameDto[];
   abandoned: GameDto[];
 };
-
-type DiscoverGameDto = { igdbId: string; title: string; year: number | null; posterPath: string | null };
-type GamesDiscoverResponse = { popular: DiscoverGameDto[]; upcoming: DiscoverGameDto[] };
 
 // Sorties (+ DLC) à venir des jeux suivis, groupées par mois — miroir de
 // UpcomingItemDto (shows) mais à plat (pas de `media` imbriqué).
@@ -74,19 +71,13 @@ function GamesScreenInner() {
     library.data.playing.length === 0 &&
     library.data.completed.length === 0 &&
     library.data.abandoned.length === 0;
-  // Découverte IGDB (Populaires / À venir) : toujours affichée sous la
-  // bibliothèque, et seul contenu de l'écran quand la bibliothèque est vide.
-  const discover = useQuery({
-    queryKey: ['games', 'discover'],
-    queryFn: () => api.get<GamesDiscoverResponse>('/api/games/discover'),
-  });
   // Sorties à venir des jeux suivis (miroir de « À voir » côté séries).
   const upcoming = useQuery({
     queryKey: ['games', 'upcoming'],
     queryFn: () => api.get<GamesUpcomingResponse>('/api/games/upcoming'),
   });
 
-  const { refreshing, onRefresh } = usePullRefresh([library.refetch, upcoming.refetch, discover.refetch]);
+  const { refreshing, onRefresh } = usePullRefresh([library.refetch, upcoming.refetch]);
   // Pastille de statut FLOTTANTE (VOULUS, EN COURS…) : suit le défilement,
   // comme l'onglet Séries et les bibliothèques du profil.
   const { registerSection, onListScroll, floatLabel } = useFloatingSection();
@@ -97,24 +88,6 @@ function GamesScreenInner() {
   const columns = availableWidth >= 640 ? 5 : availableWidth >= 480 ? 4 : 3;
   const posterWidth = Math.max(76, (availableWidth - SPACE.sm * (columns - 1)) / columns);
 
-  // Ajout depuis la découverte : ajoute (statut « Voulus ») puis ouvre la
-  // fiche (recherche déplacée dans l'Explorer, cf. app/(tabs)/explore.tsx).
-  const [addingDiscoverId, setAddingDiscoverId] = useState<string | null>(null);
-  // Consultation ≠ suivi (règle produit) : taper une jaquette de la découverte
-  // OUVRE la fiche sans rien ajouter — le suivi se choisit ensuite sur la fiche.
-  const addDiscover = async (g: DiscoverGameDto) => {
-    if (addingDiscoverId) return;
-    setAddingDiscoverId(g.igdbId);
-    try {
-      const res = await api.post<{ mediaId: string | null }>('/api/games/add-from-igdb', {
-        igdbId: g.igdbId,
-      });
-      if (res.mediaId) router.push(('/game/' + res.mediaId) as Href);
-    } finally {
-      setAddingDiscoverId(null);
-    }
-  };
-
   const grid = (items: GameDto[], startIndex = 0) => (
     <View style={styles.grid}>
       {items.map((g, i) => (
@@ -123,23 +96,6 @@ function GamesScreenInner() {
         </AppearItem>
       ))}
     </View>
-  );
-
-  // Carrousel horizontal de découverte (taper ajoute puis ouvre la fiche) —
-  // même gabarit que PosterRow (profile.tsx).
-  const discoverRow = (items: DiscoverGameDto[]) => (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.carousel}>
-      {items.map((g) => (
-        <View key={g.igdbId} style={{ width: 118 }}>
-          <Poster title={g.title} uri={tmdbImage(g.posterPath)} width={118} onPress={() => addDiscover(g)} />
-          {addingDiscoverId === g.igdbId ? (
-            <View style={styles.posterBusy}>
-              <ActivityIndicator color="#FFFFFF" size="small" />
-            </View>
-          ) : null}
-        </View>
-      ))}
-    </ScrollView>
   );
 
   // Carrousel horizontal des sorties à venir (jeux déjà suivis) : ouvre
@@ -193,7 +149,7 @@ function GamesScreenInner() {
                     });
                   })()
                 ) : (
-                  <EmptyState title="Aucun jeu suivi" message="Ajoutez des jeux depuis la découverte ci-dessous." />
+                  <EmptyState title="Aucun jeu suivi" message="Ajoutez des jeux depuis l'Explorer." />
                 )}
 
                 {/* Sorties à venir : jeux suivis dont la sortie n'est pas encore
@@ -211,35 +167,6 @@ function GamesScreenInner() {
                       ))}
                     </PrismeCard>
                   </View>
-                ) : null}
-
-                {/* Découverte IGDB : toujours sous la bibliothèque, seul contenu
-                    visible (avec l'EmptyState ci-dessus) quand elle est vide —
-                    jamais affichée deux fois. */}
-                {discover.isLoading && !discover.data ? (
-                  <PrismeCard elevated style={styles.sectionCard}>
-                    <SectionHeader eyebrow="Découverte" title="Populaires et à venir" />
-                    <ActivityIndicator color={COLORS.primary} />
-                  </PrismeCard>
-                ) : discover.data ? (
-                  <>
-                    {discover.data.popular.length > 0 ? (
-                      <View onLayout={registerSection('Populaires')}>
-                        <PrismeCard elevated style={styles.sectionCard}>
-                          <SectionHeader eyebrow="Découverte" title="Populaires" />
-                          {discoverRow(discover.data.popular)}
-                        </PrismeCard>
-                      </View>
-                    ) : null}
-                    {discover.data.upcoming.length > 0 ? (
-                      <View onLayout={registerSection('À venir')}>
-                        <PrismeCard elevated style={styles.sectionCard}>
-                          <SectionHeader eyebrow="Découverte" title="À venir" />
-                          {discoverRow(discover.data.upcoming)}
-                        </PrismeCard>
-                      </View>
-                    ) : null}
-                  </>
                 ) : null}
               </>
             ) : null}
@@ -263,9 +190,4 @@ const styles = StyleSheet.create({
   upcomingGroup: { paddingBottom: SPACE.xs },
   // Sous-titre de groupe (mois) au-dessus d'un carrousel « Sorties à venir ».
   groupLabel: { fontFamily: FONTS.bold, fontSize: 13, color: COLORS.textMuted, marginBottom: 6, letterSpacing: 0.4 },
-  // Overlay « en cours d'ajout » posé sur une jaquette de découverte.
-  posterBusy: {
-    position: 'absolute', top: 0, left: 0, right: 0, aspectRatio: 2 / 3,
-    borderRadius: RADIUS.poster, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center',
-  },
 });

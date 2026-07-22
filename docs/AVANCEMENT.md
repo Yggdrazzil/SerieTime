@@ -6,6 +6,7 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
+Dernière mise à jour : **2026-07-22** (Claude/Benjamin) — écran bibliothèque Jeux (`/games`, ouvert depuis le Profil) : retrait des carrousels « Découverte » Populaires/À venir (redondants avec l'Explorer qui a déjà recherche + tri « Populaires ») ; l'état vide redirige vers l'Explorer. « Sorties à venir » (jeux suivis) conservé. −83 lignes, typecheck clean.
 Dernière mise à jour : **2026-07-22** (Codex/Étienne) — résumé des statistiques du Profil rendu lisible et responsive
 Dernière mise à jour : **2026-07-22** (Claude/Étienne) — fiche jeu : refonte UX/UI de la carte d'identité (skill impeccable) — un seul format libellé/valeur, genres en tags + notes en **tuiles à dégradé vif** (façon carte « Temps devant des séries »), titre retiré du corps (bannière lisible sur tout fond)
 
