@@ -6,7 +6,7 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
-Dernière mise à jour : **2026-07-21** (Claude/Étienne) — resync globale des métadonnées (script one-shot serveur) pour nettoyer à la source les fiches (années aberrantes, données périmées), sans toucher aux affiches/personnalisations
+Dernière mise à jour : **2026-07-22** (Codex/Étienne) — résumé des statistiques du Profil rendu lisible et responsive
 
 ---
 
@@ -91,6 +91,64 @@ la migration visuelle doit encore être exécutée sans modifier la logique mét
 6. Publication native optionnelle (EAS Build APK, puis stores).
 
 ## Journal des modifications
+
+### 2026-07-22 — Codex/Étienne : statistiques du Profil clarifiées
+- **Hiérarchie remaniée** (`mobile/app/(tabs)/profile.tsx`) : les six tuiles
+  isolées sont remplacées par une surface unique organisée en trois lignes —
+  Épisodes, Films et Jeux — qui rapproche pour chaque univers le total et son
+  temps associé sans changer les données ni la navigation vers le détail.
+- **Durées toujours lisibles** : mois, jours et heures sont rendus comme des
+  unités indépendantes et peuvent se réorganiser sur un écran étroit ; aucune
+  valeur n'est désormais coupée par des points de suspension.
+- **Casse harmonisée** : majuscule initiale sur les compteurs sociaux et tous
+  les libellés du résumé (`Abonnements`, `Épisodes`, `Vus`, `Temps de
+  visionnage`, `Joués`, `Temps déclaré`, etc.).
+- **QA** : typecheck mobile et export Expo Web réussis (41 routes) ; test
+  Playwright avec les valeurs longues du cas signalé à 320 × 844 et 390 × 844,
+  sans débordement horizontal, troncature ni erreur d'exécution.
+
+### 2026-07-22 — Codex/Étienne : modale Temps de jeu adaptée au clavier
+- **Adaptation native** (`mobile/app/game/[id].tsx`) : la modale utilise désormais
+  `KeyboardAvoidingView` (`padding` sur iOS, `height` sur Android) et les safe
+  areas pour se recentrer dans l'espace réellement disponible au-dessus de
+  l'IME. L'autofocus est retiré : le clavier ne s'impose plus à l'ouverture.
+- **Densité réduite** : texte ramené à « Indique tes heures. Tu pourras les
+  modifier. », icône et espacements compactés, champ à 48 dp et actions
+  secondaires « Plus tard » / « Effacer » réunies sur une rangée de cibles
+  tactiles de 44 dp. Toutes les actions existantes restent disponibles.
+- **Structure web assainie** : le fond cliquable est séparé de la carte afin
+  d'éliminer les boutons HTML imbriqués tout en conservant la fermeture par
+  toucher extérieur et l'échappement d'accessibilité.
+- **QA** : typecheck mobile et export Expo Web réussis (41 routes) ; smoke test
+  Playwright à 390 × 844 puis 390 × 500 (zone réduite type clavier) : carte de
+  298 dp entièrement visible, trois actions accessibles, aucun débordement,
+  avertissement d'hydratation ou erreur d'exécution.
+
+### 2026-07-22 — Codex/Étienne : contenus suivis en tête des résultats Explorer
+- **Recherche médias et jeux** (`mobile/app/(tabs)/explore.tsx`) : partition
+  stable des résultats en deux groupes — contenus déjà présents dans la
+  bibliothèque ou ajoutés pendant la recherche en premier, autres résultats
+  ensuite. L'ordre de pertinence renvoyé par l'API reste inchangé à l'intérieur
+  de chaque groupe.
+- **Interaction immédiate** : après succès du bouton `+`, la série, le film ou
+  le jeu remonte sans rechargement au sommet du groupe suivi grâce à l'état
+  local déjà utilisé pour afficher la coche.
+- **QA** : typecheck mobile réussi ; export Expo Web réussi (41 routes) ; test
+  Playwright mobile 390 px validant l'ordre initial puis le réordonnancement
+  après ajout d'un film, d'une série et d'un jeu, sans débordement horizontal.
+
+### 2026-07-22 — Codex/Étienne : notifications allégées et manette dans Recherche
+- **Notifications** (`mobile/app/notifications.tsx`) : retrait de la carte
+  introductive « Centre d'activité / Ce qui vient de se passer » afin d'afficher
+  directement la liste utile ; le bandeau d'erreur de synchronisation reste
+  disponible uniquement en cas d'échec.
+- **Recherche** (`mobile/app/(tabs)/explore.tsx`) : remplacement de l'icône
+  Feather « command » de la catégorie Jeux par la manette Ionicons
+  `game-controller-outline`, états actif et inactif conservés.
+- **QA** : export Expo Web réussi (41 routes) ; smoke Playwright mobile 390 px
+  sur `/notifications` et `/explore` sans débordement ni erreur d'exécution.
+  Le typecheck global reste bloqué par trois liens Expo préexistants vers
+  `/community` et `/user-library`, hors périmètre de ce lot.
 
 ### 2026-07-21 — Claude/Étienne : export de données au format TV Time
 - **Objectif** (demande produit Étienne) : « se calquer sur le format de TV

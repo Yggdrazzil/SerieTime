@@ -4,7 +4,7 @@ import { Feather } from '@expo/vector-icons';
 import { useRouter, type Href } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, tmdbImage } from '@/lib/api';
-import { COLORS, FONTS, RADIUS, SHADOW, SIZES, SPACE } from '@/lib/theme';
+import { COLORS, FONTS, RADIUS, SIZES, SPACE } from '@/lib/theme';
 import { EmptyState, Loading, LoadError } from '@/components/ui';
 import { PageHeader } from '@/components/PageHeader';
 import { AppearItem } from '@/components/anim';
@@ -109,27 +109,12 @@ export default function NotificationsScreen() {
             refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={COLORS.primary} />}
             contentContainerStyle={styles.list}
             ListHeaderComponent={
-              <View style={styles.hero}>
-                <View style={styles.heroIcon}>
-                  <Feather name="bell" size={24} color={COLORS.primary} />
-                  {(data?.unreadCount ?? 0) > 0 ? <View style={styles.unreadDot} /> : null}
+              readError ? (
+                <View style={styles.errorBanner} accessibilityRole="alert">
+                  <Feather name="alert-circle" size={16} color={COLORS.danger} />
+                  <Text style={styles.errorText}>La lecture n'a pas pu être synchronisée. Tire pour réessayer.</Text>
                 </View>
-                <View style={styles.heroCopy}>
-                  <Text style={styles.eyebrow}>CENTRE D'ACTIVITÉ</Text>
-                  <Text style={styles.heroTitle}>Ce qui vient de se passer</Text>
-                  <Text style={styles.heroBody}>
-                    {(data?.unreadCount ?? 0) > 0
-                      ? (data?.unreadCount ?? 0) + ' nouveauté' + ((data?.unreadCount ?? 0) > 1 ? 's' : '') + ' depuis ta dernière visite.'
-                      : 'Tu es à jour. Les nouvelles activités apparaîtront ici.'}
-                  </Text>
-                  {readError ? (
-                    <View style={styles.errorBanner} accessibilityRole="alert">
-                      <Feather name="alert-circle" size={16} color={COLORS.danger} />
-                      <Text style={styles.errorText}>La lecture n'a pas pu être synchronisée. Tire pour réessayer.</Text>
-                    </View>
-                  ) : null}
-                </View>
-              </View>
+              ) : null
             }
             ListEmptyComponent={
               <EmptyState title="Aucune notification" message="L'activité de tes amis et tes nouveaux succès apparaîtront ici." />
@@ -197,45 +182,11 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: COLORS.pageMuted },
   canvas: { flex: 1, width: '100%', maxWidth: SIZES.contentMax, alignSelf: 'center' },
   list: { flexGrow: 1, paddingHorizontal: SPACE.md, paddingTop: SPACE.md, paddingBottom: SPACE.xl, gap: SPACE.sm },
-  hero: {
-    flexDirection: 'row',
-    gap: SPACE.md,
-    marginBottom: SPACE.xxs,
-    padding: SPACE.lg,
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
-    borderRadius: RADIUS.card,
-    ...SHADOW.card,
-  },
-  heroIcon: {
-    width: 52,
-    height: 52,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.primarySoft,
-    borderRadius: 26,
-  },
-  unreadDot: {
-    position: 'absolute',
-    right: 3,
-    top: 3,
-    width: 12,
-    height: 12,
-    backgroundColor: COLORS.notif,
-    borderWidth: 2,
-    borderColor: COLORS.surface,
-    borderRadius: 6,
-  },
-  heroCopy: { minWidth: 0, flex: 1 },
-  eyebrow: { color: COLORS.primary, fontSize: 11, lineHeight: 15, fontFamily: FONTS.extraBold, letterSpacing: 0.8 },
-  heroTitle: { marginTop: 3, color: COLORS.text, fontSize: 23, lineHeight: 29, fontFamily: FONTS.extraBold },
-  heroBody: { marginTop: SPACE.xs, color: COLORS.textMuted, fontSize: 14, lineHeight: 20, fontFamily: FONTS.regular },
   errorBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACE.xs,
-    marginTop: SPACE.sm,
+    marginBottom: SPACE.xxs,
     padding: SPACE.sm,
     backgroundColor: COLORS.surfaceMuted,
     borderRadius: RADIUS.control,

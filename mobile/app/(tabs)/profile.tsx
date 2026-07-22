@@ -159,18 +159,18 @@ function ProfileScreenInner() {
           <View style={styles.counters}>
             <Counter
               n={data.social?.followingCount ?? 0}
-              label={(data.social?.followingCount ?? 0) > 1 ? 'abonnements' : 'abonnement'}
+              label={(data.social?.followingCount ?? 0) > 1 ? 'Abonnements' : 'Abonnement'}
               onPress={() => router.push('/social/connections?type=following')}
             />
             <Counter
               n={data.social?.followersCount ?? 0}
-              label={(data.social?.followersCount ?? 0) > 1 ? 'abonnés' : 'abonné'}
+              label={(data.social?.followersCount ?? 0) > 1 ? 'Abonnés' : 'Abonné'}
               border
               onPress={() => router.push('/social/connections?type=followers')}
             />
             <Counter
               n={data.social?.commentsCount ?? 0}
-              label={(data.social?.commentsCount ?? 0) > 1 ? 'commentaires' : 'commentaire'}
+              label={(data.social?.commentsCount ?? 0) > 1 ? 'Commentaires' : 'Commentaire'}
               border
               onPress={() => router.push('/social/my-comments')}
             />
@@ -192,7 +192,7 @@ function ProfileScreenInner() {
                 <Feather name="chevron-right" size={16} color={COLORS.primary} />
               </Pressable>
             </View>
-            <StatTiles stats={stats} />
+            <StatsSummary stats={stats} />
 
             {/* Streak (gamification) : accès aux Trophées, façon maquette. */}
             <Pressable
@@ -290,54 +290,118 @@ function HeaderActions() {
   );
 }
 
+type DurationPart = { value: number; unit: 'mois' | 'j' | 'h' };
+
 // « 15 mois 10 j 21 h » — zéros de tête omis, heures toujours affichées.
-function fmtDuration(minutes: number): string {
+function durationParts(minutes: number): DurationPart[] {
   const t = watchTime(minutes);
-  const parts: string[] = [];
-  if (t.months) parts.push(`${t.months} mois`);
-  if (t.days || t.months) parts.push(`${t.days} j`);
-  parts.push(`${t.hours} h`);
-  return parts.join(' ');
+  const parts: DurationPart[] = [];
+  if (t.months) parts.push({ value: t.months, unit: 'mois' });
+  if (t.days || t.months) parts.push({ value: t.days, unit: 'j' });
+  parts.push({ value: t.hours, unit: 'h' });
+  return parts;
 }
 
-// Tuiles de statistiques all-time (liste arrêtée par Étienne, 2026-07-20) :
-// épisodes vus, temps épisodes, films vus, temps films, jeux joués, temps de
-// jeu (déclaratif). Contenu CENTRÉ avec pastille d'icône.
-function StatTiles({ stats }: { stats: ProfileStatsDto }) {
-  const tiles: { key: string; icon?: keyof typeof Feather.glyphMap; ionicon?: keyof typeof Ionicons.glyphMap; value: string; label: string }[] = [
-    { key: 'episodes', icon: 'tv', value: stats.episodesWatched.toLocaleString('fr-FR'), label: 'épisodes vus' },
-    { key: 'showTime', icon: 'clock', value: fmtDuration(stats.showMinutes), label: 'devant les épisodes' },
-    { key: 'movies', icon: 'film', value: stats.moviesWatched.toLocaleString('fr-FR'), label: 'films vus' },
-    { key: 'movieTime', icon: 'clock', value: fmtDuration(stats.movieMinutes), label: 'devant les films' },
-    { key: 'games', ionicon: 'game-controller-outline', value: stats.gamesPlayed.toLocaleString('fr-FR'), label: 'jeux joués' },
+// Les statistiques all-time sont regroupées par univers : le total reste
+// immédiatement scannable et les unités de durée peuvent se réorganiser sans
+// être tronquées sur les petits écrans.
+function StatsSummary({ stats }: { stats: ProfileStatsDto }) {
+  const groups: {
+    key: string;
+    title: string;
+    icon?: keyof typeof Feather.glyphMap;
+    ionicon?: keyof typeof Ionicons.glyphMap;
+    count: string;
+    countLabel: string;
+    minutes: number;
+    durationLabel: string;
+  }[] = [
     {
-      key: 'gameTime',
-      icon: 'clock',
-      value: fmtDuration(stats.gamePlaytimeMinutes ?? 0),
-      label: 'de jeu (déclaré)',
+      key: 'episodes',
+      title: 'Épisodes',
+      icon: 'tv',
+      count: stats.episodesWatched.toLocaleString('fr-FR'),
+      countLabel: 'Vus',
+      minutes: stats.showMinutes,
+      durationLabel: 'Temps de visionnage',
+    },
+    {
+      key: 'movies',
+      title: 'Films',
+      icon: 'film',
+      count: stats.moviesWatched.toLocaleString('fr-FR'),
+      countLabel: 'Vus',
+      minutes: stats.movieMinutes,
+      durationLabel: 'Temps de visionnage',
+    },
+    {
+      key: 'games',
+      title: 'Jeux',
+      ionicon: 'game-controller-outline',
+      count: stats.gamesPlayed.toLocaleString('fr-FR'),
+      countLabel: 'Joués',
+      minutes: stats.gamePlaytimeMinutes ?? 0,
+      durationLabel: 'Temps déclaré',
     },
   ];
+
   return (
-    <View style={styles.tilesGrid}>
-      {tiles.map((tile, i) => (
-        <AppearItem key={tile.key} index={i} style={styles.tileWrap}>
-          <View style={styles.tile} accessible accessibilityLabel={`${tile.value} ${tile.label}`}>
-            <View style={styles.tileIcon}>
-              {tile.ionicon ? (
-                <Ionicons name={tile.ionicon} size={16} color={COLORS.primary} />
-              ) : (
-                <Feather name={tile.icon ?? 'activity'} size={16} color={COLORS.primary} />
-              )}
+    <View style={styles.statsSummary}>
+      {groups.map((group, index) => {
+        const time = durationParts(group.minutes);
+        const spokenDuration = time.map(({ value, unit }) => value + ' ' + unit).join(' ');
+        return (
+          <AppearItem key={group.key} index={index}>
+            <View
+              style={[styles.statRow, index > 0 && styles.statRowBorder]}
+              accessible
+              accessibilityLabel={
+                group.title +
+                '. ' +
+                group.count +
+                ' ' +
+                group.countLabel.toLowerCase() +
+                '. ' +
+                group.durationLabel +
+                ' : ' +
+                spokenDuration +
+                '.'
+              }
+            >
+              <View style={styles.statIcon}>
+                {group.ionicon ? (
+                  <Ionicons name={group.ionicon} size={17} color={COLORS.primary} />
+                ) : (
+                  <Feather name={group.icon ?? 'activity'} size={17} color={COLORS.primary} />
+                )}
+              </View>
+              <View style={styles.statContent}>
+                <Text style={styles.statTitle}>{group.title}</Text>
+                <View style={styles.statMetrics}>
+                  <View style={styles.statCount}>
+                    <Text style={styles.statCountValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
+                      {group.count}
+                    </Text>
+                    <Text style={styles.statMeta}>{group.countLabel}</Text>
+                  </View>
+                  <View style={styles.statDivider} />
+                  <View style={styles.statDuration}>
+                    <View style={styles.durationParts}>
+                      {time.map(({ value, unit }) => (
+                        <View key={unit} style={styles.durationPart}>
+                          <Text style={styles.durationValue}>{value}</Text>
+                          <Text style={styles.durationUnit}>{unit}</Text>
+                        </View>
+                      ))}
+                    </View>
+                    <Text style={styles.statMeta}>{group.durationLabel}</Text>
+                  </View>
+                </View>
+              </View>
             </View>
-            <Text style={styles.tileValue} numberOfLines={1} adjustsFontSizeToFit>
-              {tile.value}
-            </Text>
-            <Text style={styles.tileLabel} numberOfLines={2}>
-              {tile.label}
-            </Text>
-          </View>
-        </AppearItem>
-      ))}
+          </AppearItem>
+        );
+      })}
     </View>
   );
 }
@@ -528,27 +592,43 @@ const styles = StyleSheet.create({
   counterBorder: { borderLeftWidth: 1, borderLeftColor: COLORS.borderLight },
   counterN: { color: COLORS.text, fontSize: 20, lineHeight: 25, fontFamily: FONTS.extraBold },
   counterL: { color: COLORS.textMuted, fontFamily: FONTS.medium, fontSize: 11, textAlign: 'center' },
-  // Tuiles de statistiques (grille 2 colonnes, maquette).
-  tilesGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACE.sm },
-  tileWrap: { flexBasis: '47%', flexGrow: 1 },
-  tile: {
-    minHeight: 108,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: SPACE.sm,
-    paddingVertical: SPACE.sm,
+  // Résumé des statistiques : une seule surface, trois univers lisibles.
+  statsSummary: {
     borderRadius: RADIUS.card,
     borderWidth: 1,
     borderColor: COLORS.borderLight,
     backgroundColor: COLORS.surface,
     ...SHADOW.card,
   },
-  tileIcon: {
-    width: 30, height: 30, borderRadius: RADIUS.pill, backgroundColor: COLORS.primarySoft,
-    alignItems: 'center', justifyContent: 'center', marginBottom: 6,
+  statRow: {
+    minHeight: 100,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACE.sm,
+    paddingHorizontal: SPACE.md,
+    paddingVertical: SPACE.sm,
   },
-  tileValue: { color: COLORS.text, fontSize: 21, lineHeight: 26, fontFamily: FONTS.extraBold, textAlign: 'center' },
-  tileLabel: { color: COLORS.textMuted, fontSize: 12.5, lineHeight: 17, fontFamily: FONTS.regular, marginTop: 2, textAlign: 'center' },
+  statRowBorder: { borderTopWidth: 1, borderTopColor: COLORS.borderLight },
+  statIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: RADIUS.pill,
+    backgroundColor: COLORS.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statContent: { flex: 1, minWidth: 0 },
+  statTitle: { color: COLORS.text, fontSize: 13, lineHeight: 17, fontFamily: FONTS.bold },
+  statMetrics: { flexDirection: 'row', alignItems: 'stretch', marginTop: SPACE.xxs },
+  statCount: { width: 78, minWidth: 0, justifyContent: 'center' },
+  statCountValue: { color: COLORS.text, fontSize: 21, lineHeight: 25, fontFamily: FONTS.extraBold },
+  statDivider: { width: 1, backgroundColor: COLORS.borderLight, marginHorizontal: SPACE.sm },
+  statDuration: { flex: 1, minWidth: 0, justifyContent: 'center' },
+  durationParts: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-end', columnGap: SPACE.xs, rowGap: 0 },
+  durationPart: { flexDirection: 'row', alignItems: 'flex-end', gap: 2 },
+  durationValue: { color: COLORS.text, fontSize: 17, lineHeight: 22, fontFamily: FONTS.extraBold },
+  durationUnit: { color: COLORS.text, fontSize: 12, lineHeight: 18, fontFamily: FONTS.semiBold },
+  statMeta: { color: COLORS.textMuted, fontSize: 11.5, lineHeight: 16, fontFamily: FONTS.medium, marginTop: 1 },
   // Encart streak → Trophées.
   streakCard: {
     minHeight: 68,

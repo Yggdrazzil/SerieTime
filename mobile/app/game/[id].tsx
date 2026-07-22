@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, Pressable, Modal, TextInput, ActivityIndicator, Image, Platform, Linking, Animated, Easing, useWindowDimensions } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Pressable, Modal, TextInput, ActivityIndicator, Image, Platform, Linking, Animated, Easing, useWindowDimensions, KeyboardAvoidingView } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
@@ -690,6 +690,7 @@ function PlaytimeSheet({
   onClose: () => void;
 }) {
   const [value, setValue] = useState('');
+  const insets = useSafeAreaInsets();
   // Pré-remplit avec la valeur connue à chaque ouverture.
   useEffect(() => {
     if (visible) setValue(currentMinutes ? String(Math.round((currentMinutes / 60) * 10) / 10) : '');
@@ -698,73 +699,99 @@ function PlaytimeSheet({
   const valid = value.trim().length > 0 && Number.isFinite(parsed) && parsed >= 0 && parsed <= 100_000;
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={ptStyles.overlay} onPress={onClose}>
-        <Pressable style={ptStyles.card} onPress={(e) => e.stopPropagation()}>
-          <View style={ptStyles.iconWrap}>
-            <Feather name="clock" size={20} color={COLORS.onAccent} />
-          </View>
-          <Text style={ptStyles.title}>Temps de jeu</Text>
-          <Text style={ptStyles.sub} numberOfLines={3}>
-            Combien d’heures as-tu passé sur « {title} » ? C’est déclaratif — tu pourras le corriger à tout moment ici.
-          </Text>
-          <View style={ptStyles.inputRow}>
-            <TextInput
-              style={ptStyles.input}
-              value={value}
-              onChangeText={setValue}
-              keyboardType="decimal-pad"
-              placeholder="Ex. 25"
-              placeholderTextColor={COLORS.textSoft}
-              autoFocus
-              accessibilityLabel="Nombre d'heures de jeu"
-            />
-            <Text style={ptStyles.unit}>heures</Text>
-          </View>
+      <KeyboardAvoidingView
+        style={ptStyles.keyboardAvoider}
+        behavior={Platform.OS === 'ios' ? 'padding' : Platform.OS === 'android' ? 'height' : undefined}
+      >
+        <View style={[ptStyles.overlay, { paddingTop: insets.top + SPACE.xs, paddingBottom: insets.bottom + SPACE.xl }]}>
           <Pressable
-            style={({ pressed }) => [ptStyles.saveBtn, !valid && ptStyles.saveBtnDisabled, pressed && valid && ptStyles.pressed]}
-            disabled={!valid}
-            onPress={() => onSave(parsed)}
+            style={[StyleSheet.absoluteFill, ptStyles.backdrop]}
+            onPress={onClose}
             accessibilityRole="button"
-            accessibilityLabel="Enregistrer le temps de jeu"
-          >
-            <Text style={ptStyles.saveText}>ENREGISTRER</Text>
-          </Pressable>
-          <Pressable onPress={onClose} hitSlop={8} accessibilityRole="button" accessibilityLabel="Plus tard">
-            <Text style={ptStyles.laterText}>Plus tard</Text>
-          </Pressable>
-          {currentMinutes ? (
+            accessibilityLabel="Fermer la saisie du temps de jeu"
+          />
+          <View style={ptStyles.card} accessibilityViewIsModal onAccessibilityEscape={onClose}>
+            <View style={ptStyles.iconWrap}>
+              <Feather name="clock" size={18} color={COLORS.onAccent} />
+            </View>
+            <Text style={ptStyles.title}>Temps de jeu</Text>
+            <Text style={ptStyles.sub}>Indique tes heures. Tu pourras les modifier.</Text>
+            <View style={ptStyles.inputRow}>
+              <TextInput
+                style={ptStyles.input}
+                value={value}
+                onChangeText={setValue}
+                keyboardType="decimal-pad"
+                returnKeyType="done"
+                placeholder="Ex. 25"
+                placeholderTextColor={COLORS.textSoft}
+                selectTextOnFocus
+                accessibilityLabel={`Nombre d'heures de jeu pour ${title}`}
+              />
+              <Text style={ptStyles.unit}>heures</Text>
+            </View>
             <Pressable
-              onPress={() => onSave(null)}
-              hitSlop={8}
+              style={({ pressed }) => [ptStyles.saveBtn, !valid && ptStyles.saveBtnDisabled, pressed && valid && ptStyles.pressed]}
+              disabled={!valid}
+              onPress={() => onSave(parsed)}
               accessibilityRole="button"
-              accessibilityLabel="Effacer le temps déclaré"
+              accessibilityLabel="Enregistrer le temps de jeu"
             >
-              <Text style={ptStyles.clearText}>Effacer le temps déclaré</Text>
+              <Text style={ptStyles.saveText}>ENREGISTRER</Text>
             </Pressable>
-          ) : null}
-        </Pressable>
-      </Pressable>
+            <View style={ptStyles.secondaryActions}>
+              <Pressable
+                style={({ pressed }) => [ptStyles.secondaryBtn, pressed && ptStyles.pressed]}
+                onPress={onClose}
+                accessibilityRole="button"
+                accessibilityLabel="Plus tard"
+              >
+                <Text style={ptStyles.laterText}>Plus tard</Text>
+              </Pressable>
+              {currentMinutes ? (
+                <Pressable
+                  style={({ pressed }) => [ptStyles.secondaryBtn, pressed && ptStyles.pressed]}
+                  onPress={() => onSave(null)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Effacer le temps déclaré"
+                >
+                  <Text style={ptStyles.clearText}>Effacer</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
 
 const ptStyles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: COLORS.overlay, alignItems: 'center', justifyContent: 'center', padding: SPACE.lg },
+  keyboardAvoider: { flex: 1 },
+  overlay: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: SPACE.md,
+  },
+  backdrop: { backgroundColor: COLORS.overlay },
   card: {
     width: '100%',
     maxWidth: 360,
     alignItems: 'center',
     backgroundColor: COLORS.sheet,
     borderRadius: RADIUS.sheet,
-    padding: SPACE.lg,
+    paddingHorizontal: SPACE.lg,
+    paddingVertical: SPACE.md,
     ...SHADOW.card,
   },
-  iconWrap: { width: 46, height: 46, borderRadius: RADIUS.control, backgroundColor: COLORS.yellow, alignItems: 'center', justifyContent: 'center' },
-  title: { color: COLORS.text, fontSize: 19, fontFamily: FONTS.extraBold, marginTop: SPACE.sm },
-  sub: { color: COLORS.textMuted, fontSize: 13.5, lineHeight: 19, fontFamily: FONTS.regular, textAlign: 'center', marginTop: SPACE.xs },
-  inputRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.sm, marginTop: SPACE.md, alignSelf: 'stretch' },
+  iconWrap: { width: 40, height: 40, borderRadius: RADIUS.control, backgroundColor: COLORS.yellow, alignItems: 'center', justifyContent: 'center' },
+  title: { color: COLORS.text, fontSize: 19, fontFamily: FONTS.extraBold, marginTop: SPACE.xs },
+  sub: { color: COLORS.textMuted, fontSize: 13, lineHeight: 18, fontFamily: FONTS.regular, textAlign: 'center', marginTop: SPACE.xxs },
+  inputRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.sm, marginTop: SPACE.sm, alignSelf: 'stretch' },
   input: {
     flex: 1,
+    minHeight: SIZES.touchComfortable,
     color: COLORS.text,
     backgroundColor: COLORS.surfaceMuted,
     borderWidth: 1,
@@ -773,7 +800,7 @@ const ptStyles = StyleSheet.create({
     fontSize: 18,
     fontFamily: FONTS.bold,
     paddingHorizontal: SPACE.sm,
-    paddingVertical: 11,
+    paddingVertical: 9,
     textAlign: 'center',
   },
   unit: { color: COLORS.textMuted, fontSize: 15, fontFamily: FONTS.semiBold },
@@ -784,13 +811,15 @@ const ptStyles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: COLORS.primary,
     borderRadius: RADIUS.pill,
-    marginTop: SPACE.md,
+    marginTop: SPACE.sm,
   },
   saveBtnDisabled: { opacity: 0.4 },
   saveText: { color: COLORS.onPrimary, fontSize: 14, fontFamily: FONTS.extraBold, letterSpacing: 0.5 },
   pressed: { opacity: 0.86, transform: [{ scale: 0.99 }] },
-  laterText: { color: COLORS.textMuted, fontSize: 14, fontFamily: FONTS.bold, marginTop: SPACE.md },
-  clearText: { color: COLORS.danger, fontSize: 13, fontFamily: FONTS.bold, marginTop: SPACE.sm },
+  secondaryActions: { alignSelf: 'stretch', flexDirection: 'row', gap: SPACE.xs, marginTop: SPACE.xs },
+  secondaryBtn: { minHeight: SIZES.touch, flex: 1, alignItems: 'center', justifyContent: 'center', borderRadius: RADIUS.control },
+  laterText: { color: COLORS.textMuted, fontSize: 14, fontFamily: FONTS.bold },
+  clearText: { color: COLORS.danger, fontSize: 13, fontFamily: FONTS.bold },
 });
 
 // Aperçu bande-annonce (16:9) : miniature YouTube + bouton lecture centré. Sur
