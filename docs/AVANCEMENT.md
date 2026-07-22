@@ -7,6 +7,7 @@
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
 Dernière mise à jour : **2026-07-22** (Codex/Étienne) — résumé des statistiques du Profil rendu lisible et responsive
+Dernière mise à jour : **2026-07-22** (Claude/Étienne) — fiche jeu : refonte UX/UI de la carte d'identité (skill impeccable) — un seul format libellé/valeur, genres en tags + notes en **tuiles à dégradé vif** (façon carte « Temps devant des séries »), titre retiré du corps (bannière lisible sur tout fond)
 
 ---
 
@@ -36,7 +37,7 @@ la migration visuelle doit encore être exécutée sans modifier la logique mét
 | Contenu séries via TheTVDB | ✅ Fait | Recherche, fiche, saisons/épisodes, titres/synopsis FR, artworks ; clé dans `apps/server/.env` |
 | Contenu films / tendances via TMDb | ✅ Fait | Clé TMDb (compte Benjamin) configurée sur le serveur de prod ; flux Explorer et images films actifs |
 | File « À voir » / « À venir » | ✅ Fait | Groupes TV Time (pas commencé, à voir, etc.) ; « Regarder plus tard » exclu des deux |
-| Fiche série/film façon TV Time | ✅ Fait | Bannière repliable, onglets À PROPOS / ÉPISODES, distribution (fiches acteurs), « également regardé », similaire à, notes de la communauté, page Commentaires dédiée |
+| Fiche série / film / épisode (identité Prisme) | ✅ Refondue | Lifting anti TV Time (2026-07-21) : pilule verre « SÉRIE/FILM » (plus le jaune), onglets **segmentés Prisme** (À propos / Épisodes), en-têtes de section pastille + sur-titre, pastilles « où regarder » violettes, puces d'intérêt en pilules, barre d'ajout violette, progression série/saison + courbe de notes en violet. Fiche épisode : bannière à dégradé + formes Prisme + sur-titre saison/épisode. **Toutes les infos conservées** (bannière repliable, distribution, « également regardé », similaire à, notes de la communauté, commentaires). Validé au rendu web (Playwright) |
 | Menu « … » de la fiche | ✅ Fait | Personnaliser (affiche + bannière, séries **et** films), Favoris, Ajouter à une liste, Regarder plus tard, Supprimer, Partager |
 | Consultation ≠ suivi | ✅ Fait | Taper un résultat ouvre la fiche sans l'ajouter ; seul le `+` suit (statut « Pas commencée » ; « En cours » au 1er épisode vu) |
 | Recherche (design TV Time) | ✅ Fait | Onglets SÉRIES ET FILMS / JEUX / UTILISATEURS, « Annuler », `+` jaunes, debounce |
@@ -106,6 +107,51 @@ la migration visuelle doit encore être exécutée sans modifier la logique mét
 - **QA** : typecheck mobile et export Expo Web réussis (41 routes) ; test
   Playwright avec les valeurs longues du cas signalé à 320 × 844 et 390 × 844,
   sans débordement horizontal, troncature ni erreur d'exécution.
+### 2026-07-22 — Claude/Étienne : fiche jeu — refonte UX/UI de la carte d'identité
+Retour Étienne : la carte fusionnée précédente faisait « décousu » (trois
+formats coexistants — texte libellé inline pour Genre/Sortie, pilules pour les
+notes, lignes à pictogramme pour le reste) et répétait le titre déjà présent
+dans la bannière. Refonte guidée par le skill `impeccable` (références
+`product` / `layout` / `distill`) :
+- **Un seul format pour les faits** : toutes les infos (Sortie, Plateformes,
+  Développeur, Éditeur, Modes, Temps de jeu) passent dans une **fiche technique
+  uniforme** libellé (gris, à gauche) / valeur (à droite), séparateurs discrets
+  et identiques. Fini les pictogrammes-pastilles et le texte inline « qui se
+  balade ».
+- **Deux zones nettes** : à côté de la jaquette, le « verdict » — **genres en
+  tags** (seul usage de pilule, données catégorielles) + **notes en tuiles**
+  (score en gros + /100 + pictogramme Joueurs/Presse), centré verticalement le
+  long de la jaquette. Puis, sous un premier trait, la fiche technique.
+- **Tuiles de notes vivifiées** (retour Étienne : le fond gris faisait terne) :
+  dégradé vif **indigo → violet → rose** repris de la carte « Temps devant des
+  séries » des Statistiques (`#41288A`/`#6D4ED1`/`#EF5BA8`) + halo lumineux en
+  coin + texte blanc. Joueurs sur la moitié fraîche, Presse sur la moitié
+  chaude → côte à côte elles balaient tout le dégradé signature de l'app.
+- **Titre retiré du corps** : il ne vit plus que dans la bannière (plus de
+  doublon). Ombre portée ajoutée au titre pour rester **lisible quelle que soit
+  la couleur de la bannière** (en plus du dégradé du bas).
+- **Nettoyage** : composant `FactRow` et styles associés remplacés par
+  `RatingTile` + `SpecRow` ; styles morts (title/headFacts/scorePill…) retirés.
+- **Validation** : typecheck mobile OK ; rendus Playwright (jeu suivi, jeu non
+  suivi, bannière quasi blanche) confirmant la cohérence et la lisibilité du
+  titre.
+
+### 2026-07-22 — Claude/Étienne : fiche jeu — carte d'identité + infos fusionnées
+Retour Étienne sur les fiches de jeux vidéo (`mobile/app/game/[id].tsx`) :
+- **Fusion de la section « Informations »** dans la première carte visible en haut
+  de fiche (jaquette + titre + Genre + Sortie + notes Joueurs/Presse). Tout est
+  désormais **une seule section SANS titre** : l'en-tête (jaquette / titre /
+  Genre / Sortie / notes) puis les lignes Plateformes / Développeur / Éditeur /
+  Modes / Temps de jeu empilées en dessous. Plus de doublon (Genre et Sortie ne
+  vivent qu'à côté de la jaquette), ordre logique (identité → détails de prod).
+- **Bannière épurée** : la sous-ligne « année · plateforme » a été retirée — la
+  bannière ne porte plus que la pastille « JEU VIDÉO » et le **nom complet** du
+  jeu ; la date de sortie et les plateformes vivent dans la section fusionnée.
+- **Détail technique** : la `identityCard` passe en colonne, avec un en-tête
+  `identityHead` (jaquette + copie côte à côte) puis les `FactRow` ; styles
+  `heroMeta` et `factList` (devenus inutiles) retirés.
+- **Validation** : typecheck mobile OK ; rendu Playwright de la fiche jeu (suivie
+  et non suivie) confirmant la carte unique sans titre et la bannière au seul nom.
 
 ### 2026-07-22 — Codex/Étienne : modale Temps de jeu adaptée au clavier
 - **Adaptation native** (`mobile/app/game/[id].tsx`) : la modale utilise désormais
@@ -149,6 +195,108 @@ la migration visuelle doit encore être exécutée sans modifier la logique mét
   sur `/notifications` et `/explore` sans débordement ni erreur d'exécution.
   Le typecheck global reste bloqué par trois liens Expo préexistants vers
   `/community` et `/user-library`, hors périmètre de ce lot.
+
+### 2026-07-21 — Claude/Étienne : refonte de la recherche Explorer (UX + tri/filtre jeux)
+Plusieurs retours Étienne sur l'onglet Explorer :
+- **Dernier type mémorisé** : la recherche revenait toujours sur « médias ». Le
+  type (médias / jeux / profils) est désormais **persisté** (`searchType` dans le
+  store) → on reste sur « Jeux » pour en ajouter plusieurs à la suite.
+- **Sélecteur dès le focus** : le sélecteur de type s'affiche **au clic** sur la
+  barre (avant même de taper), plus seulement après saisie.
+- **Croix = effacer seulement** : la croix vide le champ et **reste** sur l'écran
+  de recherche (champ re-focalisé), au lieu de refermer vers le feed.
+- **Retour arrière** : sur l'écran de recherche, le « précédent » ferme la barre
+  et revient au feed TikTok (via `useBackClose`) au lieu de repartir sur l'Accueil.
+- **Recherche jeux — ordre & exhaustivité** (serveur) : `igdbSearch` fusionne
+  toujours la requête « nom contient » (joker, limite 120) → **tous** les jeux
+  dont le nom contient le terme remontent (ex. « Mario ») ; résultats triés
+  **notés d'abord, par popularité (nb de notes) puis note** — fini l'ordre
+  aléatoire. La recherche expose désormais `voteAverage`/`voteCount`/`platforms`.
+- **Filtre des résultats** (`components/explore/SearchFilters.tsx`, design des
+  filtres de bibliothèque) : pilule « FILTRER » + feuille tri + filtre.
+  Médias = tri (Pertinence / Plus récents / A→Z) + type (Séries / Films) ;
+  Jeux = tri (Populaires / Mieux notés / Plus récents / A→Z) + plateforme
+  (liste dynamique issue des résultats).
+- **Badges de filtres actifs** (retour Étienne) : chaque filtre appliqué (type,
+  plateforme, tri non-défaut) s'affiche en **badge amovible** au-dessus du bouton
+  FILTRER — une croix par badge retire ce filtre précis (`FilterBar` + `ActiveChip`).
+- **Plateformes sur les cartes jeux** (retour Étienne) : chaque résultat de
+  recherche jeu affiche ses **plateformes de sortie en badges** (jusqu'à 4 + « +N »)
+  → on reconnaît d'un coup d'œil la version du jeu à laquelle on a joué.
+- **Validation** : tests serveur (290, dont un nouveau sur l'ordre de la
+  recherche jeux) ; rendu Playwright des flux (sélecteur au focus, ordre jeux,
+  feuilles de filtre médias & jeux, croix qui reste, retour qui ferme). Typecheck OK.
+
+### 2026-07-21 — Claude/Étienne : coche « ajouté » recherche + vue grille d'affiches (Accueil/Agenda)
+- **Coche recherche** (`mobile/app/(tabs)/explore.tsx`) : quand un résultat est
+  déjà suivi/ajouté, la coche était un contour vert froid → remplacée par une
+  **pastille verte pleine + coche blanche**, identique à la coche d'épisode vu
+  (CheckCircle). Parité chaleureuse demandée par Étienne.
+- **Bascule vue cartes ⇄ grille d'affiches** (retour Étienne) : bouton d'en-tête
+  (icône grille/liste) posé **à gauche** dans Accueil et Agenda (symétrique de la
+  cloche de notifications). Une **grille d'affiches responsive** (3 colonnes
+  téléphone, 4-5 tablette/large) remplace les cartes pour les **3 sous-onglets**
+  (Séries / Films / Jeux) des deux onglets, en conservant les regroupements
+  (« À voir », « Aujourd'hui », « Février 2027 »…) et une ligne de contexte sous
+  chaque affiche (code épisode, heure, année, date de sortie). Taper une affiche
+  ouvre la fiche.
+  - Nouveau composant `mobile/components/PosterGrid.tsx` (`PosterGrid`,
+    `ViewModeToggle`, `useGridView`) ; réglage **indépendant par onglet**
+    (`gridView.home` / `gridView.agenda`), persisté dans le store ; `TabHeader`
+    gagne un slot `leading`.
+- **Validation** : export web OK, puis rendu Playwright (données simulées) des 6
+  vues en grille (Accueil + Agenda × Séries/Films/Jeux), bascule d'en-tête et
+  préférence partagée vérifiées. Typecheck mobile OK.
+
+### 2026-07-21 — Claude/Étienne : refonte des fiches série / film / épisode (anti TV Time)
+- **Demande Étienne** : les fiches série, film et épisode restaient trop proches
+  de TV Time. Faire un lifting visuel à l'identité **Prisme** en gardant
+  **exactement les mêmes infos**.
+- **Fiche série/film** (`mobile/app/show/[id].tsx`) :
+  - Bannière : pilule « SÉRIE / FILM » en verre translucide (fini la pastille
+    jaune), affiche en arête blanche, barre de progression « En cours » en violet.
+  - Onglets **À propos / Épisodes** → contrôle **segmenté Prisme** (pilule) au
+    lieu du soulignement façon TV Time (valeurs inchangées → logique intacte).
+  - En-têtes de section homogènes (pastille d'icône + sur-titre + titre) sur
+    Où regarder, Informations, Distribution, « également regardé », Notes,
+    Commentaires ; puces « Qu'est-ce qui vous intéresse ? » en pilules qui
+    s'enroulent (fini la liste empilée) ; barre d'ajout **violette** ; courbe des
+    notes et barres de progression de saison en violet ; badges/boutons jaunes
+    résiduels (« également regardé », « Créer une liste ») repassés en violet.
+  - Retrait de la roue crantée décorative de « Où regarder » (non fonctionnelle).
+- **Fiche épisode** (`mobile/components/EpisodeSheet.tsx`) : bannière à dégradé +
+  formes Prisme (plus le simple voile plat) et sur-titre « SAISON X · ÉPISODE Y »
+  au-dessus du code — le reste (Où regarder, À propos, Commentaires) était déjà
+  au format Prisme.
+- **Aucune info retirée** ; toutes les interactions (suivi, favoris, listes,
+  personnalisation, épisodes, feuille épisode, commentaires) inchangées.
+- **Validation** : export web (`expo export -p web`) OK, puis rendu réel dans le
+  Chromium de Playwright (données simulées) des trois fiches + bascule d'onglet +
+  ouverture de la feuille épisode. Typecheck mobile OK.
+
+### 2026-07-21 — Claude/Étienne : Explorer, une seule carte par swipe (fix scroll)
+- **Symptôme** (retour Étienne) : dans le feed TikTok de l'Explorer, un scroll
+  rapide/appuyé faisait défiler **plusieurs cartes d'un coup**, illisibles. Exigé :
+  une seule carte par swipe, quelle que soit la vitesse/force.
+- **Diagnostic** : `pagingEnabled` de React Native Web pose bien
+  `scroll-snap-type: y mandatory` + `scroll-snap-align: start`, mais **Chromium
+  ignore `scroll-snap-stop: always` pendant l'inertie** (reproduit en local : un
+  fling fort saute 5 cartes malgré la règle appliquée). RNW n'émet par ailleurs
+  **que `onScroll`** sur web (aucune phase drag/momentum).
+- **Correctif** — `mobile/components/explore/TikTokFeed.tsx` :
+  - **Natif** : `disableIntervalMomentum` (coupe le momentum au-delà d'une page).
+  - **Web** : garde JS « 1 carte ». Une *ancre* (carte de départ) est calée au
+    `touchStart` et à chaque stabilisation du défilement (débounce 140 ms) ; à
+    chaque `onScroll`, l'offset est borné à **±1 carte** autour de l'ancre — dès
+    que l'inertie dépasse la carte voisine, on la fige sur la frontière. Les
+    défilements programmatiques (avance, tirage, restauration de position,
+    changement de catégorie) neutralisent temporairement la garde (`markProgrammatic`).
+  - Règle `scroll-snap-stop: always` conservée (amélioration progressive là où le
+    moteur l'honore) via injection ciblée sur le sous-arbre du feed.
+- **Validation** : reproduction du fling fort dans le Chromium de Playwright
+  (gestes tactiles CDP avec inertie réelle) → **sans garde : 5 cartes/fling ;
+  avec garde : exactement 1 carte/fling, toutes alignées** sur une frontière de
+  carte. Typecheck mobile OK.
 
 ### 2026-07-21 — Claude/Étienne : export de données au format TV Time
 - **Objectif** (demande produit Étienne) : « se calquer sur le format de TV

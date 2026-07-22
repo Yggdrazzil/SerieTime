@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   FlatList,
   Image as RNImage,
   ActivityIndicator,
+  Platform,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   type ViewToken,
@@ -25,11 +26,40 @@ import { useResolveMedia } from './useResolveMedia';
 import { feedItemKey as keyOf, useFeedSessionStore } from './feedSession';
 import { FEED_CATEGORIES, catOf, type FeedCategory, type FeedItem } from './types';
 
+// `scroll-snap-stop: always` : amélioration progressive du snap web. En théorie
+// il force l'arrêt à CHAQUE carte ; en pratique Chromium l'ignore pendant
+// l'inertie d'un fling (reproduit en local) — la vraie garde « 1 carte » est la
+// borne JS plus bas. On le pose quand même : gratuit, et honoré par les moteurs
+// qui le supportent (Safari, Firefox). Ciblé sur le sous-arbre du feed via le
+// marqueur `data-feed-snap` (posé sur la vue racine).
+let snapStopInjected = false;
+function ensureSnapStopStyle(): void {
+  if (snapStopInjected || typeof document === 'undefined') return;
+  snapStopInjected = true;
+  const el = document.createElement('style');
+  el.setAttribute('data-feed-snap-stop', '');
+  el.textContent = '[data-feed-snap] * { scroll-snap-stop: always; }';
+  document.head.appendChild(el);
+}
+
 export function TikTokFeed({ topInset = 0 }: { topInset?: number }) {
   const queryClient = useQueryClient();
   const resolveMedia = useResolveMedia();
   const listRef = useRef<FlatList<FeedItem>>(null);
   const scrollY = useRef(0); // offset vertical courant du flux (pour le pull-to-refresh web+natif)
+
+  // Garde « une seule carte par swipe » — WEB uniquement (retour Étienne
+  // 2026-07-21). Le natif s'appuie sur pagingEnabled + disableIntervalMomentum ;
+  // sur web, RNW n'émet QUE onScroll (pas de phase drag/momentum) et Chromium
+  // ignore `scroll-snap-stop` pendant l'inertie → un fling fort saute plusieurs
+  // cartes. On borne donc chaque geste à ±1 carte autour d'une « ancre » (carte
+  // de départ) : dès que l'inertie dépasse la carte voisine, on la fige sur la
+  // frontière. `anchorRef` est (re)calé au toucher et à la stabilisation ;
+  // `suppressClampUntil` neutralise la garde pendant nos défilements
+  // programmatiques (avance, tirage, restauration de position).
+  const anchorRef = useRef(0);
+  const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const suppressClampUntil = useRef(0);
 
   // Session d'onglet (position + choix optimistes), module-scope : survit aux
   // remontages (fiche, recherche, masquage d'onglet). Un re-tap de l'onglet
@@ -112,10 +142,51 @@ export function TikTokFeed({ topInset = 0 }: { topInset?: number }) {
         if (d.length === 0 || h <= 0) return;
         const idx = Math.max(0, Math.min(useFeedSessionStore.getState().index, d.length - 1));
         scrollY.current = idx * h; // le pull-to-refresh ne doit capter qu'en haut
+        anchorRef.current = idx; // recale l'ancre de la garde « 1 carte »
+        suppressClampUntil.current = Date.now() + 500; // saut programmatique : ne pas brider
         listRef.current?.scrollToIndex({ index: idx, animated: false });
       });
       return () => cancelAnimationFrame(raf);
     }, []),
+  );
+
+  // Injection unique de la règle scroll-snap-stop (web only) + nettoyage du
+  // minuteur de stabilisation de la garde « 1 carte ».
+  useEffect(() => {
+    if (Platform.OS === 'web') ensureSnapStopStyle();
+    return () => {
+      if (settleTimer.current) clearTimeout(settleTimer.current);
+    };
+  }, []);
+
+  // Neutralise la garde « 1 carte » le temps d'un défilement programmatique et
+  // recale l'ancre sur la carte visée (web only ; no-op ailleurs).
+  const markProgrammatic = useCallback((index: number) => {
+    anchorRef.current = index;
+    suppressClampUntil.current = Date.now() + 500;
+  }, []);
+
+  // Cœur de la garde : appelée à chaque onScroll (web). Recale l'ancre à la
+  // stabilisation ; tant qu'un geste est en cours, borne l'offset à ±1 carte.
+  const clampOneCard = useCallback(
+    (offsetY: number) => {
+      if (Platform.OS !== 'web' || height <= 0) return;
+      // Débounce de stabilisation : quand le défilement se calme (~140 ms sans
+      // event), l'ancre devient la carte réellement affichée.
+      if (settleTimer.current) clearTimeout(settleTimer.current);
+      settleTimer.current = setTimeout(() => {
+        anchorRef.current = Math.round(scrollY.current / height);
+      }, 140);
+      if (Date.now() < suppressClampUntil.current) return; // saut programmatique
+      const hi = (anchorRef.current + 1) * height;
+      const lo = (anchorRef.current - 1) * height;
+      if (offsetY > hi + 1) {
+        listRef.current?.scrollToOffset({ offset: hi, animated: false });
+      } else if (offsetY < lo - 1) {
+        listRef.current?.scrollToOffset({ offset: Math.max(0, lo), animated: false });
+      }
+    },
+    [height],
   );
 
   const invalidateLibrary = useCallback(() => {
@@ -179,8 +250,9 @@ export function TikTokFeed({ topInset = 0 }: { topInset?: number }) {
     setExtra([]);
     useFeedSessionStore.getState().clearDeck();
     await (isGames ? gamesQuery.refetch() : refetch());
+    markProgrammatic(0);
     listRef.current?.scrollToOffset({ offset: 0, animated: false });
-  }, [refetch, isGames, gamesQuery]);
+  }, [refetch, isGames, gamesQuery, markProgrammatic]);
 
   // Arrivé sur la CARTE DE FIN (page après la dernière proposition) : nouveau
   // tirage complet et retour en haut — « tu as tout vu, on t'en ressert ».
@@ -207,9 +279,12 @@ export function TikTokFeed({ topInset = 0 }: { topInset?: number }) {
   const advance = useCallback(
     (index: number) => {
       const next = index + 1;
-      if (next < deck.length) listRef.current?.scrollToIndex({ index: next, animated: true });
+      if (next < deck.length) {
+        markProgrammatic(next);
+        listRef.current?.scrollToIndex({ index: next, animated: true });
+      }
     },
-    [deck.length],
+    [deck.length, markProgrammatic],
   );
 
   const refreshing = isGames ? gamesQuery.isRefetching : isRefetching;
@@ -219,7 +294,11 @@ export function TikTokFeed({ topInset = 0 }: { topInset?: number }) {
   if (isGames ? gamesQuery.isLoading : isLoading) return <Loading />;
 
   return (
-    <View style={styles.wrap} onLayout={(e) => setHeight(e.nativeEvent.layout.height)}>
+    <View
+      style={styles.wrap}
+      onLayout={(e) => setHeight(e.nativeEvent.layout.height)}
+      {...(Platform.OS === 'web' ? { dataSet: { feedSnap: 'y' } } : {})}
+    >
       {/* Arrière-plan FIGÉ (retour Étienne 2026-07-21) : le fond sombre + les
           formes Prisme vivent ici, derrière la liste — ils ne défilent jamais.
           Seules les affiches (dans chaque carte) glissent au-dessus. */}
@@ -238,6 +317,9 @@ export function TikTokFeed({ topInset = 0 }: { topInset?: number }) {
             data={deck}
             keyExtractor={keyOf}
             pagingEnabled
+            // Natif : coupe le momentum au-delà d'une page → une seule carte par
+            // swipe même lancé fort (pendant sur web = scroll-snap-stop, cf. haut).
+            disableIntervalMomentum
             showsVerticalScrollIndicator={false}
             accessibilityLabel="Suggestions personnalisées"
             decelerationRate="fast"
@@ -251,9 +333,15 @@ export function TikTokFeed({ topInset = 0 }: { topInset?: number }) {
             maxToRenderPerBatch={3}
             windowSize={3}
             scrollEventThrottle={16}
+            // Web : un toucher démarre un geste → l'ancre de la garde « 1 carte »
+            // devient la carte actuellement affichée (no-op en natif).
+            onTouchStart={() => {
+              if (Platform.OS === 'web' && height > 0) anchorRef.current = Math.round(scrollY.current / height);
+            }}
             onScroll={(e: NativeSyntheticEvent<NativeScrollEvent>) => {
               scrollY.current = e.nativeEvent.contentOffset.y;
               maybeEndRefresh(e.nativeEvent.contentOffset.y);
+              clampOneCard(e.nativeEvent.contentOffset.y);
             }}
             // Position finale fiable après snap/momentum (onScroll throttlé peut
             // rater la dernière frame → le pull-to-refresh volait des swipes).
@@ -349,6 +437,7 @@ export function TikTokFeed({ topInset = 0 }: { topInset?: number }) {
               ]}
               onPress={() => {
                 setCat(c.key);
+                markProgrammatic(0);
                 listRef.current?.scrollToOffset({ offset: 0, animated: false });
               }}
               accessibilityRole="tab"

@@ -63,34 +63,61 @@ export async function gamesRoutes(app: FastifyInstance): Promise<void> {
         // la recherche — elles vivent dans la section dédiée de la fiche.
         NOT: { game: { isDlc: true } },
       },
-      include: { statuses: { where: { userId: request.userId } } },
-      take: 10,
+      include: { statuses: { where: { userId: request.userId } }, game: true },
+      take: 50,
     });
     const seen = new Set(local.map((m) => m.igdbId).filter(Boolean));
     const allowAdult = await allowsAdultContent(request.userId);
     const games = await igdbSearch(needle, allowAdult).catch(() => []);
-    return {
-      results: [
-        ...local.map((m) => ({
-          id: m.id,
-          igdbId: m.igdbId,
-          title: m.localizedTitle ?? m.title,
-          year: m.year,
-          posterPath: m.posterPath,
-          inLibrary: m.statuses.length > 0,
-        })),
-        ...games
-          .filter((g) => !seen.has(String(g.id)))
-          .map((g) => ({
-            id: null,
-            igdbId: String(g.id),
-            title: g.name,
-            year: g.first_release_date ? new Date(g.first_release_date * 1000).getFullYear() : null,
-            posterPath: g.cover ? igdbImageUrl(g.cover.image_id) : null,
-            inLibrary: false,
-          })),
-      ],
+    // `platforms` renvoyé en tableau (filtre côté client) : local = string
+    // « Plateforme A, Plateforme B » à découper ; IGDB = objets {name}.
+    const splitPlatforms = (s: string | null | undefined) =>
+      s ? s.split(',').map((x) => x.trim()).filter(Boolean) : [];
+
+    type GameResult = {
+      id: string | null; igdbId: string | null; title: string; year: number | null;
+      posterPath: string | null; inLibrary: boolean;
+      voteAverage: number | null; voteCount: number | null; platforms: string[];
     };
+    const results: GameResult[] = [
+      ...local.map((m) => ({
+        id: m.id,
+        igdbId: m.igdbId,
+        title: m.localizedTitle ?? m.title,
+        year: m.year,
+        posterPath: m.posterPath,
+        inLibrary: m.statuses.length > 0,
+        voteAverage: m.voteAverage,
+        voteCount: m.voteCount,
+        platforms: splitPlatforms(m.game?.platforms),
+      })),
+      ...games
+        .filter((g) => !seen.has(String(g.id)))
+        .map((g) => ({
+          id: null,
+          igdbId: String(g.id),
+          title: g.name,
+          year: g.first_release_date ? new Date(g.first_release_date * 1000).getFullYear() : null,
+          posterPath: g.cover ? igdbImageUrl(g.cover.image_id) : null,
+          inLibrary: false,
+          voteAverage: typeof g.total_rating === 'number' ? g.total_rating / 10 : null,
+          voteCount: typeof g.total_rating_count === 'number' ? g.total_rating_count : null,
+          platforms: g.platforms ? g.platforms.map((p) => p.name) : [],
+        })),
+    ];
+
+    // Ordre par défaut (retour Étienne : plus d'ordre « aléatoire ») : les jeux
+    // NOTÉS d'abord, puis par popularité (nombre de notes) et meilleure note —
+    // les titres connus (Mario…) remontent en tête ; année/titre départagent.
+    const rank = (r: GameResult) => (r.voteCount && r.voteCount > 0 ? 1 : 0);
+    results.sort((a, b) =>
+      rank(b) - rank(a) ||
+      (b.voteCount ?? 0) - (a.voteCount ?? 0) ||
+      (b.voteAverage ?? 0) - (a.voteAverage ?? 0) ||
+      (b.year ?? 0) - (a.year ?? 0) ||
+      a.title.localeCompare(b.title, 'fr'),
+    );
+    return { results };
   });
 
   app.post('/api/games/add-from-igdb', async (request) => {

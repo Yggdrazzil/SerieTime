@@ -84,7 +84,7 @@ export function searchQueryBody(q: string, allowAdult = false): string {
   // La clause fait partie du corps Apicalypse = clé de cache → isolation entre
   // comptes 18+ et comptes standards.
   const where = allowAdult ? '' : ` where ${SAFE_THEMES};`;
-  return `search "${q.replace(/"/g, '')}"; ${FIELDS};${where} limit 30;`;
+  return `search "${q.replace(/"/g, '')}"; ${FIELDS};${where} limit 50;`;
 }
 
 // Repli PRÉFIXE : le `search` plein-texte IGDB ne matche pas les mots partiels
@@ -93,17 +93,19 @@ export function searchQueryBody(q: string, allowAdult = false): string {
 export function prefixQueryBody(q: string, allowAdult = false): string {
   const safe = q.replace(/["\\]/g, '');
   const themes = allowAdult ? '' : ` & ${SAFE_THEMES}`;
-  return `${FIELDS}; where name ~ *"${safe}"*${themes}; sort total_rating_count desc; limit 30;`;
+  // limit élevé + tri par popularité (nb de notes) : TOUS les jeux dont le nom
+  // contient le terme remontent (ex. « Mario »), les plus connus en tête.
+  return `${FIELDS}; where name ~ *"${safe}"*${themes}; sort total_rating_count desc; limit 120;`;
 }
 
 export async function igdbSearch(q: string, allowAdult = false): Promise<IgdbGame[]> {
   const games = ((await igdbQuery<IgdbGame[]>('games', searchQueryBody(q, allowAdult), DAY)) ?? []).filter(isMainGame);
-  // Peu/pas de résultats plein-texte → tentative joker (saisie partielle).
-  if (games.length < 3) {
-    const viaPrefix = ((await igdbQuery<IgdbGame[]>('games', prefixQueryBody(q, allowAdult), DAY)) ?? []).filter(isMainGame);
-    const seen = new Set(games.map((g) => g.id));
-    for (const g of viaPrefix) if (!seen.has(g.id)) games.push(g);
-  }
+  // On fusionne TOUJOURS la requête « nom contient » (joker) : le `search`
+  // plein-texte d'IGDB est limité et manque des titres (saisie partielle, longue
+  // liste « Mario »…). Le joker garantit l'exhaustivité par nom ; dédup par id.
+  const viaPrefix = ((await igdbQuery<IgdbGame[]>('games', prefixQueryBody(q, allowAdult), DAY)) ?? []).filter(isMainGame);
+  const seen = new Set(games.map((g) => g.id));
+  for (const g of viaPrefix) if (!seen.has(g.id)) games.push(g);
   return allowAdult ? games : games.filter(isSafeGame);
 }
 

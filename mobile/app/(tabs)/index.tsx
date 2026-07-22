@@ -18,6 +18,7 @@ import { useFloatingSection, FloatingSectionPill } from '@/components/FloatingSe
 import { SegmentedFilter, TabHeader } from '@/components/prisme';
 import { QueueSkeleton } from '@/components/skeletons';
 import { usePullRefresh } from '@/lib/usePullRefresh';
+import { PosterGrid, ViewModeToggle, useGridView, type PosterSection } from '@/components/PosterGrid';
 
 // Accueil coupé en trois (demande produit 2026-07-20, miroir de l'Agenda) :
 // Séries = la file d'épisodes à voir (contenu historique de l'Accueil),
@@ -38,7 +39,7 @@ export default function ShowsScreen() {
   return (
     <View key={resetSeq} style={{ flex: 1, backgroundColor: COLORS.pageMuted }}>
       <View style={[styles.homeHeader, { paddingTop: insets.top }]}>
-        <TabHeader title="À voir" trailing={<HomeHeaderActions />} />
+        <TabHeader title="À voir" leading={<ViewModeToggle tab="home" />} trailing={<HomeHeaderActions />} />
         <SegmentedFilter
           options={HOME_TABS}
           value={tab}
@@ -123,6 +124,8 @@ const QueueRow = React.memo(function QueueRow({
 
 function QueueView() {
   const qc = useQueryClient();
+  const router = useRouter();
+  const gridView = useGridView('home');
   // L'historique est masqué au-dessus de la liste : on cale le scroll initial
   // juste en dessous, il se découvre en faisant défiler vers le haut (TV Time).
   const scrollRef = useRef<ScrollView>(null);
@@ -257,6 +260,32 @@ function QueueView() {
   const groups = new Map<string, QueueItemDto[]>();
   (data?.items ?? []).forEach((it) => groups.set(it.group, [...(groups.get(it.group) ?? []), it]));
 
+  // Vue grille d'affiches : les séries à voir en posters, groupées comme les
+  // cartes ; taper une affiche ouvre la fiche de la série (l'historique et la
+  // carte héro restent propres à la vue cartes).
+  if (gridView) {
+    const sections: PosterSection[] = [...groups.entries()].map(([group, items]) => ({
+      key: group,
+      header: <GroupHead label={queueGroupLabel(group)} count={items.length} />,
+      cells: items.map((it) => ({
+        key: it.media.id,
+        title: it.media.title,
+        sub: it.nextEpisode ? episodeCodeCompact(it.nextEpisode.seasonNumber, it.nextEpisode.episodeNumber) : null,
+        uri: tmdbImage(it.media.posterPath, 'w342'),
+        onPress: () => router.push(`/show/${it.media.id}`),
+        accessibilityHint: 'Ouvre la fiche de la série',
+      })),
+    }));
+    if (sections.length === 0)
+      return <EmptyState title="Rien à voir pour le moment" message="Ajoutez des séries depuis Explorer ou importez vos données TV Time." />;
+    return (
+      <PosterGrid
+        sections={sections}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} colors={[COLORS.primary]} />}
+      />
+    );
+  }
+
   return (
     <View style={{ flex: 1 }}>
     <ScrollView
@@ -373,6 +402,7 @@ type MoviesResponse = { toWatch: MediaDto[]; upcoming: { media: MediaDto; releas
 
 function MoviesToWatchView() {
   const router = useRouter();
+  const gridView = useGridView('home');
   const { data, isLoading, isError, refetch, isRefetching } = useQuery({
     queryKey: ['movies'],
     queryFn: () => api.get<MoviesResponse>('/api/movies'),
@@ -383,6 +413,24 @@ function MoviesToWatchView() {
   const items = data?.toWatch ?? [];
   if (items.length === 0)
     return <EmptyState title="Aucun film à voir" message="Ajoutez des films depuis Explorer : ils vous attendront ici." />;
+  if (gridView)
+    return (
+      <PosterGrid
+        sections={[{
+          key: 'a-voir',
+          header: <GroupHead label="À voir" count={items.length} unit="film" />,
+          cells: items.map((media) => ({
+            key: media.id,
+            title: media.title,
+            sub: media.year ? String(media.year) : null,
+            uri: tmdbImage(media.posterPath ?? null, 'w342'),
+            onPress: () => router.push(`/show/${media.id}?type=movie`),
+            accessibilityHint: 'Ouvre la fiche du film',
+          })),
+        }]}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} colors={[COLORS.primary]} />}
+      />
+    );
   return (
     <ScrollView
       contentContainerStyle={styles.homeListContent}
@@ -412,6 +460,7 @@ type HomeGameDto = { id: string; title: string; posterPath: string | null; year:
 
 function GamesWishlistView() {
   const router = useRouter();
+  const gridView = useGridView('home');
   const { data, isLoading, isError, refetch, isRefetching } = useQuery({
     queryKey: ['games', 'library'],
     queryFn: () => api.get<{ wishlist: HomeGameDto[] }>('/api/games'),
@@ -425,6 +474,24 @@ function GamesWishlistView() {
       <EmptyState
         title="Aucun jeu en attente"
         message="Marquez des jeux en « Voulu » depuis Explorer : votre liste d'envies s'affichera ici."
+      />
+    );
+  if (gridView)
+    return (
+      <PosterGrid
+        sections={[{
+          key: 'voulus',
+          header: <GroupHead label="Voulus" count={items.length} unit="jeu" unitPlural="jeux" />,
+          cells: items.map((game) => ({
+            key: game.id,
+            title: game.title,
+            sub: game.year ? String(game.year) : null,
+            uri: tmdbImage(game.posterPath, 'w342'),
+            onPress: () => router.push(`/game/${game.id}`),
+            accessibilityHint: 'Ouvre la fiche du jeu',
+          })),
+        }]}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} colors={[COLORS.primary]} />}
       />
     );
   return (
@@ -603,6 +670,10 @@ function HeroCard({
 }
 
 export function UpcomingView() {
+  const router = useRouter();
+  // UpcomingView est la vue « Séries » de l'AGENDA (bien que définie ici) → son
+  // réglage grille suit l'onglet Agenda, pas Accueil.
+  const gridView = useGridView('agenda');
   // Historique des sorties (HIER, AVANT-HIER…) masqué au-dessus de la liste,
   // comme l'historique de visionnage de « À voir » : le scroll initial se cale
   // sur AUJOURD'HUI, on remonte pour rattraper une sortie manquée.
@@ -644,6 +715,37 @@ export function UpcomingView() {
   const pastGroups = data?.past ?? [];
   if (!data || (data.groups.length === 0 && pastGroups.length === 0))
     return <EmptyState title="Aucun épisode à venir" message="Les prochaines diffusions apparaîtront ici." />;
+
+  // Vue grille : affiches des séries dont un épisode arrive, groupées par période
+  // (les sorties passées estompées). Taper une affiche ouvre la fiche de la série.
+  if (gridView) {
+    const toCells = (items: UpcomingItemDto[], past: boolean) =>
+      items
+        .filter((it) => it.episodes[0])
+        .map((it) => {
+          const ep = it.episodes[0];
+          const air = airTimeLabel(ep.airDate);
+          return {
+            key: `${it.media.id}-${it.date}`,
+            title: it.media.title,
+            sub: [episodeCode(ep.seasonNumber, ep.episodeNumber), air].filter(Boolean).join(' · '),
+            uri: tmdbImage(it.media.posterPath, 'w342'),
+            onPress: () => router.push(`/show/${it.media.id}`),
+            accessibilityHint: 'Ouvre la fiche de la série',
+            dimmed: past,
+          };
+        });
+    const sections: PosterSection[] = [
+      ...pastGroups.map((g) => ({ key: `p-${g.label}`, header: <PillHeader label={g.label} />, cells: toCells(g.items, true) })),
+      ...data.groups.map((g) => ({ key: g.label, header: <PillHeader label={g.label} />, cells: toCells(g.items, false) })),
+    ];
+    return (
+      <PosterGrid
+        sections={sections}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} colors={[COLORS.primary]} />}
+      />
+    );
+  }
 
   return (
     <ScrollView
