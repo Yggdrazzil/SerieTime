@@ -6,7 +6,7 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
-Dernière mise à jour : **2026-07-22** (Claude/Étienne) — fiche jeu : section « Informations » fusionnée dans la carte d'identité du haut (une seule section sans titre, sans doublon) et bannière réduite au seul nom du jeu
+Dernière mise à jour : **2026-07-22** (Claude/Étienne) — fiche jeu : refonte UX/UI de la carte d'identité (skill impeccable) — un seul format libellé/valeur, genres en tags + notes en tuiles, titre retiré du corps (bannière lisible sur tout fond)
 
 ---
 
@@ -91,6 +91,31 @@ la migration visuelle doit encore être exécutée sans modifier la logique mét
 6. Publication native optionnelle (EAS Build APK, puis stores).
 
 ## Journal des modifications
+
+### 2026-07-22 — Claude/Étienne : fiche jeu — refonte UX/UI de la carte d'identité
+Retour Étienne : la carte fusionnée précédente faisait « décousu » (trois
+formats coexistants — texte libellé inline pour Genre/Sortie, pilules pour les
+notes, lignes à pictogramme pour le reste) et répétait le titre déjà présent
+dans la bannière. Refonte guidée par le skill `impeccable` (références
+`product` / `layout` / `distill`) :
+- **Un seul format pour les faits** : toutes les infos (Sortie, Plateformes,
+  Développeur, Éditeur, Modes, Temps de jeu) passent dans une **fiche technique
+  uniforme** libellé (gris, à gauche) / valeur (à droite), séparateurs discrets
+  et identiques. Fini les pictogrammes-pastilles et le texte inline « qui se
+  balade ».
+- **Deux zones nettes** : à côté de la jaquette, le « verdict » — **genres en
+  tags** (seul usage de pilule, données catégorielles) + **notes en tuiles**
+  (score en gros + /100 + petit pictogramme teinté Joueurs/Presse), centré
+  verticalement le long de la jaquette. Puis, sous un premier trait, la fiche
+  technique.
+- **Titre retiré du corps** : il ne vit plus que dans la bannière (plus de
+  doublon). Ombre portée ajoutée au titre pour rester **lisible quelle que soit
+  la couleur de la bannière** (en plus du dégradé du bas).
+- **Nettoyage** : composant `FactRow` et styles associés remplacés par
+  `RatingTile` + `SpecRow` ; styles morts (title/headFacts/scorePill…) retirés.
+- **Validation** : typecheck mobile OK ; rendus Playwright (jeu suivi, jeu non
+  suivi, bannière quasi blanche) confirmant la cohérence et la lisibilité du
+  titre.
 
 ### 2026-07-22 — Claude/Étienne : fiche jeu — carte d'identité + infos fusionnées
 Retour Étienne sur les fiches de jeux vidéo (`mobile/app/game/[id].tsx`) :
