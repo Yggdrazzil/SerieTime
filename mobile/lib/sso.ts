@@ -1,21 +1,5 @@
 import { Platform } from 'react-native';
 
-// Fond sombre au moment du RENDU (pas un `IS_DARK` importé : ce module peut
-// recevoir une instance de theme.ts résolue à un autre instant — matchMedia
-// pas encore stabilisé —, d'où un bouton Google resté blanc sur thème sombre).
-// On lit le vrai état : `colorScheme` posé par app/_layout.tsx d'après le thème
-// actif, avec repli sur la luminance du fond du document.
-function isDarkUi(): boolean {
-  if (typeof document === 'undefined') return false;
-  const cs = document.documentElement.style.colorScheme;
-  if (cs === 'dark') return true;
-  if (cs === 'light') return false;
-  const m = getComputedStyle(document.body).backgroundColor.match(/\d+/g);
-  if (!m) return false;
-  const [r, g, b] = m.map(Number);
-  return 0.299 * r + 0.587 * g + 0.114 * b < 128;
-}
-
 // Aide SSO côté WEB APP : charge les SDK officiels Google/Facebook et récupère
 // un jeton à envoyer au serveur (/api/auth/oauth ou /link). Le natif (Expo Go)
 // n'est pas encore géré ici (viendra avec expo-auth-session).
@@ -74,9 +58,12 @@ export async function initGoogleButton(
   const buttonWidth = Math.max(200, Math.min(400, containerWidth));
   g.accounts.id.renderButton(el, {
     type: 'standard',
-    // Thème sombre : bouton noir officiel (le thème `outline` blanc était le
-    // seul élément blanc sur la carte sombre — « bouton blanc » signalé).
-    theme: isDarkUi() ? 'filled_black' : 'outline',
+    // Bouton officiel Google en `outline` (pilule blanche) : c'est le rendu
+    // standard imposé par Google. On a testé `filled_black` en thème sombre,
+    // mais l'iframe GSI (cross-origin) a un fond blanc interne — un bouton noir
+    // y fait apparaître un vilain rectangle blanc autour, pire que la pilule
+    // blanche qui, elle, se fond dans ce fond. On garde donc `outline` partout.
+    theme: 'outline',
     size: 'large',
     text: 'continue_with',
     shape: 'pill',
