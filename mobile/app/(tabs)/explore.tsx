@@ -718,8 +718,15 @@ function UserResults({ query }: { query: string }) {
     try {
       if (currently) await api.del(`/api/social/follow/${u.id}`);
       else await api.post(`/api/social/follow/${u.id}`);
+      // Mêmes invalidations que l'onglet Amis (social.tsx) : sans ['user', id],
+      // ['stats','leaderboard'] et ['gamification'], suivre depuis la recherche
+      // laissait le profil de la personne, le classement et la gamification
+      // périmés jusqu'à un refresh manuel.
       queryClient.invalidateQueries({ queryKey: ['social'] });
       queryClient.invalidateQueries({ queryKey: ['profile'] });
+      queryClient.invalidateQueries({ queryKey: ['user', u.id] });
+      queryClient.invalidateQueries({ queryKey: ['stats', 'leaderboard'] });
+      queryClient.invalidateQueries({ queryKey: ['gamification'] });
     } catch {
       setOverrides((o) => ({ ...o, [u.id]: currently }));
     } finally {

@@ -28,6 +28,12 @@ export function SsoButtons({
   const [fbBusy, setFbBusy] = useState(false);
   const [dcBusy, setDcBusy] = useState(false);
   const gRef = useRef<View>(null);
+  // `onToken` change d'identité à chaque rendu du parent (défini inline). Sans
+  // cette ref, l'effet ci-dessous se re-jouerait à chaque frappe et RE-rendrait
+  // le bouton Google (innerHTML='' + renderButton) → scintillement (bug signalé
+  // 2026-07-22). On ne dépend donc que de `cfg` (résolu une seule fois).
+  const onTokenRef = useRef(onToken);
+  onTokenRef.current = onToken;
 
   useEffect(() => {
     let cancelled = false;
@@ -37,10 +43,10 @@ export function SsoButtons({
 
   useEffect(() => {
     if (!cfg?.google || !ssoWebAvailable() || !gRef.current) return;
-    initGoogleButton(cfg.googleClientId, gRef.current as unknown as HTMLElement, (t) => onToken('google', t)).catch(
+    initGoogleButton(cfg.googleClientId, gRef.current as unknown as HTMLElement, (t) => onTokenRef.current('google', t)).catch(
       () => undefined,
     );
-  }, [cfg, onToken]);
+  }, [cfg]);
 
   // Natif (Expo Go) : SSO web-only pour l'instant.
   if (!ssoWebAvailable() || !cfg || (!cfg.google && !cfg.facebook && !cfg.discord)) return null;

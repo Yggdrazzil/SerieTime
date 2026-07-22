@@ -168,10 +168,6 @@ export default function Setup() {
           </View>
 
           <View style={styles.hero}>
-            <View style={styles.eyebrowRow}>
-              <Feather name={step === 'server' ? 'server' : 'aperture'} size={14} color={COLORS.primary} />
-              <Text style={styles.eyebrow}>{step === 'server' ? 'Configuration' : 'Votre espace personnel'}</Text>
-            </View>
             <Text accessibilityRole="header" style={[styles.title, compact && styles.titleCompact]}>
               {step === 'server'
                 ? 'Reliez votre univers.'
@@ -208,7 +204,7 @@ export default function Setup() {
                   <TextInput
                     style={styles.input}
                     placeholder="http://192.168.1.42:4000"
-                    placeholderTextColor={COLORS.text}
+                    placeholderTextColor={COLORS.textSoft}
                     autoCapitalize="none"
                     autoCorrect={false}
                     keyboardType="url"
@@ -373,7 +369,7 @@ export default function Setup() {
                           textContentType="emailAddress"
                           accessibilityLabel="E-mail"
                           placeholder="vous@exemple.com"
-                          placeholderTextColor={COLORS.text}
+                          placeholderTextColor={COLORS.textSoft}
                         />
                       </View>
                     </View>
@@ -393,7 +389,7 @@ export default function Setup() {
                           returnKeyType="done"
                           accessibilityLabel="Mot de passe"
                           placeholder="8 caractères minimum"
-                          placeholderTextColor={COLORS.text}
+                          placeholderTextColor={COLORS.textSoft}
                         />
                       </View>
                     </View>
@@ -526,14 +522,6 @@ const styles = StyleSheet.create({
   },
   brandTagline: { color: COLORS.text, fontSize: 12, lineHeight: 17, fontFamily: FONTS.semiBold },
   hero: { marginTop: SPACE.xl, marginBottom: SPACE.lg },
-  eyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.xs, marginBottom: SPACE.xs },
-  eyebrow: {
-    color: COLORS.primary,
-    fontFamily: FONTS.bold,
-    fontSize: 11,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-  },
   title: {
     color: COLORS.text,
     fontFamily: FONTS.extraBold,
@@ -619,8 +607,8 @@ const styles = StyleSheet.create({
   feedbackError: { backgroundColor: COLORS.surfaceMuted, borderColor: COLORS.danger },
   feedbackSuccess: { backgroundColor: COLORS.surfaceMuted, borderColor: COLORS.success },
   feedbackText: { flex: 1, color: COLORS.text, fontFamily: FONTS.semiBold, fontSize: 13, lineHeight: 18 },
-  error: { color: COLORS.text },
-  success: { color: COLORS.text },
+  error: { color: COLORS.danger },
+  success: { color: COLORS.success },
   secondaryButton: {
     minHeight: SIZES.touchComfortable,
     flexDirection: 'row',

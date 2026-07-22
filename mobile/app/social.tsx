@@ -267,6 +267,25 @@ export function FeedTab({ header }: { header?: React.ReactElement }) {
     onError: (_error, _item, context) => {
       if (context?.previous) queryClient.setQueryData(FEED_KEY, context.previous);
     },
+    // Réconciliation avec la vérité serveur ({ reacted, count }) : l'optimiste
+    // ±1 pouvait dériver sous réactions concurrentes. On aligne total + mine.
+    onSuccess: (res, item) => {
+      queryClient.setQueryData<{ items: FeedItem[] }>(FEED_KEY, (old) =>
+        old
+          ? {
+              ...old,
+              items: old.items.map((it) => {
+                if (it.kind !== item.kind || it.id !== item.id) return it;
+                const r = it.reactions ?? { total: 0, mine: [], counts: {} };
+                const mine = res.reacted
+                  ? (r.mine.includes(HEART) ? r.mine : [...r.mine, HEART])
+                  : r.mine.filter((e) => e !== HEART);
+                return { ...it, reactions: { ...r, total: res.count, mine } };
+              }),
+            }
+          : old,
+      );
+    },
   });
 
   // Référence stable passée aux cartes mémoïsées : évite de re-rendre les
