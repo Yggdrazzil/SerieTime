@@ -6,6 +6,7 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
+Dernière mise à jour : **2026-07-22** (Claude/Étienne) — Recherche jeux : plateformes enrichies depuis IGDB sur les jeux locaux hérités (filtre « Plateforme » de nouveau exploitable)
 Dernière mise à jour : **2026-07-22** (Claude/Benjamin) — écran bibliothèque Jeux (`/games`, ouvert depuis le Profil) : retrait des carrousels « Découverte » Populaires/À venir (redondants avec l'Explorer qui a déjà recherche + tri « Populaires ») ; l'état vide redirige vers l'Explorer. « Sorties à venir » (jeux suivis) conservé. −83 lignes, typecheck clean.
 Dernière mise à jour : **2026-07-22** (Claude/Étienne) — Profil : « Temps déclaré » → « Temps de jeu » et titre de section « Récompenses » au-dessus de la carte Trophées
 Dernière mise à jour : **2026-07-22** (Codex/Étienne) — résumé des statistiques du Profil rendu lisible et responsive
@@ -94,6 +95,25 @@ la migration visuelle doit encore être exécutée sans modifier la logique mét
 6. Publication native optionnelle (EAS Build APK, puis stores).
 
 ## Journal des modifications
+
+### 2026-07-22 — Claude/Étienne : recherche jeux — filtre « Plateforme » réparé (enrichissement IGDB)
+- **Symptôme** (retour Étienne) : à la recherche de jeux, le filtre « Plateforme »
+  ne proposait que « Toutes les plateformes » — impossible de trier par console.
+- **Cause** (`apps/server/src/modules/games/routes.ts`, `/api/games/search`) : un
+  jeu déjà en base **sans plateformes** (données héritées, cache antérieur au
+  champ `platforms`) était listé en premier, et son doublon IGDB — pourtant
+  porteur des plateformes/notes — était **écarté par la déduplication**. Résultat :
+  aucune plateforme dans les résultats → filtre vide.
+- **Correctif** : les résultats IGDB sont indexés par id ; un jeu local dont les
+  `platforms` (ou `voteAverage`/`voteCount`) manquent **récupère** ces valeurs du
+  résultat IGDB correspondant (la donnée locale reste prioritaire quand elle
+  existe). Test : `game-search-enrich.test.ts` (cache IGDB pré-rempli).
+- **Vérifié** : le système filtre/tri de la recherche (séries/films : type +
+  Pertinence/Récents/A→Z ; jeux : plateforme + Populaires/Mieux notés/Récents/A→Z)
+  fonctionne de bout en bout (rendu Playwright web, données locales). Suite jeux+
+  recherche verte (13 tests), typecheck serveur 0 erreur.
+- **NB déploiement** : correctif **serveur** — le VPS doit relancer l'API pour
+  qu'il prenne effet (le seul rebuild web ne suffit pas).
 
 ### 2026-07-22 — Claude/Étienne : Profil — libellé « Temps de jeu » + section « Récompenses »
 - **`mobile/app/(tabs)/profile.tsx`** — deux retouches ciblées demandées par
