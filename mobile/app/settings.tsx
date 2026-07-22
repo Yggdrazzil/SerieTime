@@ -53,6 +53,15 @@ export default function Settings() {
 function AccountTab() {
   const router = useRouter();
   const { user, logout } = useAppStore();
+  // Réglages est un écran de PILE (hors (tabs)) : vider le token ne suffit pas,
+  // la garde `<Redirect href="/setup">` ne vit que dans (tabs)/_layout. Sans
+  // navigation explicite on restait sur Réglages, « toujours connecté » jusqu'à
+  // un redémarrage de l'app (bug web signalé 2026-07-22). On repart donc à
+  // l'écran de connexion nous-mêmes, pour la déconnexion ET la suppression.
+  const signOut = () => {
+    logout();
+    router.replace('/setup');
+  };
   const [pwOpen, setPwOpen] = useState(false);
   const [delOpen, setDelOpen] = useState(false);
   const [nameOpen, setNameOpen] = useState(false);
@@ -172,7 +181,7 @@ function AccountTab() {
 
       {/* Zone sensible isolée (recommandation Prisme : danger à part). */}
       <PrismeCard elevated style={styles.dangerCard}>
-        <Pressable style={({ pressed }) => [styles.logoutBtn, pressed && styles.btnPressed]} onPress={logout} accessibilityRole="button" accessibilityLabel="Se déconnecter">
+        <Pressable style={({ pressed }) => [styles.logoutBtn, pressed && styles.btnPressed]} onPress={signOut} accessibilityRole="button" accessibilityLabel="Se déconnecter">
           <Feather name="log-out" size={17} color={COLORS.onPrimary} />
           <Text style={styles.logoutText}>SE DÉCONNECTER</Text>
         </Pressable>
@@ -184,7 +193,7 @@ function AccountTab() {
       {pwOpen ? <PasswordModal onClose={() => setPwOpen(false)} /> : null}
       {nameOpen ? <DisplayNameModal current={displayName} onClose={() => setNameOpen(false)} /> : null}
       {countryOpen ? <CountryModal current={countryCode} onClose={() => setCountryOpen(false)} /> : null}
-      {delOpen ? <DeleteAccountModal onClose={() => setDelOpen(false)} onDeleted={logout} /> : null}
+      {delOpen ? <DeleteAccountModal onClose={() => setDelOpen(false)} onDeleted={signOut} /> : null}
     </>
   );
 }

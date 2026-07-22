@@ -24,10 +24,17 @@ type FeedSessionState = {
   index: number;
   cat: FeedCategory;
   overrides: Record<string, FeedOverride>;
+  // Titres suivis/vus PENDANT la session (clé = feedItemKey), quelle que soit
+  // la surface (fiche d'un ami, recherche…) : le deck figé les EXCLUT à la
+  // volée pour ne plus les re-proposer. Le serveur les exclut déjà des tirages
+  // futurs ; ceci reconcilie le deck courant sans le re-fetch (position gardée).
+  tracked: Record<string, true>;
   setIndex: (index: number) => void;
   setCat: (cat: FeedCategory) => void;
   setOverride: (key: string, override: FeedOverride) => void;
   removeOverride: (key: string) => void;
+  markTracked: (keys: string[]) => void;
+  unmarkTracked: (keys: string[]) => void;
   // Nouveau tirage VOLONTAIRE sans changer d'onglet (pull-to-refresh, carte de
   // fin) : position et choix repartent de zéro, la catégorie est conservée.
   clearDeck: () => void;
@@ -40,6 +47,7 @@ export const useFeedSessionStore = create<FeedSessionState>((set) => ({
   index: 0,
   cat: 'tout',
   overrides: {},
+  tracked: {},
   setIndex: (index) => set({ index }),
   setCat: (cat) => set({ cat, index: 0 }),
   setOverride: (key, override) => set((s) => ({ overrides: { ...s.overrides, [key]: override } })),
@@ -48,6 +56,22 @@ export const useFeedSessionStore = create<FeedSessionState>((set) => ({
       const { [key]: _drop, ...rest } = s.overrides;
       return { overrides: rest };
     }),
-  clearDeck: () => set({ index: 0, overrides: {} }),
-  reset: (seq) => set({ seq, index: 0, cat: 'tout', overrides: {} }),
+  // Ajout/retrait idempotents (retourne {} si rien ne change → pas de re-render
+  // inutile, l'effet des fiches pouvant se déclencher à chaque rendu).
+  markTracked: (keys) =>
+    set((s) => {
+      let changed = false;
+      const next = { ...s.tracked };
+      for (const k of keys) if (!next[k]) { next[k] = true; changed = true; }
+      return changed ? { tracked: next } : {};
+    }),
+  unmarkTracked: (keys) =>
+    set((s) => {
+      let changed = false;
+      const next = { ...s.tracked };
+      for (const k of keys) if (next[k]) { delete next[k]; changed = true; }
+      return changed ? { tracked: next } : {};
+    }),
+  clearDeck: () => set({ index: 0, overrides: {}, tracked: {} }),
+  reset: (seq) => set({ seq, index: 0, cat: 'tout', overrides: {}, tracked: {} }),
 }));

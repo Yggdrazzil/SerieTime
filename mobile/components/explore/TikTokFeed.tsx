@@ -112,15 +112,18 @@ export function TikTokFeed({ topInset = 0 }: { topInset?: number }) {
   });
 
   const all = useMemo(() => [...(data?.feed ?? []), ...extra], [data?.feed, extra]);
-  const deck = useMemo(
-    () =>
-      isGames
-        ? gamesQuery.data?.feed ?? []
-        : cat === 'tout'
-          ? all
-          : all.filter((f) => catOf(f) === cat),
-    [all, cat, isGames, gamesQuery.data],
-  );
+  // Titres suivis/vus pendant la session (marqués depuis une fiche d'ami, la
+  // recherche…) : on les retire du deck figé pour ne plus les re-proposer, sans
+  // re-fetch (position gardée). Le serveur les exclut déjà des tirages futurs.
+  const tracked = useFeedSessionStore((s) => s.tracked);
+  const deck = useMemo(() => {
+    const base = isGames
+      ? gamesQuery.data?.feed ?? []
+      : cat === 'tout'
+        ? all
+        : all.filter((f) => catOf(f) === cat);
+    return base.filter((f) => !tracked[keyOf(f)]);
+  }, [all, cat, isGames, gamesQuery.data, tracked]);
   // Le deck courant, lu par les callbacks stables (onViewable) sans closure périmée.
   const deckRef = useRef(deck);
   deckRef.current = deck;
