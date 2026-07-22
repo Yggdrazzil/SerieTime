@@ -260,7 +260,6 @@ export default function GameDetail() {
   if (!detail.data) return <LoadError onRetry={detail.refetch} busy={detail.isRefetching} />;
   const game = detail.data;
   const posterUri = tmdbImage(game.posterPath, 'w342');
-  const heroMeta = [game.year, game.platforms?.split(',')[0]?.trim()].filter(Boolean).join(' · ');
   const trackingBusy =
     trackingLock.current ||
     setStatus.isPending ||
@@ -335,12 +334,16 @@ export default function GameDetail() {
                 <Text style={styles.heroEyebrow}>JEU VIDÉO</Text>
               </View>
               <Text style={styles.heroTitle} numberOfLines={2}>{game.title}</Text>
-              {heroMeta ? <Text style={styles.heroMeta} numberOfLines={1}>{heroMeta}</Text> : null}
             </View>
           </View>
 
           <View style={styles.body}>
+          {/* Carte d'identité + infos AGRÉGÉES en une seule section SANS titre :
+              jaquette + titre + Genre/Sortie/notes en tête, puis Plateformes /
+              Développeur / Éditeur / Modes / Temps de jeu (ex-« Informations »
+              fusionnée ici — pas de doublon, ordre logique). */}
           <View style={styles.identityCard}>
+          <View style={styles.identityHead}>
           {posterUri ? (
             <Image source={{ uri: posterUri }} style={styles.poster} resizeMode="cover" accessibilityLabel={'Affiche de ' + game.title} />
           ) : (
@@ -386,6 +389,47 @@ export default function GameDetail() {
               ) : null}
             </View>
           </View>
+          </View>
+          {game.platforms ? (
+            <FactRow icon="monitor" label="Plateformes" value={game.platforms} />
+          ) : null}
+          {game.developer ? (
+            <FactRow icon="code" label="Développeur" value={game.developer} />
+          ) : null}
+          {game.publisher ? (
+            <FactRow icon="briefcase" label="Éditeur" value={game.publisher} />
+          ) : null}
+          {game.gameModes ? (
+            <FactRow icon="users" label="Modes" value={game.gameModes} />
+          ) : null}
+          {game.userStatus ? (
+            // Jeu suivi : le temps de jeu est déclaratif et ÉDITABLE ici.
+            <Pressable
+              style={({ pressed }) => pressed && { opacity: 0.7 }}
+              onPress={() => setPlaytimeOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel={
+                game.playtimeMinutes
+                  ? `Temps de jeu : ${formatPlaytime(game.playtimeMinutes)} — modifier`
+                  : 'Déclarer ton temps de jeu'
+              }
+            >
+              <View style={styles.factRow}>
+                <View style={styles.factIcon}>
+                  <Feather name="clock" size={17} color={COLORS.primary} />
+                </View>
+                <View style={styles.factCopy}>
+                  <Text style={styles.factLabel}>Temps de jeu</Text>
+                  <Text style={styles.fact}>
+                    {game.playtimeMinutes ? formatPlaytime(game.playtimeMinutes) : 'Ajouter mes heures'}
+                  </Text>
+                </View>
+                <Feather name="edit-3" size={16} color={COLORS.textMuted} />
+              </View>
+            </Pressable>
+          ) : game.playtimeMinutes ? (
+            <FactRow icon="clock" label="Temps de jeu" value={formatPlaytime(game.playtimeMinutes)} />
+          ) : null}
         </View>
 
         {/* Suivi REMONTÉ juste sous la jaquette/titre (avant le trailer) :
@@ -438,62 +482,6 @@ export default function GameDetail() {
         </View>
 
         {game.videoId ? <TrailerPreview videoId={game.videoId} /> : null}
-
-        {/* Fiche d'identité complète (Genre/Sortie/Note presse vivent à côté de
-            la jaquette) : Plateformes / Développeur / Éditeur / Modes / Temps
-            de jeu — l'ancienne section « Informations » est fusionnée ici. */}
-        {game.platforms || game.developer || game.publisher || game.gameModes || game.playtimeMinutes || game.userStatus ? (
-          <View style={[styles.section, styles.factList]}>
-            <View style={styles.sectionHeading}>
-              <View style={styles.sectionIcon}>
-                <Feather name="info" size={18} color={COLORS.primary} />
-              </View>
-              <View style={styles.sectionHeadingCopy}>
-                <Text style={styles.sectionTitle}>Informations</Text>
-              </View>
-            </View>
-            {game.platforms ? (
-              <FactRow icon="monitor" label="Plateformes" value={game.platforms} />
-            ) : null}
-            {game.developer ? (
-              <FactRow icon="code" label="Développeur" value={game.developer} />
-            ) : null}
-            {game.publisher ? (
-              <FactRow icon="briefcase" label="Éditeur" value={game.publisher} />
-            ) : null}
-            {game.gameModes ? (
-              <FactRow icon="users" label="Modes" value={game.gameModes} />
-            ) : null}
-            {game.userStatus ? (
-              // Jeu suivi : le temps de jeu est déclaratif et ÉDITABLE ici.
-              <Pressable
-                style={({ pressed }) => pressed && { opacity: 0.7 }}
-                onPress={() => setPlaytimeOpen(true)}
-                accessibilityRole="button"
-                accessibilityLabel={
-                  game.playtimeMinutes
-                    ? `Temps de jeu : ${formatPlaytime(game.playtimeMinutes)} — modifier`
-                    : 'Déclarer ton temps de jeu'
-                }
-              >
-                <View style={styles.factRow}>
-                  <View style={styles.factIcon}>
-                    <Feather name="clock" size={17} color={COLORS.primary} />
-                  </View>
-                  <View style={styles.factCopy}>
-                    <Text style={styles.factLabel}>Temps de jeu</Text>
-                    <Text style={styles.fact}>
-                      {game.playtimeMinutes ? formatPlaytime(game.playtimeMinutes) : 'Ajouter mes heures'}
-                    </Text>
-                  </View>
-                  <Feather name="edit-3" size={16} color={COLORS.textMuted} />
-                </View>
-              </Pressable>
-            ) : game.playtimeMinutes ? (
-              <FactRow icon="clock" label="Temps de jeu" value={formatPlaytime(game.playtimeMinutes)} />
-            ) : null}
-          </View>
-        ) : null}
 
         {game.overview ? (
           <View style={[styles.section, styles.overviewCard]}>
@@ -1532,29 +1520,27 @@ const styles = StyleSheet.create({
     lineHeight: 35,
     letterSpacing: -0.5,
   },
-  heroMeta: {
-    marginTop: SPACE.xs,
-    color: 'rgba(255,255,255,0.86)',
-    fontFamily: FONTS.semiBold,
-    fontSize: 14,
-  },
   body: {
     marginTop: -SPACE.xl,
     paddingBottom: SPACE.sm,
   },
   identityCard: {
-    minHeight: 174,
     marginHorizontal: SPACE.md,
     marginBottom: SPACE.sm,
     padding: SPACE.sm,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: SPACE.md,
     borderRadius: RADIUS.card,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: COLORS.borderLight,
     backgroundColor: COLORS.surface,
     ...SHADOW.card,
+  },
+  // En-tête de la carte fusionnée : jaquette + titre/Genre/Sortie/notes côte à
+  // côte ; les autres infos (Plateformes, Développeur…) s'empilent en dessous.
+  identityHead: {
+    minHeight: 174,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: SPACE.md,
   },
   poster: {
     width: 108,
@@ -1708,9 +1694,6 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 12,
     ...SHADOW.card,
-  },
-  factList: {
-    gap: SPACE.xs,
   },
   // Bouton « Temps de jeu » du bloc suivi (visible dès que le jeu est suivi).
   playtimeBtn: {

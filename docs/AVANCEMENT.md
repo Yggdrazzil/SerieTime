@@ -6,7 +6,7 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
-Dernière mise à jour : **2026-07-21** (Claude/Étienne) — recherche Explorer : type mémorisé, sélecteur au focus, croix/retour, jeux triés par popularité + exhaustifs, filtre/tri + badges de filtres actifs, et plateformes de sortie affichées en badges sur les cartes jeux
+Dernière mise à jour : **2026-07-22** (Claude/Étienne) — fiche jeu : section « Informations » fusionnée dans la carte d'identité du haut (une seule section sans titre, sans doublon) et bannière réduite au seul nom du jeu
 
 ---
 
@@ -91,6 +91,23 @@ la migration visuelle doit encore être exécutée sans modifier la logique mét
 6. Publication native optionnelle (EAS Build APK, puis stores).
 
 ## Journal des modifications
+
+### 2026-07-22 — Claude/Étienne : fiche jeu — carte d'identité + infos fusionnées
+Retour Étienne sur les fiches de jeux vidéo (`mobile/app/game/[id].tsx`) :
+- **Fusion de la section « Informations »** dans la première carte visible en haut
+  de fiche (jaquette + titre + Genre + Sortie + notes Joueurs/Presse). Tout est
+  désormais **une seule section SANS titre** : l'en-tête (jaquette / titre /
+  Genre / Sortie / notes) puis les lignes Plateformes / Développeur / Éditeur /
+  Modes / Temps de jeu empilées en dessous. Plus de doublon (Genre et Sortie ne
+  vivent qu'à côté de la jaquette), ordre logique (identité → détails de prod).
+- **Bannière épurée** : la sous-ligne « année · plateforme » a été retirée — la
+  bannière ne porte plus que la pastille « JEU VIDÉO » et le **nom complet** du
+  jeu ; la date de sortie et les plateformes vivent dans la section fusionnée.
+- **Détail technique** : la `identityCard` passe en colonne, avec un en-tête
+  `identityHead` (jaquette + copie côte à côte) puis les `FactRow` ; styles
+  `heroMeta` et `factList` (devenus inutiles) retirés.
+- **Validation** : typecheck mobile OK ; rendu Playwright de la fiche jeu (suivie
+  et non suivie) confirmant la carte unique sans titre et la bannière au seul nom.
 
 ### 2026-07-22 — Codex/Étienne : notifications allégées et manette dans Recherche
 - **Notifications** (`mobile/app/notifications.tsx`) : retrait de la carte
