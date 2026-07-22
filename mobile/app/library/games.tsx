@@ -6,12 +6,12 @@ import { useQuery } from '@tanstack/react-query';
 import { api, tmdbImage } from '@/lib/api';
 import { COLORS, FONTS, SPACE, SIZES } from '@/lib/theme';
 import { EmptyState, LoadError, Poster } from '@/components/ui';
-import { ScreenShell, SectionHeader, PrismeCard, TabHeader } from '@/components/prisme';
+import { ScreenShell, SectionHeader, PrismeCard } from '@/components/prisme';
+import { LibHeader } from '@/components/library';
 import { AppearItem } from '@/components/anim';
 import { PullToRefresh } from '@/components/PullToRefresh';
 import { useFloatingSection, FloatingSectionPill } from '@/components/FloatingSection';
 import { GridSkeleton } from '@/components/skeletons';
-import { useTabResetSeq } from '@/lib/tabReset';
 import { usePullRefresh } from '@/lib/usePullRefresh';
 
 // Miroir de MediaDto (packages/types) pour les jeux : le serveur ne renvoie
@@ -51,13 +51,11 @@ const SECTIONS: { key: keyof GamesLibraryResponse; label: string }[] = [
   { key: 'abandoned', label: 'Abandonnés' },
 ];
 
-export default function GamesScreen() {
-  // Re-clic sur l'onglet « Jeux » : remontage complet (état + scroll par défaut).
-  const resetSeq = useTabResetSeq('games');
-  return <GamesScreenInner key={resetSeq} />;
-}
-
-function GamesScreenInner() {
+// Bibliothèque de jeux : écran de PILE ouvert depuis le Profil (« voir tout »),
+// comme Séries/Films (app/library/*). Écran de pile — et non onglet caché —
+// pour que le retour (bouton ET swipe) revienne proprement ici depuis une
+// fiche jeu, au lieu de retomber sur l'onglet voisin (Explorer).
+export default function GamesLibraryScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const library = useQuery({
@@ -109,9 +107,10 @@ function GamesScreenInner() {
   );
 
   return (
-    <ScreenShell contentContainerStyle={styles.content}>
-      {/* En-tête d'écran (même identité que l'onglet Films). */}
-      <TabHeader title="Jeux" />
+    <ScreenShell safeTop={false} contentContainerStyle={styles.content}>
+      {/* En-tête de pile « Ma collection » avec retour (comme Séries/Films) ;
+          LibHeader gère lui-même le safe-area haut, d'où safeTop={false}. */}
+      <LibHeader title="Jeux" />
 
       {library.isLoading ? (
         <GridSkeleton />

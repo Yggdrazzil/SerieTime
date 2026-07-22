@@ -6,6 +6,7 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
+Dernière mise à jour : **2026-07-22** (Claude/Benjamin) — Fix navigation Jeux : la bibliothèque Jeux devient un écran de **pile `/library/games`** (comme Séries/Films) au lieu d'un onglet caché `href:null`. Corrige le bug « retour depuis une fiche jeu (bouton **et** swipe) ramenait à l'Explorer » — expo-router ne pouvait pas restaurer l'onglet caché et retombait sur l'onglet voisin. En-tête « Ma collection » + retour (`LibHeader`).
 Dernière mise à jour : **2026-07-22** (Claude/Étienne) — Accueil : carte héro compacte + déclinée aux sous-onglets Films/Jeux, item « en vedette » choisi selon les préférences (favori d'abord)
 Dernière mise à jour : **2026-07-22** (Claude/Étienne) — Explorer : clavier conservé au changement de catégorie ; fiche jeu : « Temps de jeu » dédoublonné + bouton refondu (icône chrono, sans sous-titre) ; recherche jeux : plateformes resynchronisées durablement en base
 Dernière mise à jour : **2026-07-22** (Claude/Étienne) — Recherche jeux : plateformes enrichies depuis IGDB sur les jeux locaux hérités (filtre « Plateforme » de nouveau exploitable)
