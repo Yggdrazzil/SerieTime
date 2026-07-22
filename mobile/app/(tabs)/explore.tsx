@@ -596,11 +596,23 @@ function GameResults({ query, rawQuery }: { query: string; rawQuery: string }) {
                     <View style={styles.resultMetaRow}>
                       <Ionicons name="game-controller" size={14} color={COLORS.primary} />
                       <Text style={styles.resultMeta} numberOfLines={1}>
-                        {['Jeu', r.year, r.platforms && r.platforms.length ? r.platforms.slice(0, 2).join(', ') : null]
-                          .filter(Boolean)
-                          .join(' · ')}
+                        {['Jeu', r.year].filter(Boolean).join(' · ')}
                       </Text>
                     </View>
+                    {/* Plateformes de sortie en badges : d'un coup d'œil on
+                        reconnaît la version du jeu à laquelle on a joué. */}
+                    {r.platforms && r.platforms.length ? (
+                      <View style={styles.platformRow}>
+                        {r.platforms.slice(0, 4).map((p) => (
+                          <View key={p} style={styles.platformBadge}>
+                            <Text style={styles.platformBadgeText} numberOfLines={1}>{p}</Text>
+                          </View>
+                        ))}
+                        {r.platforms.length > 4 ? (
+                          <Text style={styles.platformMore}>+{r.platforms.length - 4}</Text>
+                        ) : null}
+                      </View>
+                    ) : null}
                   </View>
                   {openingKey === key || addingKey === key ? (
                     <View style={styles.addSquareGhost} accessibilityLabel="Action en cours">
@@ -874,6 +886,18 @@ const styles = StyleSheet.create({
     paddingBottom: SIZES.tabBar + SPACE.xxl * 2,
   },
   filterEmpty: { paddingTop: SPACE.xl },
+  // Badges des plateformes de sortie (cartes de résultats jeux).
+  platformRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 4, marginTop: 6 },
+  platformBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: RADIUS.pill,
+    backgroundColor: COLORS.surfaceMuted,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+  },
+  platformBadgeText: { color: COLORS.textMuted, fontSize: 10.5, fontFamily: FONTS.bold, letterSpacing: 0.2 },
+  platformMore: { color: COLORS.textSoft, fontSize: 10.5, fontFamily: FONTS.bold, marginLeft: 2 },
   resultRow: {
     minHeight: 112,
     flexDirection: 'row',
