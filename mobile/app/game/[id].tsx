@@ -310,7 +310,7 @@ export default function GameDetail() {
             <View style={[styles.heroBtns, { top: insets.top + SPACE.sm }]}>
               <PressableScale
                 style={styles.heroAction}
-                onPress={() => goBack('/library/games')}
+                onPress={() => goBack('/')}
                 accessibilityRole="button"
                 accessibilityLabel="Retour aux jeux"
                 accessibilityHint="Revient à l’écran précédent"

@@ -6,6 +6,7 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
+Dernière mise à jour : **2026-07-22** (Claude/Étienne) — navigation depuis les overlays fiabilisée (feuille épisode : nom de la série / commentaires OUVRENT au lieu de fermer la fiche) + P0 audit (repli retour fiche jeu, popup SSO web)
 Dernière mise à jour : **2026-07-22** (Claude/Étienne) — retour arrière corrigé (natif + PWA : la fiche ouverte depuis la recherche revient sur les résultats, plus sur le feed) + Agenda › Films groupé par mois comme les Jeux
 Dernière mise à jour : **2026-07-22** (Claude/Étienne) — recherche Jeux : filtre plateformes classé de la console la plus récente à la plus ancienne (Switch 2 → …), « Toutes les plateformes » en tête
 Dernière mise à jour : **2026-07-23** (Claude/Benjamin) — Lot QA 2 (« corrige tout ») : **Écran de connexion** — bouton Google en thème `filled_black` sur thèmes sombres (fini le bouton blanc), plus de scintillement (init une seule fois via ref), largeur alignée (≤400px GSI), placeholders lisibles (`textSoft`), en-tête condensé (sur-titre kicker retiré), messages erreur/succès colorés. **Explorer** — suivre depuis la recherche invalide aussi profil/classement/gamification (comme l'onglet Amis). **Fil social** — réactions ❤️ réconciliées avec la vérité serveur (plus de dérive du compteur). **Navigation** — retour des Notifications repointé vers l'Accueil (au lieu du Profil). **Accueil** — état vide en grille « Tout est à jour » quand on est à jour (au lieu de « ajoutez des séries »), rangée d'actions héro sans débordement. **Divers** — routes `library/favorite-games` & `reorder-favorites` déclarées. Reportés (notés) : puce « intérêt » de la fiche série (décision produit → Étienne), overlay busy SSO, code mort interne.
@@ -101,6 +102,32 @@ la migration visuelle doit encore être exécutée sans modifier la logique mét
 6. Publication native optionnelle (EAS Build APK, puis stores).
 
 ## Journal des modifications
+
+### 2026-07-22 — Claude/Étienne : navigation depuis les overlays + démarrage des P0 (audit)
+Retour Étienne (feuille épisode) + attaque des priorités P0 de l'audit UX.
+- **Navigation depuis un overlay fiabilisée** (`mobile/lib/useBackClose.ts`) :
+  depuis la feuille épisode, taper le **nom de la série** ou les **commentaires**
+  fermait la fiche au lieu d'ouvrir la cible. Cause (PWA) : `onClose()` déclenchait
+  le `history.back()` du cran fantôme, qui entrait en course avec le `router.push`
+  et l'annulait. Le hook expose désormais `beginNavigation()` : appelé juste avant
+  de naviguer depuis l'overlay, il neutralise ce `history.back()`. Câblé sur
+  `EpisodeSheet` (nom de série + commentaires), `UserPreviewSheet` (profil complet
+  + bibliothèque) et `CommentsSheet` (ouvrir un profil). Validé au rendu web : la
+  feuille épisode → « Commentaires » ouvre bien `/comments/…` (au lieu de fermer).
+- **P0 — repli de retour de la fiche jeu** (`mobile/app/game/[id].tsx`) : le retour
+  après rechargement/lien partagé replie désormais sur `'/'` (accueil, neutre) au
+  lieu de `/library/games`, comme la fiche série.
+- **P0 — popup SSO web** (`mobile/components/LinkAccountPrompt.tsx`) : ajout de
+  `useBackClose` → sur la PWA, le retour referme la popup au lieu de reculer le
+  routeur (qui, depuis un onglet racine, quittait la web app). Le bouton « Lier »
+  passe aussi par `beginNavigation()`.
+- **P0 — médailles « inversées » profil public : FAUX POSITIF** (vérifié). Le
+  `TIER_COLORS` de `user/[id]` colore des **paliers de badge** (bronze = palier 1,
+  progression → diamant), pas des rangs de classement (or = 1er). Rien à corriger
+  ici (les rangs de Stats/Classement restent or d'abord, à juste titre).
+- **Reste des P0** (audit) : les autres feuilles `<Modal>` web sans garde de retour
+  (menus de fiche, tri/filtre imbriqué…) = passe plus large recommandée (primitive
+  `BottomSheet` partagée) — à planifier.
 
 ### 2026-07-22 — Claude/Étienne : retour arrière fiabilisé + Agenda Films groupé par mois
 Deux retours Étienne (Android) :

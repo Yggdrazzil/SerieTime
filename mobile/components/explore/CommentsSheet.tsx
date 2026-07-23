@@ -27,7 +27,7 @@ export function CommentsSheet({
   const [mediaId, setMediaId] = useState<string | null>(null);
   const [error, setError] = useState(false);
   // Le « retour » ferme la feuille de commentaires au lieu de quitter l'Explorer.
-  useBackClose(!!item, onClose);
+  const { beginNavigation } = useBackClose(!!item, onClose);
 
   useEffect(() => {
     if (!item) return;
@@ -59,7 +59,7 @@ export function CommentsSheet({
             <Text style={styles.err}>Impossible de charger les commentaires.</Text>
           </View>
         ) : mediaId ? (
-          <CommentsPanel mediaId={mediaId} title={item?.title} onClose={onClose} onCommentPosted={onCommentPosted} />
+          <CommentsPanel mediaId={mediaId} title={item?.title} onClose={onClose} onNavigateAway={beginNavigation} onCommentPosted={onCommentPosted} />
         ) : (
           <View style={styles.center}>
             <ActivityIndicator color={COLORS.black} />
@@ -76,11 +76,13 @@ function CommentsPanel({
   mediaId,
   title,
   onClose,
+  onNavigateAway,
   onCommentPosted,
 }: {
   mediaId: string;
   title?: string;
   onClose: () => void;
+  onNavigateAway: () => void;
   onCommentPosted?: () => void;
 }) {
   const router = useRouter();
@@ -139,7 +141,7 @@ function CommentsPanel({
               replyText={replyText}
               setReplyText={setReplyText}
               onPostReply={() => postReply(c.id)}
-              onOpenUser={(userId) => { onClose(); router.push(`/user/${userId}`); }}
+              onOpenUser={(userId) => { onNavigateAway(); onClose(); router.push(`/user/${userId}`); }}
             />
           ))}
         </ScrollView>
