@@ -306,6 +306,12 @@ export default function GameDetail() {
   const releaseParts = releaseTxt ? releaseTxt.split(' ') : null;
   const releaseDay = releaseParts && releaseParts.length >= 3 ? releaseParts.slice(0, -1).join(' ') : releaseTxt;
   const releaseYear = releaseParts && releaseParts.length >= 3 ? releaseParts[releaseParts.length - 1] : null;
+  // Plateformes en BADGES dans la carte d'identité (retour Étienne 2026-07-23) :
+  // l'info est visible dès l'ouverture, sans scroller (la date, déjà dans la
+  // tuile, laisse sa place — et la rangée quitte la carte Informations).
+  const platformList = game.platforms
+    ? game.platforms.split(',').map((p) => p.trim()).filter(Boolean)
+    : [];
 
   return (
     <Pop style={styles.screen}>
@@ -368,7 +374,20 @@ export default function GameDetail() {
             }
           >
             {genresTxt ? <Text style={styles.identityMeta}>{genresTxt}</Text> : null}
-            {releaseTxt ? <Text style={styles.identityRelease}>Sortie le {releaseTxt}</Text> : null}
+            {platformList.length ? (
+              <View
+                style={styles.platRow}
+                accessible
+                accessibilityRole="text"
+                accessibilityLabel={`Plateformes : ${platformList.join(', ')}`}
+              >
+                {platformList.map((p) => (
+                  <View key={p} style={styles.platBadge} accessible={false}>
+                    <Text style={styles.platBadgeText} numberOfLines={1}>{p}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
           </FicheIdentity>
 
         {/* Suivi : contrôle segmenté pleine largeur (maquette) — re-taper le
@@ -421,26 +440,26 @@ export default function GameDetail() {
           ) : null}
         </View>
 
-        {game.videoId ? <TrailerPreview videoId={game.videoId} /> : null}
-
+        {/* Résumé et Informations AVANT la bande-annonce (retour Étienne
+            2026-07-23) ; les plateformes vivent en badges dans la carte
+            d'identité, la note presse dans la tuile note. */}
         {game.overview ? (
           <FicheSection icon="book-open" title="Résumé">
             <Text style={styles.overview}>{game.overview}</Text>
           </FicheSection>
         ) : null}
 
-        {/* « Informations » (maquette) : libellé à gauche, valeur à droite.
-            La note presse vit dans la TUILE note (bascule joueurs ↔ presse). */}
-        {game.platforms || game.developer || game.publisher || game.gameModes ? (
+        {game.developer || game.publisher || game.gameModes ? (
           <FicheSection icon="info" title="Informations">
             <View style={styles.infoRows}>
-              {game.platforms ? <InfoRow label="Plateformes" value={game.platforms} align="right" /> : null}
               {game.developer ? <InfoRow label="Développeur" value={game.developer} align="right" /> : null}
               {game.publisher ? <InfoRow label="Éditeur" value={game.publisher} align="right" /> : null}
               {game.gameModes ? <InfoRow label="Modes" value={game.gameModes} align="right" /> : null}
             </View>
           </FicheSection>
         ) : null}
+
+        {game.videoId ? <TrailerPreview videoId={game.videoId} /> : null}
 
         <RelatedGamesRow items={game.related ?? []} />
 
@@ -1383,12 +1402,25 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     lineHeight: 17,
   },
-  identityRelease: {
-    marginTop: SPACE.xxs,
-    color: COLORS.textMuted,
-    fontFamily: FONTS.medium,
-    fontSize: 12.5,
-    lineHeight: 17,
+  // Badges de plateformes (PJ Étienne, adaptés à la DA) : pilules lavande
+  // compactes, texte fort, retour à la ligne libre.
+  platRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: SPACE.xs,
+  },
+  platBadge: {
+    minHeight: 24,
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+    borderRadius: RADIUS.pill,
+    backgroundColor: COLORS.surfaceMuted,
+  },
+  platBadgeText: {
+    color: COLORS.text,
+    fontFamily: FONTS.bold,
+    fontSize: 11.5,
   },
   // Cartes « contrôle » (Suivi, Je possède) : titre bold sans pastille — les
   // sections de CONTENU passent par FicheSection (pastille d'icône).

@@ -162,6 +162,12 @@ signalement, temps de jeu) inchangés.
   avant, le POST optimiste était déjà vérifié) ; inventaire pré/post refonte
   confirmé : **aucune section manquante** (Bande-annonce et Éditions &
   extensions étaient juste absentes des données de test des captures).
+- **Retours Étienne v3 (même jour, fiche jeu)** : sections **Résumé** et
+  **Informations** remontées AVANT la Bande-annonce ; **plateformes en badges**
+  (pilules lavande DA) dans la carte d'identité, à la place de la ligne
+  « Sortie le … » (doublon de la tuile date) — l'info consoles est visible dès
+  l'ouverture, sans scroller ; la rangée « Plateformes » quitte la carte
+  Informations (Développeur / Éditeur / Modes restent).
 - **Primitives partagées** (`ScreenHeader`, `SectionHeader`, `TabHeader`,
   en-têtes de bibliothèque) : échelle typographique resserrée et suppression des
   API de sur-titre/sous-titre décoratives, afin d’imposer un titre unique par
