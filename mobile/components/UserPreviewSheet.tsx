@@ -74,7 +74,7 @@ export function UserPreviewSheet() {
   // Tab bar flottante : masquée tant que la feuille est ouverte (cf. tabBarHidden).
   useHideTabBar(!!userId);
   // Le « retour » ferme l'aperçu au lieu de quitter l'app.
-  useBackClose(!!userId, close);
+  const { beginNavigation } = useBackClose(!!userId, close);
 
   return (
     <Modal
@@ -96,7 +96,7 @@ export function UserPreviewSheet() {
           onAccessibilityEscape={close}
         >
           <View style={styles.handle} accessible={false} />
-          {userId ? <PreviewContent userId={userId} onClose={close} /> : null}
+          {userId ? <PreviewContent userId={userId} onClose={close} onNavigateAway={beginNavigation} /> : null}
         </View>
       </View>
     </Modal>
@@ -104,7 +104,7 @@ export function UserPreviewSheet() {
 }
 
 // Contenu monté seulement quand un userId est ouvert (query toujours réelle).
-function PreviewContent({ userId, onClose }: { userId: string; onClose: () => void }) {
+function PreviewContent({ userId, onClose, onNavigateAway }: { userId: string; onClose: () => void; onNavigateAway: () => void }) {
   const router = useRouter();
   const qc = useQueryClient();
   const [busy, setBusy] = useState(false);
@@ -150,12 +150,14 @@ function PreviewContent({ userId, onClose }: { userId: string; onClose: () => vo
   };
 
   const openFullProfile = () => {
+    onNavigateAway();
     onClose();
     router.push(('/user/' + userId) as Href);
   };
 
   const openLibrary = () => {
     if (!data) return;
+    onNavigateAway();
     onClose();
     router.push({
       pathname: '/user-library',

@@ -9,6 +9,7 @@ import { useAppStore } from '@/lib/store';
 import { COLORS, FONTS, GLASS_BLUR, RADIUS, SHADOW, SIZES, SPACE, applyThemePreference, getThemePreference, type ThemePreference } from '@/lib/theme';
 import { ScreenShell, ScreenHeader, SectionHeader, SegmentedFilter, PrismeCard, IconAction } from '@/components/prisme';
 import { goBack } from '@/lib/nav';
+import { useBackClose } from '@/lib/useBackClose';
 import { FadeSwitch, PopIn } from '@/components/anim';
 import { useReduceMotion } from '@/lib/useReduceMotion';
 import { ssoWebAvailable, initGoogleButton, discordLogin } from '@/lib/sso';
@@ -66,6 +67,12 @@ function AccountTab() {
   const [delOpen, setDelOpen] = useState(false);
   const [nameOpen, setNameOpen] = useState(false);
   const [countryOpen, setCountryOpen] = useState(false);
+  // Retour système → ferme la feuille ouverte (piloté par l'état, ces feuilles
+  // n'ont pas d'entrée d'historique propre).
+  useBackClose(pwOpen, () => setPwOpen(false));
+  useBackClose(delOpen, () => setDelOpen(false));
+  useBackClose(nameOpen, () => setNameOpen(false));
+  useBackClose(countryOpen, () => setCountryOpen(false));
   const [exporting, setExporting] = useState(false);
   const [exportingTvtime, setExportingTvtime] = useState(false);
   // Nom d'utilisateur = nom d'affichage COURANT (source : profil serveur).

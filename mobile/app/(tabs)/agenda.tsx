@@ -52,6 +52,26 @@ export default function AgendaScreen() {
 
 type MoviesResponse = { toWatch: MediaDto[]; upcoming: { media: MediaDto; releaseDate: string }[] };
 
+// Films à venir GROUPÉS par mois — mêmes badges de période que les Jeux (retour
+// Étienne : éviter la longue liste « en vrac »). Groupage CÔTÉ CLIENT (l'API
+// /api/movies renvoie une liste plate) ; libellé « mois année » (mois complet,
+// tableau local — évite les Intl limités d'Hermes ; PillHeader met en capitales
+// comme pour les Jeux) et périodes triées par ordre chronologique.
+type MovieUpcoming = MoviesResponse['upcoming'][number];
+const MONTHS_LONG = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+function groupMoviesByMonth(items: MovieUpcoming[]): { label: string; items: MovieUpcoming[] }[] {
+  const sorted = [...items].sort((a, b) => new Date(a.releaseDate).getTime() - new Date(b.releaseDate).getTime());
+  const groups = new Map<string, MovieUpcoming[]>();
+  for (const it of sorted) {
+    const d = new Date(it.releaseDate);
+    const label = `${MONTHS_LONG[d.getMonth()]} ${d.getFullYear()}`;
+    const arr = groups.get(label) ?? [];
+    arr.push(it);
+    groups.set(label, arr);
+  }
+  return [...groups.entries()].map(([label, items]) => ({ label, items }));
+}
+
 function MoviesUpcoming() {
   const router = useRouter();
   const gridView = useGridView('agenda');
@@ -60,31 +80,38 @@ function MoviesUpcoming() {
     queryFn: () => api.get<MoviesResponse>('/api/movies'),
   });
   const { refreshing, onRefresh } = usePullRefresh([refetch]);
-  // renderItem stable (le router l'est) : les rangées déjà montées ne sont pas
-  // re-rendues quand la liste se re-rend (virtualisation FlatList).
-  const renderMovie = useCallback(
-    ({ item: { media, releaseDate } }: { item: MoviesResponse['upcoming'][number] }) => (
-      <UpcomingRow
-        title={media.title}
-        sub={shortDateFr(releaseDate)}
-        uri={tmdbImage(media.posterPath, 'w342')}
-        onPress={() => router.push(`/show/${media.id}?type=movie`)}
-        hint="Ouvre la fiche du film"
-      />
+  // FlatList par GROUPE (période) : bloc PillHeader + rangées, comme les Jeux —
+  // les groupes hors écran ne sont pas montés (virtualisation).
+  const renderGroup = useCallback(
+    ({ item: g }: { item: { label: string; items: MovieUpcoming[] } }) => (
+      <View style={styles.group}>
+        <PillHeader label={g.label} />
+        {g.items.map(({ media, releaseDate }) => (
+          <UpcomingRow
+            key={media.id}
+            title={media.title}
+            sub={shortDateFr(releaseDate)}
+            uri={tmdbImage(media.posterPath, 'w342')}
+            onPress={() => router.push(`/show/${media.id}?type=movie`)}
+            hint="Ouvre la fiche du film"
+          />
+        ))}
+      </View>
     ),
     [router],
   );
   if (isLoading) return <QueueSkeleton />;
   if (isError && !data) return <LoadError onRetry={refetch} busy={isRefetching} />;
-  const items = data?.upcoming ?? [];
-  if (items.length === 0)
+  const groups = groupMoviesByMonth(data?.upcoming ?? []);
+  if (groups.length === 0)
     return <EmptyState title="Aucun film à venir" message="Les prochaines sorties des films de ta liste apparaîtront ici." />;
   if (gridView)
     return (
       <PosterGrid
-        sections={[{
-          key: 'a-venir',
-          cells: items.map(({ media, releaseDate }) => ({
+        sections={groups.map((g) => ({
+          key: g.label,
+          header: <PillHeader label={g.label} />,
+          cells: g.items.map(({ media, releaseDate }) => ({
             key: media.id,
             title: media.title,
             sub: shortDateFr(releaseDate),
@@ -92,15 +119,15 @@ function MoviesUpcoming() {
             onPress: () => router.push(`/show/${media.id}?type=movie`),
             accessibilityHint: 'Ouvre la fiche du film',
           })),
-        }]}
+        }))}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} colors={[COLORS.primary]} />}
       />
     );
   return (
     <FlatList
-      data={items}
-      keyExtractor={movieKey}
-      renderItem={renderMovie}
+      data={groups}
+      keyExtractor={movieGroupKey}
+      renderItem={renderGroup}
       initialNumToRender={10}
       windowSize={7}
       contentContainerStyle={styles.listContent}
@@ -109,7 +136,7 @@ function MoviesUpcoming() {
   );
 }
 
-const movieKey = (it: MoviesResponse['upcoming'][number]) => it.media.id;
+const movieGroupKey = (g: { label: string }) => g.label;
 
 // --- Jeux à venir (sorties des jeux suivis, groupées par période) ---
 

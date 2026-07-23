@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useBackClose } from '@/lib/useBackClose';
 import { COLORS, FONTS, RADIUS, SHADOW, SIZES, SPACE } from '@/lib/theme';
 
 // Filtre/tri des résultats de recherche Explorer — reprend le design des filtres
@@ -83,6 +84,9 @@ export function SearchFilterSheet({
   onApply: (sort: string, filter: string) => void;
 }) {
   const insets = useSafeAreaInsets();
+  // Retour (PWA/Android) : ferme la feuille de filtres au lieu de reculer le
+  // routeur (qui quittait la web app depuis l'onglet Explorer).
+  useBackClose(visible, onClose);
   const [s, setS] = useState(sort);
   const [f, setF] = useState(filter);
   useEffect(() => {

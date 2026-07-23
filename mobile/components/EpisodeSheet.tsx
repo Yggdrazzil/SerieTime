@@ -155,7 +155,7 @@ export function EpisodeSheet({
 
   // Le « retour » (bouton précédent du navigateur / back Android) ferme la
   // feuille au lieu de quitter l'onglet (sinon la web app se fermait).
-  useBackClose(!!target, close);
+  const { beginNavigation } = useBackClose(!!target, close);
 
   if (!target) return null;
 
@@ -298,6 +298,7 @@ export function EpisodeSheet({
                 seasons={episodesQ.data?.seasons ?? []}
                 seasonsLoading={episodesQ.isLoading && !episodesQ.isError}
                 onClose={onClose}
+                onNavigateAway={beginNavigation}
                 bottomPad={insets.bottom + SPACE.lg}
               />
             </View>
@@ -367,6 +368,7 @@ function EpisodePage({
   seasons,
   seasonsLoading,
   onClose,
+  onNavigateAway,
   bottomPad,
 }: {
   episode: EpisodeDto;
@@ -376,6 +378,9 @@ function EpisodePage({
   seasons: SeasonData[];
   seasonsLoading: boolean;
   onClose: () => void;
+  // Signale au hook « retour » qu'on quitte la feuille pour un autre écran
+  // (évite un history.back() qui annulerait la navigation → fiche qui se ferme).
+  onNavigateAway: () => void;
   bottomPad: number;
 }) {
   const router = useRouter();
@@ -591,6 +596,7 @@ function EpisodePage({
   };
 
   const openShow = () => {
+    onNavigateAway();
     onClose();
     router.push(('/show/' + mediaId) as Href);
   };
@@ -830,6 +836,7 @@ function EpisodePage({
           pressed && styles.cardPressed,
         ]}
         onPress={() => {
+          onNavigateAway();
           onClose();
           router.push((
             '/comments/' +

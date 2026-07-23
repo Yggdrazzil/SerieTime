@@ -23,8 +23,8 @@ import { FicheSkeleton } from '@/components/FicheSkeleton';
 import { ReportModal } from '@/components/ReportModal';
 import { StatusLine } from '@/components/StatusLine';
 import { useReduceMotion } from '@/lib/useReduceMotion';
+import { useBackClose } from '@/lib/useBackClose';
 
-const INTEREST = ['LES ACTEURS', 'LA PRÉMISSE', 'LES CRÉATEURS', 'LA CHAÎNE/LA PLATEFORME', "LA FRANCHISE OU L'UNIVERS", 'AUTRE'];
 const STATUS_LABELS: Record<string, string> = {
   watching: 'En cours', completed: 'Terminée', watchlist: 'À voir',
   paused: 'En pause', abandoned: 'Arrêtée', not_started: 'Pas commencée',
@@ -76,7 +76,8 @@ export default function ShowDetail() {
   const qc = useQueryClient();
   const [tab, setTab] = useState('À PROPOS');
   const [menu, setMenu] = useState(false);
-  const [interest, setInterest] = useState<string[]>([]);
+  // Retour (PWA/Android) : ferme le menu « … » au lieu de reculer le routeur.
+  useBackClose(menu, () => setMenu(false));
   const [justAdded, setJustAdded] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [persoMenu, setPersoMenu] = useState(false);
@@ -382,7 +383,7 @@ export default function ShowDetail() {
       ) : (
         <FadeSwitch trigger={tab}>
           {tab === 'À PROPOS' ? (
-            <AboutTab media={media} detail={detail.data} mediaId={String(id)} tracking={trackingLine} interest={interest} setInterest={setInterest} onScroll={onScroll} topPad={topPad} />
+            <AboutTab media={media} detail={detail.data} mediaId={String(id)} tracking={trackingLine} onScroll={onScroll} topPad={topPad} />
           ) : (
             <EpisodesTab showId={String(id)} title={media.title} posterPath={media.posterPath} onChange={refresh} onScroll={onScroll} topPad={topPad} />
           )}
@@ -1496,31 +1497,11 @@ function yearRange(media: MediaDto, endYear?: number | null) {
 // Onglet « À propos » — ordre des sections calqué sur la fiche TV Time :
 // où regarder, question d'intérêt, similaire à, informations (méta + étoiles +
 // synopsis + rangées), distribution, également regardé, notes, commentaires.
-function AboutTab({ media, detail, mediaId, tracking, interest, setInterest, onScroll, topPad }: any) {
+function AboutTab({ media, detail, mediaId, tracking, onScroll, topPad }: any) {
   return (
     <ScrollView onScroll={onScroll} scrollEventThrottle={16} contentContainerStyle={{ paddingTop: topPad, paddingBottom: 90 }}>
       {tracking}
       <WhereToWatch providers={detail.providers ?? []} />
-
-      <View style={styles.section}>
-        <SectionHead icon="compass" title="Ce qui vous intéresse" />
-        <View style={styles.interestWrap}>
-          {INTEREST.map((o) => (
-            <Pressable
-              key={o}
-              style={({ pressed }) => [styles.qbtn, interest.includes(o) && styles.qbtnSel, pressed && styles.pressed]}
-              onPress={() =>
-                setInterest((sel: string[]) => (sel.includes(o) ? sel.filter((x) => x !== o) : [...sel, o]))
-              }
-              accessibilityRole="checkbox"
-              accessibilityLabel={o}
-              accessibilityState={{ checked: interest.includes(o) }}
-            >
-              <Text style={[styles.qbtnText, interest.includes(o) && { color: COLORS.onPrimary }]}>{o}</Text>
-            </Pressable>
-          ))}
-        </View>
-      </View>
 
       {detail.recommendations?.length ? <SimilarTo item={detail.recommendations[0]} isMovie={false} /> : null}
 
@@ -2141,20 +2122,6 @@ const styles = StyleSheet.create({
   },
   provText: { color: COLORS.onPrimary, fontSize: 12, fontFamily: FONTS.extraBold, letterSpacing: 0.3 },
   // Puces d'intérêt : pilules Prisme qui s'enroulent (plus la liste empilée TV Time).
-  interestWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACE.xs, marginTop: SPACE.md },
-  qbtn: {
-    minHeight: 38,
-    backgroundColor: COLORS.surfaceMuted,
-    borderRadius: RADIUS.pill,
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
-    paddingHorizontal: SPACE.sm,
-    paddingVertical: SPACE.xs,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  qbtnSel: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  qbtnText: { color: COLORS.text, textAlign: 'center', fontSize: 12, fontFamily: FONTS.bold, letterSpacing: 0.3 },
   similarRow: { minHeight: 78, flexDirection: 'row', alignItems: 'center', gap: SPACE.sm },
   similarThumb: { width: 52, height: 52, borderRadius: RADIUS.control, backgroundColor: COLORS.imagePlaceholder },
   similarTitle: { color: COLORS.text, fontSize: 16, fontFamily: FONTS.extraBold },

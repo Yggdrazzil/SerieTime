@@ -4,6 +4,7 @@ import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, FONTS, RADIUS, SHADOW, SIZES, SPACE } from '@/lib/theme';
 import { useReduceMotion } from '@/lib/useReduceMotion';
+import { useBackClose } from '@/lib/useBackClose';
 
 // Modal de confirmation « Signaler » — partagé par les fiches série/film
 // (mobile/app/show/[id].tsx), jeu (mobile/app/game/[id].tsx) et les
@@ -24,6 +25,7 @@ export function ReportModal({
 }) {
   const insets = useSafeAreaInsets();
   const reduce = useReduceMotion();
+  useBackClose(visible, onClose);
   return (
     <Modal visible={visible} transparent animationType={reduce ? 'none' : 'fade'} onRequestClose={onClose}>
       <Pressable

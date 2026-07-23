@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api, tmdbImage } from '@/lib/api';
 import { useAppStore } from '@/lib/store';
 import { goBack } from '@/lib/nav';
+import { useBackClose } from '@/lib/useBackClose';
 import { COLORS, FONTS, RADIUS, SHADOW, SIZES, SPACE } from '@/lib/theme';
 import { ScreenShell, ScreenHeader, SectionHeader, PrismeCard, ProgressBar, IconAction } from '@/components/prisme';
 import { MedalBadge, LevelMedal, TIER_LABELS, type MedalTier } from '@/components/medals';
@@ -219,6 +220,7 @@ function BadgesCard({ data, onOpenBadge }: { data: GamificationMeDto; onOpenBadg
 
 function BadgeModal({ badge, onClose }: { badge: BadgeDto | null; onClose: () => void }) {
   const tier = badge ? medalTier(badge.tier) : 0;
+  useBackClose(!!badge, onClose);
   return (
     <Modal visible={!!badge} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.modalOverlay} onPress={onClose}>

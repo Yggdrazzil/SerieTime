@@ -6,6 +6,10 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
+Dernière mise à jour : **2026-07-23** (Claude/Étienne) — chantier « retour arrière » (fin) : garde de retour branchée sur les dernières feuilles/modales autonomes (Trophées, filtres de bibliothèque Séries/Films, favoris, Paramètres, blocage profil, composer de commentaire) + suite de tests navigation web (6/6 : la feuille se referme au retour et l'écran hôte est conservé)
+Dernière mise à jour : **2026-07-22** (Claude/Étienne) — chantier « retour arrière » : garde de retour ajoutée aux feuilles/menus web (filtres Explorer, menus « … » des fiches, popups) + section « Votre avis » retirée des fiches série/film
+Dernière mise à jour : **2026-07-22** (Claude/Étienne) — retour arrière corrigé (natif + PWA : la fiche ouverte depuis la recherche revient sur les résultats, plus sur le feed) + Agenda › Films groupé par mois comme les Jeux
+Dernière mise à jour : **2026-07-22** (Claude/Étienne) — recherche Jeux : filtre plateformes classé de la console la plus récente à la plus ancienne (Switch 2 → …), « Toutes les plateformes » en tête
 Dernière mise à jour : **2026-07-23** (Codex/Étienne) — Passe globale de hiérarchie typographique : tailles de titres harmonisées et allégées, sur-titres/sous-titres redondants supprimés sur l’Accueil, le Profil, les bibliothèques, les fiches série/film/jeu/épisode/personne, Explorer, Communauté, commentaires, statistiques, trophées et onboarding. Les libellés informatifs utiles (compteurs, métriques, instructions) sont conservés. Validation : typecheck, export web statique, détecteur Impeccable et tests Playwright responsive 320/390 px sans débordement horizontal ni erreur console.
 Dernière mise à jour : **2026-07-23** (Claude/Benjamin) — Lot QA 2 (« corrige tout ») : **Écran de connexion** — bouton Google en thème `filled_black` sur thèmes sombres (fini le bouton blanc), plus de scintillement (init une seule fois via ref), largeur alignée (≤400px GSI), placeholders lisibles (`textSoft`), en-tête condensé (sur-titre kicker retiré), messages erreur/succès colorés. **Explorer** — suivre depuis la recherche invalide aussi profil/classement/gamification (comme l'onglet Amis). **Fil social** — réactions ❤️ réconciliées avec la vérité serveur (plus de dérive du compteur). **Navigation** — retour des Notifications repointé vers l'Accueil (au lieu du Profil). **Accueil** — état vide en grille « Tout est à jour » quand on est à jour (au lieu de « ajoutez des séries »), rangée d'actions héro sans débordement. **Divers** — routes `library/favorite-games` & `reorder-favorites` déclarées. Reportés (notés) : puce « intérêt » de la fiche série (décision produit → Étienne), overlay busy SSO, code mort interne.
 Dernière mise à jour : **2026-07-23** (Claude/Benjamin) — Lot QA (retours testeurs) : **(1)** Déconnexion web réparée (`settings.tsx` : `signOut` vide le token **et** renvoie à `/setup` ; idem après suppression de compte — qui garde sa confirmation « taper SUPPRIMER »). **(2)** Explorer — « déjà vu » pris en compte instantanément : un titre suivi/vu depuis une fiche (même ouverte depuis un ami) est retiré du deck figé de l'Explorer sans re-fetch (`feedSession.tracked` + filtre `TikTokFeed` + effet fiches série/film/jeu). **(3)** Jeux « Sorties à venir » : grille d'affiches **avec date** (au lieu d'une carte-carrousel sans date), cohérente avec les autres catégories et l'Agenda ; + invalidation `['games','upcoming']` sur changement de statut. **(4)** Nettoyage `TabBar` (clause d'onglet Jeux masqué devenue morte après le passage en écran de pile). Écran de connexion (bouton Google blanc sur thème sombre + scintillement + surcharge) → findings transmis à Étienne (design).
@@ -17,7 +21,6 @@ Dernière mise à jour : **2026-07-22** (Claude/Benjamin) — écran bibliothèq
 Dernière mise à jour : **2026-07-22** (Claude/Étienne) — Profil : « Temps déclaré » → « Temps de jeu » et titre de section « Récompenses » au-dessus de la carte Trophées
 Dernière mise à jour : **2026-07-22** (Codex/Étienne) — résumé des statistiques du Profil rendu lisible et responsive
 Dernière mise à jour : **2026-07-22** (Claude/Étienne) — fiche jeu : refonte UX/UI de la carte d'identité (skill impeccable) — un seul format libellé/valeur, genres en tags + notes en **tuiles à dégradé vif** (façon carte « Temps devant des séries »), titre retiré du corps (bannière lisible sur tout fond)
-
 ---
 
 ## Vue d'ensemble
@@ -123,6 +126,116 @@ la migration visuelle doit encore être exécutée sans modifier la logique mét
 - **Vérifié** : typecheck mobile, export Expo web statique, détecteur
   Impeccable (`[]`) et parcours Playwright sur 8 écrans en 320/390 px — aucun
   débordement horizontal, aucune erreur console/page.
+### 2026-07-23 — Claude/Étienne : chantier « retour arrière » (fin) + tests navigation
+Poursuite (et bouclage) du chantier retour arrière : la garde `useBackClose`
+(déjà focus-gardée, cf. entrées précédentes) est branchée sur toutes les
+feuilles/modales **autonomes** qui en manquaient encore, sans rien changer
+d'autre. Toujours le même motif éprouvé — composant **monté en permanence**,
+`visible` réactif — jamais `useBackClose(true, …)` sur un composant monté
+conditionnellement (qui fuiterait le cran d'historique fantôme au démontage).
+- **Feuilles branchées** :
+  - Trophées → modale **badge** (`app/trophies.tsx`, `useBackClose(!!badge, …)`).
+  - Bibliothèque **Séries** et **Films** → feuille **filtres** (`app/library/shows.tsx`,
+    `app/library/movies.tsx`, `useBackClose(visible, onClose)`).
+  - **Favoris** → feuille **Trier par** et page **Ajouter/Supprimer**
+    (`components/favorites.tsx`). Le menu flottant « … » (qui **navigue** via
+    `router.push`) est laissé de côté, comme les menus « … » des fiches, pour
+    éviter la course cran-fantôme / navigation.
+  - **Paramètres** → modales **Nom d'affichage / Pays / Mot de passe / Suppression**
+    (`app/settings.tsx`). Comme ces modales sont montées **conditionnellement**,
+    la garde est portée par le parent `AccountTab` sur les états `pwOpen`,
+    `delOpen`, `nameOpen`, `countryOpen` (monté en permanence, `visible` réactif).
+  - **Profil utilisateur** → confirmation **blocage** (`app/user/[id].tsx`).
+  - **Commentaires** → **composer** (`app/comments/[id].tsx`).
+- **Toujours reportées** (motif « course » documenté) : les feuilles secondaires
+  ouvertes **depuis** un menu « … » de fiche (personnaliser / listes / affiche /
+  notes / temps de jeu) et le menu flottant des favoris. Piste d'unification
+  inchangée : une primitive `BottomSheet` partagée intégrant la garde.
+- **Tests navigation (web, Chromium)** : suite dédiée **6/6** — fiche série
+  (menu → retour → menu fermé, fiche conservée), filtres bibliothèque Séries,
+  badge Trophées, modale Pays des Paramètres, blocage profil, composer de
+  commentaire ; **+ non-régression** confirmée sur recherche → fiche → retour
+  (revient aux résultats, pas au feed) et feuille épisode → commentaires
+  (navigue sans fermer la fiche). `tsc --noEmit` clean, export web OK.
+
+### 2026-07-22 — Claude/Étienne : chantier « retour arrière » (garde sur les feuilles) + section « Votre avis » retirée
+- **Section « Votre avis / Qu'est-ce qui vous intéresse ? » retirée** des fiches
+  série/film (`mobile/app/show/[id].tsx`, onglet À propos) : sans intérêt dans
+  l'app (état purement local, jamais enregistré). Const `INTEREST`, état
+  `interest`, JSX et styles associés supprimés. Validé au rendu web.
+- **Chantier retour arrière — 1re salve** : `useBackClose` (garde de retour web,
+  déjà focus-gardée) branché sur les feuilles/menus qui en manquaient, en
+  priorité celles qui pouvaient **quitter l'app** ou sauter une étape sur la PWA :
+  feuille **filtres Explorer** (`SearchFilters.tsx`), **menus « … »** des fiches
+  série et jeu, et les popups `ReportModal`, `MarkPreviousPopup`,
+  `BlockedCommentPopup`. Le retour referme désormais la feuille au lieu de
+  reculer le routeur. Validé au rendu web (fiche série : menu ouvert → retour →
+  menu fermé, fiche conservée).
+- **Reste du chantier** (à poursuivre) : feuilles secondaires des fiches
+  (personnaliser / listes / affiche / notes / temps de jeu), Paramètres,
+  Trophées, filtres de bibliothèque, favoris, composer de commentaire, blocage
+  profil. Piste d'unification : une primitive `BottomSheet` partagée intégrant
+  la garde (plutôt que la recâbler à chaque feuille).
+
+### 2026-07-22 — Claude/Étienne : navigation depuis les overlays + démarrage des P0 (audit)
+Retour Étienne (feuille épisode) + attaque des priorités P0 de l'audit UX.
+- **Navigation depuis un overlay fiabilisée** (`mobile/lib/useBackClose.ts`) :
+  depuis la feuille épisode, taper le **nom de la série** ou les **commentaires**
+  fermait la fiche au lieu d'ouvrir la cible. Cause (PWA) : `onClose()` déclenchait
+  le `history.back()` du cran fantôme, qui entrait en course avec le `router.push`
+  et l'annulait. Le hook expose désormais `beginNavigation()` : appelé juste avant
+  de naviguer depuis l'overlay, il neutralise ce `history.back()`. Câblé sur
+  `EpisodeSheet` (nom de série + commentaires), `UserPreviewSheet` (profil complet
+  + bibliothèque) et `CommentsSheet` (ouvrir un profil). Validé au rendu web : la
+  feuille épisode → « Commentaires » ouvre bien `/comments/…` (au lieu de fermer).
+- **P0 — repli de retour de la fiche jeu** (`mobile/app/game/[id].tsx`) : le retour
+  après rechargement/lien partagé replie désormais sur `'/'` (accueil, neutre) au
+  lieu de `/library/games`, comme la fiche série.
+- **P0 — popup SSO web** (`mobile/components/LinkAccountPrompt.tsx`) : ajout de
+  `useBackClose` → sur la PWA, le retour referme la popup au lieu de reculer le
+  routeur (qui, depuis un onglet racine, quittait la web app). Le bouton « Lier »
+  passe aussi par `beginNavigation()`.
+- **P0 — médailles « inversées » profil public : FAUX POSITIF** (vérifié). Le
+  `TIER_COLORS` de `user/[id]` colore des **paliers de badge** (bronze = palier 1,
+  progression → diamant), pas des rangs de classement (or = 1er). Rien à corriger
+  ici (les rangs de Stats/Classement restent or d'abord, à juste titre).
+- **Reste des P0** (audit) : les autres feuilles `<Modal>` web sans garde de retour
+  (menus de fiche, tri/filtre imbriqué…) = passe plus large recommandée (primitive
+  `BottomSheet` partagée) — à planifier.
+
+### 2026-07-22 — Claude/Étienne : retour arrière fiabilisé + Agenda Films groupé par mois
+Deux retours Étienne (Android) :
+- **Retour arrière logique** (`mobile/lib/useBackClose.ts`) : depuis une fiche
+  ouverte via un résultat de recherche, le retour ramenait au feed TikTok au
+  lieu des résultats. Cause : le `useBackClose` de l'Explorer interceptait le
+  retour même quand la fiche était empilée par-dessus. Corrigé en **verrouillant
+  l'interception sur le focus** (`useIsFocused`) — l'overlay ne capture le retour
+  que si son écran est au premier plan ; sinon le routeur dépile la fiche et l'on
+  revient sur les résultats (recherche préservée). Corrigé pour le **natif**
+  (BackHandler) ET la **PWA web** (cran d'historique fantôme gardé par le focus,
+  avec garde anti-course : ne jamais `history.back()` lors d'une nav avant, ce
+  qui annulait l'ouverture de la fiche). Validé au rendu web : fiche → retour →
+  résultats de recherche (plus le feed).
+  Reste identifié (audit, à traiter ensuite) : plusieurs `<Modal>` web n'utilisent
+  pas encore `useBackClose` (retour navigateur qui saute l'étape) — cf. audit.
+- **Agenda › Films par période** (`mobile/app/(tabs)/agenda.tsx`) : les films à
+  venir étaient listés « en vrac ». Ils sont désormais **groupés par mois** avec
+  les mêmes badges `PillHeader` que le sous-onglet Jeux (groupage client par
+  « mois année », tri chronologique). Vue liste et vue grille. Logique de
+  groupage vérifiée (ordre chronologique, tri intra-mois) ; chemin de rendu
+  identique au sous-onglet Jeux.
+
+### 2026-07-22 — Claude/Étienne : recherche Jeux — filtre plateformes classé par récence
+Retour Étienne : dans la feuille « Trier & filtrer » des résultats Jeux, les
+plateformes étaient listées par ordre alphabétique (64DD, Android, Arcade… en
+tête). La liste reste **dérivée des résultats** (seules les consoles sur
+lesquelles au moins un jeu trouvé est sorti sont proposées — comportement
+voulu), mais elle est désormais **classée de la plus récente à la plus
+ancienne** (Nintendo Switch 2 → PS5 → Xbox Series → … → NES → Arcade), avec
+« Toutes les plateformes » toujours en tête (`PLATFORM_ORDER` dans
+`mobile/app/(tabs)/explore.tsx`). Toute plateforme hors liste de référence est
+reléguée en fin, par ordre alphabétique (dégradation gracieuse). Validé par un
+contrôle déterministe de l'ordre + rendu Playwright de la feuille de filtre.
 
 ### 2026-07-22 — Claude/Étienne : Accueil — carte héro compacte, déclinée Films/Jeux, choisie par préférences
 - **Carte héro réduite** (`mobile/app/(tabs)/index.tsx`) : elle prenait trop de
@@ -214,6 +327,7 @@ la migration visuelle doit encore être exécutée sans modifier la logique mét
 - **QA** : typecheck mobile et export Expo Web réussis (41 routes) ; test
   Playwright avec les valeurs longues du cas signalé à 320 × 844 et 390 × 844,
   sans débordement horizontal, troncature ni erreur d'exécution.
+
 ### 2026-07-22 — Claude/Étienne : fiche jeu — refonte UX/UI de la carte d'identité
 Retour Étienne : la carte fusionnée précédente faisait « décousu » (trois
 formats coexistants — texte libellé inline pour Genre/Sortie, pilules pour les

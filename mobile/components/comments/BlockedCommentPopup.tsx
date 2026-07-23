@@ -3,11 +3,13 @@ import { View, Text, StyleSheet, Pressable, Modal } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { COLORS, FONTS, RADIUS, SHADOW, SIZES, SPACE } from '@/lib/theme';
 import { useReduceMotion } from '@/lib/useReduceMotion';
+import { useBackClose } from '@/lib/useBackClose';
 
 // Petite popup centrée (ton complice) affichée quand un commentaire/réponse est
 // rejeté par la modération (400 comment_blocked). Le message vient du serveur.
 export function BlockedCommentPopup({ message, onClose }: { message: string | null; onClose: () => void }) {
   const reduce = useReduceMotion();
+  useBackClose(!!message, onClose);
   return (
     <Modal visible={!!message} transparent animationType={reduce ? 'none' : 'fade'} onRequestClose={onClose}>
       <Pressable
