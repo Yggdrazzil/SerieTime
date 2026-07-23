@@ -17,6 +17,7 @@ import {
 import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import { goBack } from '@/lib/nav';
+import { useBackClose } from '@/lib/useBackClose';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, FONTS, RADIUS, SHADOW, SIZES, SPACE } from '@/lib/theme';
 import { EmptyState, LoadError } from '@/components/ui';
@@ -123,6 +124,7 @@ export default function CommentsScreen() {
   const closeComposer = () => {
     if (!busy) setComposer(false);
   };
+  useBackClose(composer, closeComposer);
 
   // Retour vers la fiche du média (retour Étienne) : seulement quand l'appelant
   // a transmis le type — sans lui, on ne sait pas quelle fiche ouvrir.

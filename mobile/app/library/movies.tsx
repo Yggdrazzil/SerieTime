@@ -12,6 +12,7 @@ import { AppearItem, Pop } from '@/components/anim';
 import { useFloatingSection, FloatingSectionPill } from '@/components/FloatingSection';
 import { GridSkeleton } from '@/components/skeletons';
 import { usePullRefresh } from '@/lib/usePullRefresh';
+import { useBackClose } from '@/lib/useBackClose';
 
 type Sort = 'last_watched' | 'last_added' | 'alpha';
 type Filter = 'all' | 'seen' | 'unseen';
@@ -152,6 +153,7 @@ function FilterSheet({
   const [s, setS] = useState<Sort>(sort);
   const [f, setF] = useState<Filter>(filter);
   React.useEffect(() => { if (visible) { setS(sort); setF(filter); } }, [visible, sort, filter]);
+  useBackClose(visible, onClose);
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
       <Pressable

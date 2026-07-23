@@ -6,6 +6,7 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
+Dernière mise à jour : **2026-07-23** (Claude/Étienne) — chantier « retour arrière » (fin) : garde de retour branchée sur les dernières feuilles/modales autonomes (Trophées, filtres de bibliothèque Séries/Films, favoris, Paramètres, blocage profil, composer de commentaire) + suite de tests navigation web (6/6 : la feuille se referme au retour et l'écran hôte est conservé)
 Dernière mise à jour : **2026-07-22** (Claude/Étienne) — chantier « retour arrière » : garde de retour ajoutée aux feuilles/menus web (filtres Explorer, menus « … » des fiches, popups) + section « Votre avis » retirée des fiches série/film
 Dernière mise à jour : **2026-07-22** (Claude/Étienne) — retour arrière corrigé (natif + PWA : la fiche ouverte depuis la recherche revient sur les résultats, plus sur le feed) + Agenda › Films groupé par mois comme les Jeux
 Dernière mise à jour : **2026-07-22** (Claude/Étienne) — recherche Jeux : filtre plateformes classé de la console la plus récente à la plus ancienne (Switch 2 → …), « Toutes les plateformes » en tête
@@ -102,6 +103,38 @@ la migration visuelle doit encore être exécutée sans modifier la logique mét
 6. Publication native optionnelle (EAS Build APK, puis stores).
 
 ## Journal des modifications
+
+### 2026-07-23 — Claude/Étienne : chantier « retour arrière » (fin) + tests navigation
+Poursuite (et bouclage) du chantier retour arrière : la garde `useBackClose`
+(déjà focus-gardée, cf. entrées précédentes) est branchée sur toutes les
+feuilles/modales **autonomes** qui en manquaient encore, sans rien changer
+d'autre. Toujours le même motif éprouvé — composant **monté en permanence**,
+`visible` réactif — jamais `useBackClose(true, …)` sur un composant monté
+conditionnellement (qui fuiterait le cran d'historique fantôme au démontage).
+- **Feuilles branchées** :
+  - Trophées → modale **badge** (`app/trophies.tsx`, `useBackClose(!!badge, …)`).
+  - Bibliothèque **Séries** et **Films** → feuille **filtres** (`app/library/shows.tsx`,
+    `app/library/movies.tsx`, `useBackClose(visible, onClose)`).
+  - **Favoris** → feuille **Trier par** et page **Ajouter/Supprimer**
+    (`components/favorites.tsx`). Le menu flottant « … » (qui **navigue** via
+    `router.push`) est laissé de côté, comme les menus « … » des fiches, pour
+    éviter la course cran-fantôme / navigation.
+  - **Paramètres** → modales **Nom d'affichage / Pays / Mot de passe / Suppression**
+    (`app/settings.tsx`). Comme ces modales sont montées **conditionnellement**,
+    la garde est portée par le parent `AccountTab` sur les états `pwOpen`,
+    `delOpen`, `nameOpen`, `countryOpen` (monté en permanence, `visible` réactif).
+  - **Profil utilisateur** → confirmation **blocage** (`app/user/[id].tsx`).
+  - **Commentaires** → **composer** (`app/comments/[id].tsx`).
+- **Toujours reportées** (motif « course » documenté) : les feuilles secondaires
+  ouvertes **depuis** un menu « … » de fiche (personnaliser / listes / affiche /
+  notes / temps de jeu) et le menu flottant des favoris. Piste d'unification
+  inchangée : une primitive `BottomSheet` partagée intégrant la garde.
+- **Tests navigation (web, Chromium)** : suite dédiée **6/6** — fiche série
+  (menu → retour → menu fermé, fiche conservée), filtres bibliothèque Séries,
+  badge Trophées, modale Pays des Paramètres, blocage profil, composer de
+  commentaire ; **+ non-régression** confirmée sur recherche → fiche → retour
+  (revient aux résultats, pas au feed) et feuille épisode → commentaires
+  (navigue sans fermer la fiche). `tsc --noEmit` clean, export web OK.
 
 ### 2026-07-22 — Claude/Étienne : chantier « retour arrière » (garde sur les feuilles) + section « Votre avis » retirée
 - **Section « Votre avis / Qu'est-ce qui vous intéresse ? » retirée** des fiches
