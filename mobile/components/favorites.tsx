@@ -20,6 +20,7 @@ import { Pop, PopIn } from '@/components/anim';
 import { useReduceMotion } from '@/lib/useReduceMotion';
 import { GridSkeleton } from '@/components/skeletons';
 import { usePullRefresh } from '@/lib/usePullRefresh';
+import { useBackClose } from '@/lib/useBackClose';
 
 const NATIVE = Platform.OS !== 'web';
 
@@ -221,6 +222,7 @@ export function SortSheet({
   const [temp, setTemp] = useState<FavSortKey>(current);
   useEffect(() => { if (visible) setTemp(current); }, [visible, current]);
   const changed = temp !== current;
+  useBackClose(visible, onClose);
   return (
     <BottomSheet visible={visible} onClose={onClose}>
       <Text style={styles.sheetTitle}>Trier par</Text>
@@ -318,6 +320,7 @@ function FavPicker({
   const w = WORDING[kind];
   const [q, setQ] = useState('');
   useEffect(() => { if (visible) setQ(''); }, [visible]);
+  useBackClose(visible, onClose);
 
   // Bascule OPTIMISTE : le cœur et la grille réagissent au doigt (un appui = un
   // favori), le serveur confirme derrière. Sans cela, l'UI attendait le refetch

@@ -17,6 +17,7 @@ import { useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { goBack } from '@/lib/nav';
+import { useBackClose } from '@/lib/useBackClose';
 import { api, tmdbImage } from '@/lib/api';
 import type { MediaDto } from '@/lib/types';
 import {
@@ -89,6 +90,7 @@ export default function UserProfileScreen() {
   const [busy, setBusy] = useState(false);
   const [blockConfirm, setBlockConfirm] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  useBackClose(blockConfirm, () => setBlockConfirm(false));
 
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof document === 'undefined' || !focused) return;

@@ -506,6 +506,57 @@ function applyGameFilter(items: GameSearchResultDto[], sort: GameSort, platform:
   return arr; // 'popular' = ordre renvoyé par le serveur (par popularité)
 }
 
+// Ordre du filtre plateformes : de la plus récente à la plus ancienne (retour
+// Étienne). Noms tels que renvoyés par IGDB ; toute plateforme absente de cette
+// liste est reléguée après, par ordre alphabétique (dégradation gracieuse).
+const PLATFORM_ORDER: string[] = [
+  'Nintendo Switch 2',
+  'PlayStation 5',
+  'Xbox Series X|S',
+  'PC (Microsoft Windows)',
+  'Mac',
+  'Linux',
+  'iOS',
+  'Android',
+  'Nintendo Switch',
+  'PlayStation 4',
+  'Xbox One',
+  'Wii U',
+  'PlayStation Vita',
+  'New Nintendo 3DS',
+  'Nintendo 3DS',
+  'PlayStation 3',
+  'Xbox 360',
+  'Wii',
+  'Nintendo DS',
+  'PlayStation Portable',
+  'PlayStation 2',
+  'Xbox',
+  'Nintendo GameCube',
+  'Game Boy Advance',
+  'Dreamcast',
+  '64DD',
+  'Nintendo 64',
+  'PlayStation',
+  'Sega Saturn',
+  'Virtual Boy',
+  'Super Nintendo Entertainment System',
+  'Super Famicom',
+  'Game Boy Color',
+  'Sega Mega Drive/Genesis',
+  'Sega Game Gear',
+  'Game Boy',
+  'Sega Master System/Mark III',
+  'Nintendo Entertainment System',
+  'Family Computer Disk System',
+  'Family Computer',
+  'Arcade',
+];
+const platformRank = (p: string) => {
+  const i = PLATFORM_ORDER.indexOf(p);
+  return i === -1 ? PLATFORM_ORDER.length : i;
+};
+
 // --- Résultats jeux (onglet JEUX, façon TV Time) -----------------------------
 // Taper une ligne OUVRE la fiche (« consultation ≠ suivi ») ; le bouton +
 // suit le jeu (statut « Voulus »), comme MediaResults pour séries/films.
@@ -572,11 +623,12 @@ function GameResults({ query, rawQuery }: { query: string; rawQuery: string }) {
     return <EmptyState title="Aucun résultat" message={`Aucun jeu ne correspond à « ${rawQuery.trim()} ».`} />;
   }
 
-  // Plateformes proposées au filtre : celles PRÉSENTES dans les résultats.
+  // Plateformes proposées au filtre : celles PRÉSENTES dans les résultats,
+  // classées de la plus récente à la plus ancienne (console).
   const platformOpts: FilterOption[] = [
     { key: 'all', label: 'Toutes les plateformes' },
     ...Array.from(new Set(results.flatMap((r) => r.platforms ?? [])))
-      .sort((a, b) => a.localeCompare(b, 'fr'))
+      .sort((a, b) => platformRank(a) - platformRank(b) || a.localeCompare(b, 'fr'))
       .map((p) => ({ key: p, label: p })),
   ];
   // Filtre/tri utilisateur PUIS remontée des jeux déjà ajoutés en tête.

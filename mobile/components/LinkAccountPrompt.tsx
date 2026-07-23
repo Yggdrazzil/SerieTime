@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Modal } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { ssoWebAvailable } from '@/lib/sso';
+import { useBackClose } from '@/lib/useBackClose';
 import { COLORS, FONTS } from '@/lib/theme';
 import { PopIn } from '@/components/anim';
 
@@ -30,10 +31,16 @@ export function LinkAccountPrompt() {
 
   const linked = data?.user?.linkedProviders;
   const shouldShow = ssoWebAvailable() && !!data && !linked?.google && !linked?.discord && !dismissed;
+
+  // Le « retour » (PWA) referme la popup au lieu de reculer le routeur (qui,
+  // depuis un onglet racine, quittait la web app). Appelé inconditionnellement
+  // (règle des hooks) — inerte tant que la popup n'est pas affichée.
+  const close = useCallback(() => setDismissed(true), []);
+  const { beginNavigation } = useBackClose(shouldShow, close);
   if (!shouldShow) return null;
 
-  const close = () => setDismissed(true);
   const goLink = () => {
+    beginNavigation();
     close();
     router.push('/linked-accounts');
   };
