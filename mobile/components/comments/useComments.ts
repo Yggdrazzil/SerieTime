@@ -24,10 +24,18 @@ export const SORT_LABEL: Record<SortKey, string> = { pertinents: 'Les plus perti
 // cœur ❤️ optimiste, suppression optimiste, partage. Consommée par la page
 // plein écran (mobile/app/comments/[id].tsx) et par le bottom sheet TikTok
 // (mobile/components/explore/CommentsSheet.tsx) — même clé de requête
-// `['comments', mediaId]` pour partager le cache (et les compteurs de
+// `key` pour partager le cache (et les compteurs de
 // CommentsRowLink).
-export function useComments(mediaId: string, title?: string) {
+export function useComments(mediaId: string, title?: string, episodeId?: string) {
   const qc = useQueryClient();
+  // Scope épisode optionnel : clé de cache et URLs se spécialisent quand un
+  // `episodeId` est fourni. Sans lui = fil SÉRIE, comportement inchangé.
+  const key = useMemo<readonly unknown[]>(
+    () => (episodeId ? ['comments', mediaId, episodeId] : ['comments', mediaId]),
+    [mediaId, episodeId],
+  );
+  const epParam = episodeId ? `?episodeId=${episodeId}` : '';
+  const epBody = episodeId ? { episodeId } : {};
   const [sort, setSort] = useState<SortKey>('pertinents');
   const [openReplies, setOpenReplies] = useState<Record<string, boolean>>({});
   const [replyTo, setReplyTo] = useState<string | null>(null);
@@ -43,10 +51,10 @@ export function useComments(mediaId: string, title?: string) {
     refetch,
     isRefetching,
   } = useQuery({
-    queryKey: ['comments', mediaId],
-    queryFn: () => api.get<{ comments: CommentDto[] }>(`/api/media/${mediaId}/comments`),
+    queryKey: key,
+    queryFn: () => api.get<{ comments: CommentDto[] }>(`/api/media/${mediaId}/comments${epParam}`),
   });
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['comments', mediaId] });
+  const invalidate = () => qc.invalidateQueries({ queryKey: key });
 
   const comments = useMemo(() => {
     const list = [...(data?.comments ?? [])];
@@ -64,7 +72,7 @@ export function useComments(mediaId: string, title?: string) {
     if (!body.trim()) return false;
     setPostError(null);
     try {
-      await api.post(`/api/media/${mediaId}/comments`, { body: body.trim() });
+      await api.post(`/api/media/${mediaId}/comments`, { body: body.trim(), ...epBody });
       invalidate();
       return true;
     } catch (e) {
@@ -76,7 +84,7 @@ export function useComments(mediaId: string, title?: string) {
     if (!replyText.trim()) return false;
     setPostError(null);
     try {
-      await api.post(`/api/media/${mediaId}/comments`, { body: replyText.trim(), parentId });
+      await api.post(`/api/media/${mediaId}/comments`, { body: replyText.trim(), parentId, ...epBody });
       setReplyText('');
       setReplyTo(null);
       setOpenReplies((o) => ({ ...o, [parentId]: true }));
@@ -91,8 +99,8 @@ export function useComments(mediaId: string, title?: string) {
   // doigt, le serveur confirme derrière (rollback si échec).
   const heart = async (c: CommentDto) => {
     const mine = c.reactions.mine.includes('❤️');
-    await qc.cancelQueries({ queryKey: ['comments', mediaId] });
-    const prev = qc.getQueryData<{ comments: CommentDto[] }>(['comments', mediaId]);
+    await qc.cancelQueries({ queryKey: key });
+    const prev = qc.getQueryData<{ comments: CommentDto[] }>(key);
     const patch = (x: CommentDto): CommentDto =>
       x.id === c.id
         ? {
@@ -105,20 +113,20 @@ export function useComments(mediaId: string, title?: string) {
             },
           }
         : { ...x, replies: x.replies?.map(patch) };
-    qc.setQueryData<{ comments: CommentDto[] }>(['comments', mediaId], (d) => (d ? { comments: d.comments.map(patch) } : d));
+    qc.setQueryData<{ comments: CommentDto[] }>(key, (d) => (d ? { comments: d.comments.map(patch) } : d));
     try {
       await api.post(`/api/comments/${c.id}/react`, { emoji: '❤️' });
       invalidate();
     } catch {
-      if (prev) qc.setQueryData(['comments', mediaId], prev);
+      if (prev) qc.setQueryData(key, prev);
       setPostError(REACTION_FALLBACK);
     }
   };
   // Suppression OPTIMISTE : la carte disparaît immédiatement.
   const remove = async (c: CommentDto) => {
-    await qc.cancelQueries({ queryKey: ['comments', mediaId] });
-    const prev = qc.getQueryData<{ comments: CommentDto[] }>(['comments', mediaId]);
-    qc.setQueryData<{ comments: CommentDto[] }>(['comments', mediaId], (d) =>
+    await qc.cancelQueries({ queryKey: key });
+    const prev = qc.getQueryData<{ comments: CommentDto[] }>(key);
+    qc.setQueryData<{ comments: CommentDto[] }>(key, (d) =>
       d
         ? {
             comments: d.comments
@@ -131,7 +139,7 @@ export function useComments(mediaId: string, title?: string) {
       await api.del(`/api/comments/${c.id}`);
       invalidate();
     } catch {
-      if (prev) qc.setQueryData(['comments', mediaId], prev);
+      if (prev) qc.setQueryData(key, prev);
       setPostError(DELETE_FALLBACK);
     }
   };

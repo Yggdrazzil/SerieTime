@@ -63,7 +63,9 @@ function parseMediaKind(value?: string): MediaKind | null {
 }
 
 export default function CommentsScreen() {
-  const { id, title, type } = useLocalSearchParams<{ id: string; title?: string; type?: string }>();
+  const { id, title, type, episodeId, episodeLabel } = useLocalSearchParams<{
+    id: string; title?: string; type?: string; episodeId?: string; episodeLabel?: string;
+  }>();
   const router = useRouter();
   const openUserPreview = useOpenUserPreview();
   const insets = useSafeAreaInsets();
@@ -96,7 +98,7 @@ export default function CommentsScreen() {
     heart,
     remove,
     shareComment,
-  } = useComments(id, title);
+  } = useComments(id, title, episodeId);
 
   const submit = async () => {
     if (!text.trim() || busy) return;
@@ -143,6 +145,7 @@ export default function CommentsScreen() {
           <Feather name="chevron-right" size={17} color={COLORS.textMuted} accessible={false} />
         ) : null}
       </View>
+      {episodeLabel ? <Text style={styles.headEpisode}>{episodeLabel} · Commentaires de l’épisode</Text> : null}
       <Text style={styles.headCount}>
         {total} commentaire{total !== 1 ? 's' : ''}
         {ficheHref ? ' · Voir la fiche' : ''}
@@ -388,6 +391,7 @@ const styles = StyleSheet.create({
   headTitleRow: { maxWidth: '100%', flexDirection: 'row', alignItems: 'center', gap: 2 },
 
   headTitle: { flexShrink: 1, color: COLORS.text, fontSize: 17, lineHeight: 22, fontFamily: FONTS.bold },
+  headEpisode: { marginTop: 1, color: COLORS.secondary, fontSize: 12.5, lineHeight: 17, fontFamily: FONTS.semiBold },
   headCount: { marginTop: 1, color: COLORS.textMuted, fontSize: 12.5, lineHeight: 17, fontFamily: FONTS.regular },
   toolbar: {
     backgroundColor: COLORS.surface,

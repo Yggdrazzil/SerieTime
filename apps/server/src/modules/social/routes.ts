@@ -139,6 +139,16 @@ function summarizeReactions(reactions: { emoji: string; userId: string }[], me: 
   return { total: reactions.length, byEmoji, mine };
 }
 
+// Garde anti-spoiler : lire/écrire les commentaires d'un épisode exige de
+// l'avoir marqué VU (UserEpisodeStatus). Empêche le spoiler et le scraping.
+async function hasWatchedEpisode(userId: string, episodeId: string): Promise<boolean> {
+  const s = await prisma.userEpisodeStatus.findUnique({
+    where: { userId_episodeId: { userId, episodeId } },
+    select: { status: true },
+  });
+  return s?.status === 'watched';
+}
+
 type FeedItem = {
   kind: 'watch' | 'comment' | 'badge';
   id: string;
@@ -1078,7 +1088,7 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // --- Commentaires (avec fils de discussion) + réactions -----------------
-  app.get('/api/media/:id/comments', async (request) => {
+  app.get('/api/media/:id/comments', async (request, reply) => {
     const { id } = request.params as { id: string };
     // `take` : borne le nombre de commentaires RACINES renvoyés (leurs réponses
     // suivent toujours). Le mobile n'envoie rien → défaut 100 : un fil de
@@ -1090,6 +1100,10 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
         take: z.coerce.number().int().min(1).max(500).optional(),
       })
       .parse(request.query ?? {});
+    // Anti-spoiler : le fil d'un épisode n'est lisible que si on l'a vu.
+    if (episodeId && !(await hasWatchedEpisode(request.userId, episodeId))) {
+      return reply.code(403).send({ error: 'episode_not_watched' });
+    }
     const rootTake = take ?? 100;
     // Blocage : les commentaires ET réponses des utilisateurs que j'ai bloqués
     // disparaissent de ma vue (un Set chargé une fois, pas de N+1).
@@ -1099,7 +1113,7 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
     // avant, les réponses d'une racine bloquée disparaissent avec elle.
     const roots = (
       await prisma.comment.findMany({
-        where: { mediaId: id, parentId: null, ...(episodeId ? { episodeId } : {}) },
+        where: { mediaId: id, parentId: null, ...(episodeId ? { episodeId } : { episodeId: null }) },
         include: { user: true, reactions: true },
         orderBy: { createdAt: 'desc' },
         take: rootTake,
@@ -1110,7 +1124,7 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
           await prisma.comment.findMany({
             // Même filtre episodeId que la requête d'origine (qui portait sur
             // racines ET réponses) : le comportement visible ne change pas.
-            where: { parentId: { in: roots.map((c) => c.id) }, ...(episodeId ? { episodeId } : {}) },
+            where: { parentId: { in: roots.map((c) => c.id) }, ...(episodeId ? { episodeId } : { episodeId: null }) },
             include: { user: true, reactions: true },
             orderBy: { createdAt: 'asc' },
           })
@@ -1171,6 +1185,11 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
       // L'épisode doit appartenir au média de l'URL : sinon le commentaire
       // serait rattaché à une fiche mais affiché sous l'épisode d'une autre.
       if (ep.show.mediaId !== id) return reply.code(400).send({ error: 'episode_not_in_media' });
+      // Anti-spoiler : on ne poste (commentaire OU réponse) sur un épisode que
+      // si on l'a vu.
+      if (!(await hasWatchedEpisode(request.userId, body.episodeId))) {
+        return reply.code(403).send({ error: 'episode_not_watched' });
+      }
     }
     let parent: { id: string; userId: string } | null = null;
     if (body.parentId) {

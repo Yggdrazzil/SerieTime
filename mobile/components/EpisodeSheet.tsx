@@ -387,6 +387,8 @@ function EpisodePage({
   const queryClient = useQueryClient();
   const [askPrevious, setAskPrevious] = useState(false);
   const [mutationError, setMutationError] = useState<string | null>(null);
+  // Invite « donne ton avis » après avoir marqué l'épisode vu (dismissible).
+  const [avisPrompt, setAvisPrompt] = useState(false);
 
   const detail = useQuery({
     queryKey: ['show', mediaId],
@@ -408,12 +410,15 @@ function EpisodePage({
     staleTime: 5 * 60_000,
   });
 
+  // Commentaires scopés à CET épisode. Anti-spoiler : aucun appel tant que
+  // l'épisode n'est pas marqué vu (le serveur renverrait 403 de toute façon).
   const comments = useQuery({
-    queryKey: ['comments', mediaId],
+    queryKey: ['comments', mediaId, episode.id],
     queryFn: () =>
       api.get<{ comments: { replies?: unknown[] }[] }>(
-        '/api/media/' + mediaId + '/comments',
+        '/api/media/' + mediaId + '/comments?episodeId=' + episode.id,
       ),
+    enabled: episode.watched,
     staleTime: 60_000,
   });
 
@@ -477,6 +482,11 @@ function EpisodePage({
       setMutationError(
         "Le statut de l'épisode n'a pas pu être enregistré. Réessaie.",
       );
+    },
+    onSuccess: (_data: unknown, item: EpisodeDto) => {
+      // `item.watched` = état AVANT bascule → false = on vient de marquer vu :
+      // on propose de donner son avis sur l'épisode.
+      if (!item.watched) setAvisPrompt(true);
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['shows'] });
@@ -599,6 +609,19 @@ function EpisodePage({
     onNavigateAway();
     onClose();
     router.push(('/show/' + mediaId) as Href);
+  };
+
+  const epLabel = episodeCode(episode.seasonNumber, episode.episodeNumber);
+  // Ouvre le fil de commentaires SCOPÉ à cet épisode (réservé aux « vu »).
+  const openEpisodeComments = () => {
+    onNavigateAway();
+    onClose();
+    router.push((
+      '/comments/' + mediaId +
+      '?title=' + encodeURIComponent(mediaTitle) +
+      '&type=show&episodeId=' + episode.id +
+      '&episodeLabel=' + encodeURIComponent(epLabel)
+    ) as Href);
   };
 
   const hero =
@@ -830,57 +853,74 @@ function EpisodePage({
         </View>
       ) : null}
 
-      <Pressable
-        style={({ pressed }) => [
-          styles.commentsCard,
-          pressed && styles.cardPressed,
-        ]}
-        onPress={() => {
-          onNavigateAway();
-          onClose();
-          router.push((
-            '/comments/' +
-              mediaId +
-              '?title=' +
-              encodeURIComponent(mediaTitle) +
-              '&type=show'
-          ) as Href);
-        }}
-        accessibilityRole="button"
-        accessibilityLabel={
-          commentsTotal === null
-            ? 'Ouvrir les commentaires'
-            : 'Ouvrir les commentaires, ' +
-              commentsTotal +
-              ' contribution' +
-              (commentsTotal > 1 ? 's' : '')
-        }
-      >
-        <View style={styles.commentsIcon} accessible={false}>
-          <Feather
-            name="message-circle"
-            size={20}
-            color={COLORS.secondary}
-          />
+      {avisPrompt && episode.watched ? (
+        <View style={styles.avisPrompt}>
+          <Text style={styles.avisPromptText}>Un avis sur {epLabel} ?</Text>
+          <View style={styles.avisPromptActions}>
+            <Pressable
+              onPress={() => {
+                setAvisPrompt(false);
+                openEpisodeComments();
+              }}
+              style={({ pressed }) => [styles.avisPromptBtn, pressed && styles.cardPressed]}
+              accessibilityRole="button"
+              accessibilityLabel={"Donner mon avis sur l'épisode"}
+            >
+              <Text style={styles.avisPromptBtnText}>Commenter</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setAvisPrompt(false)}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={"Masquer l'invite"}
+            >
+              <Feather name="x" size={18} color={COLORS.textMuted} />
+            </Pressable>
+          </View>
         </View>
-        <View style={styles.commentsCopy}>
-          <Text style={styles.commentsTitle}>Commentaires</Text>
+      ) : null}
+
+      {episode.watched ? (
+        <Pressable
+          style={({ pressed }) => [styles.commentsCard, pressed && styles.cardPressed]}
+          onPress={openEpisodeComments}
+          accessibilityRole="button"
+          accessibilityLabel={
+            commentsTotal === null
+              ? "Ouvrir les commentaires de l'épisode"
+              : "Ouvrir les commentaires de l'épisode, " +
+                commentsTotal +
+                ' contribution' +
+                (commentsTotal > 1 ? 's' : '')
+          }
+        >
+          <View style={styles.commentsIcon} accessible={false}>
+            <Feather name="message-circle" size={20} color={COLORS.secondary} />
+          </View>
+          <View style={styles.commentsCopy}>
+            <Text style={styles.commentsTitle}>Commentaires de l'épisode</Text>
+          </View>
+          <View style={styles.commentsAction}>
+            <Text style={styles.commentsCount}>
+              {comments.isLoading ? '…' : comments.isError ? '—' : commentsTotal}
+            </Text>
+            <Feather name="chevron-right" size={20} color={COLORS.textMuted} />
+          </View>
+        </Pressable>
+      ) : (
+        <View
+          style={styles.commentsLocked}
+          accessibilityRole="text"
+          accessibilityLabel={"Regarde l'épisode pour débloquer les commentaires"}
+        >
+          <View style={styles.commentsIcon} accessible={false}>
+            <Feather name="eye-off" size={20} color={COLORS.textMuted} />
+          </View>
+          <View style={styles.commentsCopy}>
+            <Text style={styles.commentsLockedText}>Regarde l'épisode pour débloquer les commentaires</Text>
+          </View>
         </View>
-        <View style={styles.commentsAction}>
-          <Text style={styles.commentsCount}>
-            {comments.isLoading
-              ? '…'
-              : comments.isError
-                ? '—'
-                : commentsTotal}
-          </Text>
-          <Feather
-            name="chevron-right"
-            size={20}
-            color={COLORS.textMuted}
-          />
-        </View>
-      </Pressable>
+      )}
 
       <MarkPreviousPopup
         visible={askPrevious}
@@ -1307,4 +1347,42 @@ const styles = StyleSheet.create({
     opacity: 0.82,
     transform: [{ scale: 0.995 }],
   },
+  // Carte commentaires VERROUILLÉE (épisode non vu) : sobre, non interactive.
+  commentsLocked: {
+    minHeight: 64,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACE.sm,
+    padding: SPACE.md,
+    borderRadius: RADIUS.card,
+    backgroundColor: COLORS.surfaceMuted,
+  },
+  commentsLockedText: {
+    flex: 1,
+    fontFamily: FONTS.semiBold,
+    fontSize: 13.5,
+    lineHeight: 18,
+    color: COLORS.textMuted,
+  },
+  // Invite « donne ton avis » après avoir marqué l'épisode vu.
+  avisPrompt: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: SPACE.sm,
+    paddingVertical: SPACE.sm,
+    paddingHorizontal: SPACE.md,
+    borderRadius: RADIUS.card,
+    backgroundColor: COLORS.primarySoft,
+    marginBottom: SPACE.sm,
+  },
+  avisPromptText: { flex: 1, fontFamily: FONTS.bold, fontSize: 14, color: COLORS.text },
+  avisPromptActions: { flexDirection: 'row', alignItems: 'center', gap: SPACE.sm },
+  avisPromptBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: SPACE.md,
+    borderRadius: RADIUS.pill,
+    backgroundColor: COLORS.primary,
+  },
+  avisPromptBtnText: { fontFamily: FONTS.extraBold, fontSize: 13, color: COLORS.onPrimary, letterSpacing: 0.3 },
 });

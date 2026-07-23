@@ -143,7 +143,10 @@ describe('Commentaires — parentId racine uniquement, épisode rattaché au mé
     expect(res.statusCode).toBe(400);
     expect(res.json().error).toBe('episode_not_in_media');
 
-    // Sur le BON média, le même episodeId passe.
+    // Sur le BON média, le même episodeId passe — après avoir marqué l'épisode
+    // vu (garde anti-spoiler : commenter un épisode exige de l'avoir vu).
+    const watch = await app.inject({ method: 'POST', url: `/api/episodes/${episodeId}/watched`, headers: bearer('Alice') });
+    expect(watch.statusCode).toBe(200);
     const ok = await app.inject({
       method: 'POST',
       url: `/api/media/${showMediaId}/comments`,
