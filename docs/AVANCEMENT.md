@@ -6,7 +6,7 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
-Dernière mise à jour : **2026-07-22** (Claude/Étienne) — navigation depuis les overlays fiabilisée (feuille épisode : nom de la série / commentaires OUVRENT au lieu de fermer la fiche) + P0 audit (repli retour fiche jeu, popup SSO web)
+Dernière mise à jour : **2026-07-22** (Claude/Étienne) — chantier « retour arrière » : garde de retour ajoutée aux feuilles/menus web (filtres Explorer, menus « … » des fiches, popups) + section « Votre avis » retirée des fiches série/film
 Dernière mise à jour : **2026-07-22** (Claude/Étienne) — retour arrière corrigé (natif + PWA : la fiche ouverte depuis la recherche revient sur les résultats, plus sur le feed) + Agenda › Films groupé par mois comme les Jeux
 Dernière mise à jour : **2026-07-22** (Claude/Étienne) — recherche Jeux : filtre plateformes classé de la console la plus récente à la plus ancienne (Switch 2 → …), « Toutes les plateformes » en tête
 Dernière mise à jour : **2026-07-23** (Claude/Benjamin) — Lot QA 2 (« corrige tout ») : **Écran de connexion** — bouton Google en thème `filled_black` sur thèmes sombres (fini le bouton blanc), plus de scintillement (init une seule fois via ref), largeur alignée (≤400px GSI), placeholders lisibles (`textSoft`), en-tête condensé (sur-titre kicker retiré), messages erreur/succès colorés. **Explorer** — suivre depuis la recherche invalide aussi profil/classement/gamification (comme l'onglet Amis). **Fil social** — réactions ❤️ réconciliées avec la vérité serveur (plus de dérive du compteur). **Navigation** — retour des Notifications repointé vers l'Accueil (au lieu du Profil). **Accueil** — état vide en grille « Tout est à jour » quand on est à jour (au lieu de « ajoutez des séries »), rangée d'actions héro sans débordement. **Divers** — routes `library/favorite-games` & `reorder-favorites` déclarées. Reportés (notés) : puce « intérêt » de la fiche série (décision produit → Étienne), overlay busy SSO, code mort interne.
@@ -102,6 +102,25 @@ la migration visuelle doit encore être exécutée sans modifier la logique mét
 6. Publication native optionnelle (EAS Build APK, puis stores).
 
 ## Journal des modifications
+
+### 2026-07-22 — Claude/Étienne : chantier « retour arrière » (garde sur les feuilles) + section « Votre avis » retirée
+- **Section « Votre avis / Qu'est-ce qui vous intéresse ? » retirée** des fiches
+  série/film (`mobile/app/show/[id].tsx`, onglet À propos) : sans intérêt dans
+  l'app (état purement local, jamais enregistré). Const `INTEREST`, état
+  `interest`, JSX et styles associés supprimés. Validé au rendu web.
+- **Chantier retour arrière — 1re salve** : `useBackClose` (garde de retour web,
+  déjà focus-gardée) branché sur les feuilles/menus qui en manquaient, en
+  priorité celles qui pouvaient **quitter l'app** ou sauter une étape sur la PWA :
+  feuille **filtres Explorer** (`SearchFilters.tsx`), **menus « … »** des fiches
+  série et jeu, et les popups `ReportModal`, `MarkPreviousPopup`,
+  `BlockedCommentPopup`. Le retour referme désormais la feuille au lieu de
+  reculer le routeur. Validé au rendu web (fiche série : menu ouvert → retour →
+  menu fermé, fiche conservée).
+- **Reste du chantier** (à poursuivre) : feuilles secondaires des fiches
+  (personnaliser / listes / affiche / notes / temps de jeu), Paramètres,
+  Trophées, filtres de bibliothèque, favoris, composer de commentaire, blocage
+  profil. Piste d'unification : une primitive `BottomSheet` partagée intégrant
+  la garde (plutôt que la recâbler à chaque feuille).
 
 ### 2026-07-22 — Claude/Étienne : navigation depuis les overlays + démarrage des P0 (audit)
 Retour Étienne (feuille épisode) + attaque des priorités P0 de l'audit UX.

@@ -5,6 +5,7 @@ import type { EpisodeDto } from '@/lib/types';
 import { COLORS, FONTS, RADIUS, SHADOW, SIZES, SPACE } from '@/lib/theme';
 import { PopIn } from '@/components/anim';
 import { useReduceMotion } from '@/lib/useReduceMotion';
+import { useBackClose } from '@/lib/useBackClose';
 
 // Mini pop-up « Cocher aussi les épisodes précédents ? » (règle produit) :
 // quand l'utilisateur coche un épisode alors que des épisodes ANTÉRIEURS
@@ -45,6 +46,7 @@ export function MarkPreviousPopup({
   onNo: () => void;
 }) {
   const reduce = useReduceMotion();
+  useBackClose(visible, onNo);
   if (!visible) return null;
   return (
     <Modal visible transparent animationType={reduce ? 'none' : 'fade'} onRequestClose={onNo}>

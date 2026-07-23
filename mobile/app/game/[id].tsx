@@ -17,6 +17,7 @@ import { ReportModal } from '@/components/ReportModal';
 import { useFeedSessionStore } from '@/components/explore/feedSession';
 import { shortDateFr } from '@/lib/format';
 import { useReduceMotion } from '@/lib/useReduceMotion';
+import { useBackClose } from '@/lib/useBackClose';
 
 // Miroir de la réponse GET /api/games/:id (serveur : apps/server/src/modules/games/routes.ts).
 type GameDetailDto = {
@@ -88,6 +89,8 @@ export default function GameDetail() {
   const qc = useQueryClient();
   const [toast, setToast] = useState<string | null>(null);
   const [menu, setMenu] = useState(false);
+  // Retour (PWA/Android) : ferme le menu « … » au lieu de reculer le routeur.
+  useBackClose(menu, () => setMenu(false));
   const [persoMenu, setPersoMenu] = useState(false);
   const [artwork, setArtwork] = useState<'poster' | 'banner' | null>(null);
   const [listsOpen, setListsOpen] = useState(false);
