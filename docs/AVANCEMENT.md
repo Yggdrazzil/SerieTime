@@ -6,6 +6,7 @@
 > 2. ajouter une entrée datée en tête du « Journal des modifications » (date, auteur, résumé) ;
 > 3. déplacer les éléments terminés de « Prochaines étapes » vers le journal.
 
+Dernière mise à jour : **2026-07-23** (Claude/Étienne) — **Refonte esthétique des fiches série / film / jeu** (maquettes Étienne, pixel-perfect) : un seul langage visuel pour les trois fiches — bannière défilante + boutons ronds épinglés (retour / ♥ favori / …), jaquette flottante à liseré, carte d'identité (badge type, titre, méta, onglets série), 3 tuiles de stats (note **/5**, genres, saisons·épisodes / durée / date de sortie), Suivi en **contrôle segmenté** à icônes, cartes de section à pastille d'icône. Série : Épisodes façon maquette (« Ma progression » à anneau + épisodes vus + temps restant estimé, sélecteur de saison, rangées S01 | E01 + vignette + durée + coche verte). Jeu : titre déplacé de la bannière vers la carte, « Je possède ce jeu » + tuile TEMPS DE JEU, Informations à valeurs à droite (+ note presse /5). Fonctionnalités inchangées (primitives partagées `components/fiche.tsx`). Typecheck 0, détecteur Impeccable 0, tests Playwright 11/11 + régressions nav vertes.
 Dernière mise à jour : **2026-07-23** (Claude/Benjamin) — **Commentaires par épisode** : chaque épisode a son fil dédié depuis la fiche épisode (réactions/réponses/tri du socle réutilisés, scopés `episodeId`). **Anti-spoiler strict** : lecture ET écriture réservées à qui a marqué l'épisode vu (garde client `episode.watched` + serveur `403 episode_not_watched` sur GET/POST/réponses) ; sinon carte « Regarde l'épisode pour débloquer ». Le fil **série** est désormais strictement `episodeId=null` (les commentaires épisode n'y fuient plus). **Prompt post-vu** dismissible « Un avis sur SxEy ? » à la bascule vu. Tests serveur dédiés (garde + séparation des fils) ; suite serveur verte (hors `/health` préexistant), typecheck mobile 0 erreur.
 Dernière mise à jour : **2026-07-23** (Claude/Étienne) — chantier « retour arrière » (fin) : garde de retour branchée sur les dernières feuilles/modales autonomes (Trophées, filtres de bibliothèque Séries/Films, favoris, Paramètres, blocage profil, composer de commentaire) + suite de tests navigation web (6/6 : la feuille se referme au retour et l'écran hôte est conservé)
 Dernière mise à jour : **2026-07-22** (Claude/Étienne) — chantier « retour arrière » : garde de retour ajoutée aux feuilles/menus web (filtres Explorer, menus « … » des fiches, popups) + section « Votre avis » retirée des fiches série/film
@@ -106,7 +107,67 @@ la migration visuelle doit encore être exécutée sans modifier la logique mét
 
 ## Journal des modifications
 
-### 2026-07-23 — Codex/Étienne : hiérarchie typographique allégée dans toute l’app
+### 2026-07-23 — Claude/Étienne : refonte esthétique des fiches série / film / jeu (maquettes)
+Uniformisation visuelle des trois fiches d'après les 4 maquettes fournies par
+Étienne (pixel-perfect en thème Clair ; **tokens** partout donc Sombre / Sunset /
+Nuit / Glass suivent automatiquement). **Aucune fonctionnalité modifiée** — même
+requêtes, mutations optimistes, menus « … », feuilles (listes, artwork, ordre,
+signalement, temps de jeu) inchangés.
+- **Primitives partagées** `mobile/components/fiche.tsx` : `FicheBanner`
+  (bannière défilante — l'en-tête rétractable disparaît), `FicheTopActions`
+  (boutons ronds épinglés : retour / ♥ favori / « … » ; le ♥ arrive en en-tête
+  des fiches série/film, le partage vit dans le menu), `FicheIdentity`
+  (carte d'identité chevauchant la bannière, jaquette flottante à liseré,
+  badge SÉRIE/FILM/JEU VIDÉO, titre, méta), `FicheTabs` (À propos / Épisodes
+  dans la carte), `StatTile(s)` (3 tuiles lavande), `FicheSection` (carte à
+  pastille d'icône ronde), `InfoRow` (libellé/valeur, valeur à droite pour le
+  jeu), `ProgressRing` (SVG), `EpisodeCheck` (coche verte / anneau lavande),
+  `rating5` (échelle d'affichage **/5** des maquettes — TMDb /10 et IGDB /100
+  rescalés, information identique).
+- **`StatusLine` restylée en place** (même API) : contrôle segmenté pleine
+  largeur, icône au-dessus du libellé, segment actif en pilule violette.
+- **Fiche série** (`app/show/[id].tsx`) : onglets dans la carte d'identité ;
+  tuiles note/genres/« N saisons · M épisodes » ; À propos = Suivi → Où
+  regarder (tuiles à initiale) → Informations (méta + étoiles + synopsis +
+  rangées à icônes : Diffuseur, Diffusion, Durée épisode, Statut, Communauté —
+  les infos de l'ancien bandeau) → Distribution (photo + nom/rôle dessous) →
+  Également regardé (affiche + titre dessous, badge vert « ajouté ») → Notes de
+  la communauté → Commentaires. **Épisodes** = « Ma progression » (anneau %,
+  épisodes vus, temps restant estimé = durée × restants, coche maîtresse
+  « tout vu » dans l'en-tête) → « Continuer le suivi » (file conservée) →
+  carte « Épisodes » à sélecteur de saison (cycle, comme les Notes de la
+  communauté) + coche de saison + barre x/y vus + rangées maquette
+  (S01 | E01, vignette 16:9, durée, coche verte / décompte J-x). La rangée
+  « Similaire à » (doublon du 1ᵉʳ élément du rail) est consolidée dans le rail.
+- **Fiche film** : mêmes fondations ; tuile Durée, carte Synopsis dédiée
+  (+ rangée Communauté), rail « Similaire à » (libellé maquette).
+- **Fiche jeu** (`app/game/[id].tsx`) : titre sorti de la bannière → carte
+  d'identité (genres + « Sortie le … ») ; tuiles note joueurs /5, genres,
+  date ; carte « Je possède ce jeu » (interrupteur + tuile TEMPS DE JEU
+  éditable) séparée du Suivi ; « Informations » redevient une carte dédiée
+  (valeurs à droite, maquette) avec la **note presse /5** ; Bande-annonce,
+  Résumé, Éditions et extensions (affiche + légende dessous), Commentaires
+  restylés. Les tuiles de notes à dégradé (2026-07-22) sont remplacées par le
+  format maquette.
+- **Validation** : typecheck 0 erreur ; détecteur Impeccable 0 finding ;
+  Playwright 11/11 (coche épisode → POST optimiste, pop-up « précédents »,
+  sélecteur de saison, feuille épisode, menu « … » + retour, ♥ épinglé,
+  statut jeu + feuille heures, possession, tuile temps de jeu, navigation
+  commentaires) + régression recherche → fiche → retour (résultats conservés).
+- **Retours Étienne v2 (même jour)** : tuile note de la fiche jeu **cliquable**
+  — bascule note **joueurs ↔ presse** (/5) au tap quand les deux existent,
+  indicateur ⇄ dans le coin (la rangée « Note presse » quitte Informations,
+  la note vit dans la tuile) ; coche d'épisode sur **disque clair** pour rester
+  lisible sur les fonds lavande (file « Continuer le suivi » — cochable comme
+  avant, le POST optimiste était déjà vérifié) ; inventaire pré/post refonte
+  confirmé : **aucune section manquante** (Bande-annonce et Éditions &
+  extensions étaient juste absentes des données de test des captures).
+- **Retours Étienne v3 (même jour, fiche jeu)** : sections **Résumé** et
+  **Informations** remontées AVANT la Bande-annonce ; **plateformes en badges**
+  (pilules lavande DA) dans la carte d'identité, à la place de la ligne
+  « Sortie le … » (doublon de la tuile date) — l'info consoles est visible dès
+  l'ouverture, sans scroller ; la rangée « Plateformes » quitte la carte
+  Informations (Développeur / Éditeur / Modes restent).
 - **Primitives partagées** (`ScreenHeader`, `SectionHeader`, `TabHeader`,
   en-têtes de bibliothèque) : échelle typographique resserrée et suppression des
   API de sur-titre/sous-titre décoratives, afin d’imposer un titre unique par

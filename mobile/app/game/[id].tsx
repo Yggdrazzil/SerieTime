@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, Pressable, Modal, TextInput, ActivityIndicator, Image, Platform, Linking, Animated, Easing, useWindowDimensions, KeyboardAvoidingView } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import { goBack } from '@/lib/nav';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,6 +8,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, tmdbImage } from '@/lib/api';
 import { COLORS, FONTS, RADIUS, SHADOW, SIZES, SPACE } from '@/lib/theme';
 import { Loading, LoadError } from '@/components/ui';
+import {
+  FicheTopActions, FicheBanner, FicheIdentity, StatTile, StatTiles,
+  FicheSection, InfoRow, rating5,
+} from '@/components/fiche';
 import { Pop, PressableScale, SlideUpBar } from '@/components/anim';
 import { shareMedia } from '@/lib/share';
 import { FicheSkeleton } from '@/components/FicheSkeleton';
@@ -86,6 +89,7 @@ export default function GameDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   const qc = useQueryClient();
   const [toast, setToast] = useState<string | null>(null);
   const [menu, setMenu] = useState(false);
@@ -95,6 +99,8 @@ export default function GameDetail() {
   const [artwork, setArtwork] = useState<'poster' | 'banner' | null>(null);
   const [listsOpen, setListsOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
+  // Tuile note : bascule joueurs ↔ presse au tap (quand les deux existent).
+  const [scoreView, setScoreView] = useState<'players' | 'critics'>('players');
   const reduce = useReduceMotion();
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const trackingLock = useRef(false);
@@ -277,7 +283,11 @@ export default function GameDetail() {
     else store.unmarkTracked([key]);
   }, [feedIgdbId, feedStatus]);
 
-  if (detail.isLoading) return <FicheSkeleton heroHeight={288} />;
+  // Bannière (refonte 2026-07-23) : mêmes cotes que les fiches série/film —
+  // elle défile avec le contenu, les boutons restent épinglés.
+  const heroH = insets.top + (width >= 700 ? 252 : 196);
+
+  if (detail.isLoading) return <FicheSkeleton heroHeight={heroH} />;
   if (!detail.data) return <LoadError onRetry={detail.refetch} busy={detail.isRefetching} />;
   const game = detail.data;
   const posterUri = tmdbImage(game.posterPath, 'w342');
@@ -287,6 +297,21 @@ export default function GameDetail() {
     setOwned.isPending ||
     removeTracking.isPending;
   const heroUri = tmdbImage(game.backdropPath) ?? tmdbImage(game.posterPath);
+  // « Aventure • RPG » (méta de la carte d'identité) + date de sortie séparée
+  // en « 14 mars » / « 2024 » pour la tuile (maquette).
+  const genresTxt = game.genres
+    ? game.genres.split(',').map((g) => g.trim()).filter(Boolean).join(' • ')
+    : null;
+  const releaseTxt = game.releaseDate ? shortDateFr(game.releaseDate) : null;
+  const releaseParts = releaseTxt ? releaseTxt.split(' ') : null;
+  const releaseDay = releaseParts && releaseParts.length >= 3 ? releaseParts.slice(0, -1).join(' ') : releaseTxt;
+  const releaseYear = releaseParts && releaseParts.length >= 3 ? releaseParts[releaseParts.length - 1] : null;
+  // Plateformes en BADGES dans la carte d'identité (retour Étienne 2026-07-23) :
+  // l'info est visible dès l'ouverture, sans scroller (la date, déjà dans la
+  // tuile, laisse sa place — et la rangée quitte la carte Informations).
+  const platformList = game.platforms
+    ? game.platforms.split(',').map((p) => p.trim()).filter(Boolean)
+    : [];
 
   return (
     <Pop style={styles.screen}>
@@ -295,148 +320,102 @@ export default function GameDetail() {
         contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom + 80, 96) }]}
       >
         <View style={styles.canvas}>
-          <View style={styles.hero}>
-            {heroUri ? (
-              <Image source={{ uri: heroUri }} style={StyleSheet.absoluteFill} resizeMode="cover" accessibilityIgnoresInvertColors />
-            ) : (
-              <View style={[StyleSheet.absoluteFill, styles.heroFallback]} accessible={false}>
-                <View style={styles.heroPrismOne} />
-                <View style={styles.heroPrismTwo} />
-                <Ionicons name="game-controller-outline" size={74} color="rgba(255,255,255,0.34)" />
-              </View>
-            )}
-            <LinearGradient
-              colors={['rgba(12,7,28,0.08)', 'rgba(12,7,28,0.52)', 'rgba(12,7,28,0.95)']}
-              locations={[0, 0.46, 1]}
-              style={StyleSheet.absoluteFill}
-            />
-            <View style={[styles.heroBtns, { top: insets.top + SPACE.sm }]}>
-              <PressableScale
-                style={styles.heroAction}
-                onPress={() => goBack('/')}
-                accessibilityRole="button"
-                accessibilityLabel="Retour aux jeux"
-                accessibilityHint="Revient à l’écran précédent"
+          <FicheBanner
+            uri={heroUri}
+            height={heroH}
+            fallback={<Ionicons name="game-controller-outline" size={64} color="rgba(255,255,255,0.34)" />}
+          />
+
+          {/* Carte d'identité (maquette) : jaquette flottante, badge JEU VIDÉO,
+              titre, genres, date de sortie, puis tuiles note / genre / date. */}
+          <FicheIdentity
+            posterUri={posterUri}
+            posterFallback={<Ionicons name="game-controller-outline" size={30} color={COLORS.textSoft} />}
+            posterLabel={'Affiche de ' + game.title}
+            badge="JEU VIDÉO"
+            title={game.title}
+            tiles={
+              <StatTiles>
+                {game.playerScore || game.criticScore ? (() => {
+                  // Bascule joueurs ↔ presse au tap sur la tuile (retour
+                  // Étienne 2026-07-23) — indicateur ⇄ dans le coin quand les
+                  // deux notes existent ; sinon la seule note disponible.
+                  const both = !!(game.playerScore && game.criticScore);
+                  const critics = game.playerScore ? scoreView === 'critics' : true;
+                  const score = critics ? game.criticScore! : game.playerScore!;
+                  const label = critics ? 'Note presse' : 'Note joueurs';
+                  return (
+                    <StatTile
+                      icon={<Ionicons name="star" size={21} color={COLORS.tertiary} />}
+                      value={`${rating5(score, 100)}/5`}
+                      sub={label}
+                      a11y={`${label} ${rating5(score, 100)} sur 5${both ? `. Afficher la note ${critics ? 'des joueurs' : 'de la presse'}` : ''}`}
+                      onPress={both ? () => setScoreView(critics ? 'players' : 'critics') : undefined}
+                      corner={both ? <Feather name="repeat" size={9} color={COLORS.primary} /> : undefined}
+                    />
+                  );
+                })() : null}
+                {genresTxt ? (
+                  <StatTile
+                    icon={<Ionicons name="game-controller-outline" size={21} color={COLORS.primary} />}
+                    text={game.genres!.split(',').map((g) => g.trim()).filter(Boolean).slice(0, 2).join('\n')}
+                    a11y={`Genres : ${genresTxt}`}
+                  />
+                ) : null}
+                {releaseTxt ? (
+                  <StatTile
+                    icon={<Feather name="calendar" size={19} color={COLORS.primary} />}
+                    value={releaseDay ?? releaseTxt}
+                    sub={releaseYear ?? undefined}
+                    a11y={`Sortie le ${releaseTxt}`}
+                  />
+                ) : null}
+              </StatTiles>
+            }
+          >
+            {genresTxt ? <Text style={styles.identityMeta}>{genresTxt}</Text> : null}
+            {platformList.length ? (
+              <View
+                style={styles.platRow}
+                accessible
+                accessibilityRole="text"
+                accessibilityLabel={`Plateformes : ${platformList.join(', ')}`}
               >
-                <Feather name="arrow-left" size={22} color="#fff" />
-              </PressableScale>
-              <View style={styles.heroActionGroup}>
-                <PressableScale
-                  style={styles.heroAction}
-                  onPress={() => favorite.mutate()}
-                  disabled={favorite.isPending}
-                  accessibilityRole="button"
-                  accessibilityLabel={game.isFavorite ? 'Retirer des favoris' : 'Ajouter aux favoris'}
-                  accessibilityState={{ selected: game.isFavorite, disabled: favorite.isPending, busy: favorite.isPending }}
-                >
-                  <Feather name="heart" size={20} color={game.isFavorite ? '#FF77B8' : '#fff'} />
-                </PressableScale>
-                <PressableScale
-                  style={styles.heroAction}
-                  onPress={share}
-                  accessibilityRole="button"
-                  accessibilityLabel="Partager ce jeu"
-                >
-                  <Feather name="share-2" size={20} color="#fff" />
-                </PressableScale>
-                <PressableScale
-                  style={styles.heroAction}
-                  onPress={() => setMenu(true)}
-                  accessibilityRole="button"
-                  accessibilityLabel="Plus d’options"
-                >
-                  <Feather name="more-horizontal" size={22} color="#fff" />
-                </PressableScale>
-              </View>
-            </View>
-            <View style={styles.heroCopy}>
-              <View style={styles.eyebrowRow}>
-                <Ionicons name="game-controller-outline" size={15} color="#fff" />
-                <Text style={styles.heroEyebrow}>JEU VIDÉO</Text>
-              </View>
-              <Text style={styles.heroTitle} numberOfLines={2}>{game.title}</Text>
-            </View>
-          </View>
-
-          <View style={styles.body}>
-          {/* Carte d'identité + infos AGRÉGÉES en une seule section SANS titre :
-              jaquette + titre + Genre/Sortie/notes en tête, puis Plateformes /
-              Développeur / Éditeur / Modes / Temps de jeu (ex-« Informations »
-              fusionnée ici — pas de doublon, ordre logique). */}
-          {/* Carte d'identité + fiche technique en UN SEUL bloc, sans titre
-              (le titre vit dans la bannière). Deux zones nettes : à côté de la
-              jaquette le « verdict » (genres en tags + notes), puis dessous
-              TOUTES les infos dans un seul format libellé / valeur. */}
-          <View style={styles.identityCard}>
-            <View style={styles.identityHead}>
-              {posterUri ? (
-                <Image source={{ uri: posterUri }} style={styles.poster} resizeMode="cover" accessibilityLabel={'Affiche de ' + game.title} />
-              ) : (
-                <View style={[styles.poster, styles.posterEmpty]}>
-                  <Ionicons name="game-controller-outline" size={32} color={COLORS.textSoft} />
-                </View>
-              )}
-              <View style={styles.headMain}>
-                {game.genres ? (
-                  <View style={styles.genreRow}>
-                    {game.genres.split(',').map((g) => g.trim()).filter(Boolean).map((g) => (
-                      <View key={g} style={styles.genreChip}>
-                        <Text style={styles.genreChipText}>{g}</Text>
-                      </View>
-                    ))}
+                {platformList.map((p) => (
+                  <View key={p} style={styles.platBadge} accessible={false}>
+                    <Text style={styles.platBadgeText} numberOfLines={1}>{p}</Text>
                   </View>
-                ) : null}
-                {game.playerScore || game.criticScore ? (
-                  <View style={styles.ratingRow}>
-                    {game.playerScore ? (
-                      <RatingTile colors={['#41288A', '#6D4ED1']} icon="users" value={game.playerScore} label="Joueurs" />
-                    ) : null}
-                    {game.criticScore ? (
-                      <RatingTile colors={['#6D4ED1', '#EF5BA8']} icon="award" value={game.criticScore} label="Presse" />
-                    ) : null}
-                  </View>
-                ) : null}
+                ))}
               </View>
-            </View>
+            ) : null}
+          </FicheIdentity>
 
-            <View style={styles.specList}>
-              {game.releaseDate ? <SpecRow label="Sortie" value={shortDateFr(game.releaseDate)} /> : null}
-              {game.platforms ? <SpecRow label="Plateformes" value={game.platforms} /> : null}
-              {game.developer ? <SpecRow label="Développeur" value={game.developer} /> : null}
-              {game.publisher ? <SpecRow label="Éditeur" value={game.publisher} /> : null}
-              {game.gameModes ? <SpecRow label="Modes" value={game.gameModes} /> : null}
-              {/* « Temps de jeu » n'est PAS répété ici : il vit dans le bloc Suivi
-                  (bouton dédié sous « Je possède »). */}
-            </View>
-          </View>
-
-        {/* Suivi REMONTÉ juste sous la jaquette/titre (avant le trailer) :
-            bloc COMPACT (demande produit 2026-07-20) — petit titre discret et
-            les 4 statuts sur UNE ligne (StatusLine partagée avec show/[id]). */}
-        <View style={[styles.section, styles.trackingCard]}>
-          <Text style={styles.trackingTitle}>Suivi</Text>
+        {/* Suivi : contrôle segmenté pleine largeur (maquette) — re-taper le
+            statut actif le DÉSÉLECTIONNE (retrait du suivi). */}
+        <View style={styles.trackCard}>
+          <Text style={styles.trackTitle}>Suivi</Text>
           <StatusLine
             options={GAME_STATUSES.map((s) => ({ value: s, label: STATUS_LABELS[s] }))}
             value={game.userStatus}
-            // Re-taper le statut actif le DÉSÉLECTIONNE (retrait du suivi).
             onChange={(v) => (v === null ? removeFromTracking() : changeStatus(v as GameStatus))}
             accessibilityLabel="Statut de suivi du jeu"
             disabled={trackingBusy}
             allowDeselect
           />
-          {/* « Je possède » : interrupteur INDÉPENDANT du statut (Game Pass,
-              collection…) — même style que les toggles des Paramètres. */}
+        </View>
+
+        {/* « Je possède ce jeu » (maquette) : carte dédiée — interrupteur
+            INDÉPENDANT du statut (Game Pass, collection…) + tuile TEMPS DE JEU
+            éditable (seul point d'entrée de la déclaration d'heures). */}
+        <View style={styles.trackCard}>
           <OwnedToggle
             on={game.isOwned}
             disabled={trackingBusy}
             onToggle={changeOwned}
           />
-          {/* Temps de jeu : seul point d'entrée (le doublon de la carte Infos a
-              été retiré). Visible dès que le jeu est suivi OU qu'un temps existe
-              déjà (import Steam sans suivi). Chrono = temps passé, pas l'heure. */}
           {game.userStatus || game.playtimeMinutes ? (
             <Pressable
-              style={({ pressed }) => [styles.playtimeBtn, pressed && styles.playtimeBtnPressed]}
+              style={({ pressed }) => [styles.playtimeTile, pressed && styles.playtimeTilePressed]}
               onPress={() => setPlaytimeOpen(true)}
               accessibilityRole="button"
               accessibilityLabel={
@@ -446,16 +425,14 @@ export default function GameDetail() {
               }
             >
               <View style={styles.playtimeIcon}>
-                <Ionicons name="stopwatch" size={18} color={COLORS.onAccent} />
+                <Ionicons name="stopwatch" size={17} color={COLORS.primary} />
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.playtimeLabel}>Temps de jeu</Text>
                 {game.playtimeMinutes ? (
-                  <>
-                    <Text style={styles.playtimeLabel}>Temps de jeu</Text>
-                    <Text style={styles.playtimeValue} numberOfLines={1}>{formatPlaytime(game.playtimeMinutes)}</Text>
-                  </>
+                  <Text style={styles.playtimeValue} numberOfLines={1}>{formatPlaytime(game.playtimeMinutes)}</Text>
                 ) : (
-                  <Text style={styles.playtimeCta}>Temps de jeu</Text>
+                  <Text style={styles.playtimeCta}>Déclarer mes heures</Text>
                 )}
               </View>
               <Feather name="edit-3" size={17} color={COLORS.primary} />
@@ -463,28 +440,42 @@ export default function GameDetail() {
           ) : null}
         </View>
 
-        {game.videoId ? <TrailerPreview videoId={game.videoId} /> : null}
-
+        {/* Résumé et Informations AVANT la bande-annonce (retour Étienne
+            2026-07-23) ; les plateformes vivent en badges dans la carte
+            d'identité, la note presse dans la tuile note. */}
         {game.overview ? (
-          <View style={[styles.section, styles.overviewCard]}>
-            <View style={styles.sectionHeading}>
-              <View style={styles.sectionIcon}>
-                <Feather name="book-open" size={18} color={COLORS.primary} />
-              </View>
-              <View style={styles.sectionHeadingCopy}>
-                <Text style={styles.sectionTitle}>Résumé</Text>
-              </View>
-            </View>
+          <FicheSection icon="book-open" title="Résumé">
             <Text style={styles.overview}>{game.overview}</Text>
-          </View>
+          </FicheSection>
         ) : null}
+
+        {game.developer || game.publisher || game.gameModes ? (
+          <FicheSection icon="info" title="Informations">
+            <View style={styles.infoRows}>
+              {game.developer ? <InfoRow label="Développeur" value={game.developer} align="right" /> : null}
+              {game.publisher ? <InfoRow label="Éditeur" value={game.publisher} align="right" /> : null}
+              {game.gameModes ? <InfoRow label="Modes" value={game.gameModes} align="right" /> : null}
+            </View>
+          </FicheSection>
+        ) : null}
+
+        {game.videoId ? <TrailerPreview videoId={game.videoId} /> : null}
 
         <RelatedGamesRow items={game.related ?? []} />
 
             <CommentsRow mediaId={game.id} title={game.title} />
-          </View>
         </View>
       </ScrollView>
+
+      {/* Boutons épinglés au-dessus de tout : retour / favori / options
+          (le partage reste dans le menu « … »). */}
+      <FicheTopActions
+        topInset={insets.top}
+        onBack={() => goBack('/')}
+        backLabel="Retour aux jeux"
+        favorite={{ on: game.isFavorite, busy: favorite.isPending, onPress: () => favorite.mutate() }}
+        onMenu={() => setMenu(true)}
+      />
 
       <SlideUpBar visible={!!toast} style={[styles.toastBar, { paddingBottom: insets.bottom + SPACE.md }]}>
         <View style={styles.toastRow} accessibilityRole="alert" accessibilityLiveRegion="polite">
@@ -584,7 +575,7 @@ function OwnedToggle({ on, disabled, onToggle }: { on: boolean; disabled?: boole
 
   return (
     <View style={[styles.ownedRow, disabled && styles.controlDisabled]}>
-      <Text style={styles.ownedLabel}>Je possède</Text>
+      <Text style={styles.ownedLabel}>Je possède ce jeu</Text>
       <Pressable
         style={styles.toggleTarget}
         onPress={() => onToggle(!on)}
@@ -623,67 +614,6 @@ function OwnedToggle({ on, disabled, onToggle }: { on: boolean; disabled?: boole
   );
 }
 
-// Tuile de note (Joueurs / Presse) : dégradé vif façon carte « Temps devant des
-// séries » des Statistiques (indigo → violet → rose), halo lumineux et texte
-// blanc — plus vivant que l'ancien fond gris. Joueurs sur la moitié fraîche,
-// Presse sur la moitié chaude : côte à côte, elles balaient tout le dégradé.
-function RatingTile({
-  colors,
-  icon,
-  value,
-  label,
-}: {
-  colors: readonly [string, string, ...string[]];
-  icon: keyof typeof Feather.glyphMap;
-  value: number;
-  label: string;
-}) {
-  return (
-    <View style={styles.ratingTile}>
-      <LinearGradient colors={colors} start={{ x: 0, y: 0 }} end={{ x: 1.1, y: 1.2 }} style={StyleSheet.absoluteFill} />
-      <View style={styles.ratingOrb} />
-      <View style={styles.ratingValueRow}>
-        <Text style={styles.ratingValue}>{value}</Text>
-        <Text style={styles.ratingMax}>/100</Text>
-      </View>
-      <View style={styles.ratingLabelRow}>
-        <Feather name={icon} size={12} color="#FFFFFF" />
-        <Text style={styles.ratingLabel}>{label}</Text>
-      </View>
-    </View>
-  );
-}
-
-// Ligne de fiche technique : libellé discret à gauche, valeur à droite — UN
-// SEUL format pour toutes les infos. `onPress` la rend éditable (temps de jeu).
-function SpecRow({
-  label,
-  value,
-  onPress,
-}: {
-  label: string;
-  value: string;
-  onPress?: () => void;
-}) {
-  const inner = (
-    <View style={styles.specRow}>
-      <Text style={styles.specLabel}>{label}</Text>
-      <Text style={styles.specValue}>{value}</Text>
-      {onPress ? <Feather name="edit-3" size={15} color={COLORS.textMuted} style={styles.specEdit} /> : null}
-    </View>
-  );
-  if (!onPress) return inner;
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => (pressed ? { opacity: 0.6 } : null)}
-      accessibilityRole="button"
-      accessibilityLabel={`${label} : ${value} — modifier`}
-    >
-      {inner}
-    </Pressable>
-  );
-}
 // Feuille « Temps de jeu » (déclaratif) : proposée à la bascule de statut,
 // JAMAIS bloquante (« Plus tard »), rouvrable depuis la ligne Informations.
 function PlaytimeSheet({
@@ -848,15 +778,7 @@ function TrailerPreview({ videoId }: { videoId: string }) {
   };
 
   return (
-    <View style={styles.section}>
-      <View style={styles.sectionHeading}>
-        <View style={styles.sectionIcon}>
-          <Feather name="play-circle" size={18} color={COLORS.primary} />
-        </View>
-        <View style={styles.sectionHeadingCopy}>
-          <Text style={styles.sectionTitle}>Bande-annonce</Text>
-        </View>
-      </View>
+    <FicheSection icon="play-circle" title="Bande-annonce">
       <View style={styles.trailerBox}>
         {playing && Platform.OS === 'web' ? (
           // RN-web rend les tags DOM natifs via React.createElement — pas d'équivalent
@@ -885,7 +807,7 @@ function TrailerPreview({ videoId }: { videoId: string }) {
           </Pressable>
         )}
       </View>
-    </View>
+    </FicheSection>
   );
 }
 
@@ -1371,15 +1293,7 @@ function RelatedGamesRow({ items }: { items: RelatedGameDto[] }) {
   };
 
   return (
-    <View style={[styles.section, styles.relatedSection]}>
-      <View style={[styles.sectionHeading, styles.relatedHeading]}>
-        <View style={styles.sectionIcon}>
-          <Feather name="layers" size={18} color={COLORS.primary} />
-        </View>
-        <View style={styles.sectionHeadingCopy}>
-          <Text style={styles.sectionTitle}>Éditions et extensions</Text>
-        </View>
-      </View>
+    <FicheSection icon="layers" title="Éditions et extensions" flush>
       {openError ? (
         <View style={pstyles.errorBanner} accessibilityRole="alert" accessibilityLiveRegion="polite">
           <Feather name="alert-circle" size={18} color={COLORS.danger} />
@@ -1421,7 +1335,7 @@ function RelatedGamesRow({ items }: { items: RelatedGameDto[] }) {
                 )}
                 {r.inLibrary ? (
                   <View style={styles.relBadge} accessibilityLabel="Dans ta bibliothèque">
-                    <Feather name="check" size={16} color={COLORS.onPrimary} />
+                    <Feather name="check" size={14} color="#FFFFFF" />
                   </View>
                 ) : null}
                 {opening ? (
@@ -1430,17 +1344,15 @@ function RelatedGamesRow({ items }: { items: RelatedGameDto[] }) {
                   </View>
                 ) : null}
               </View>
-              <View style={styles.relCap}>
-                <Text style={styles.relName} numberOfLines={2}>{r.title}</Text>
-                <Text style={styles.relKind}>
-                  {[r.kind === 'edition' ? 'Édition' : 'Extension', r.year].filter(Boolean).join(' · ')}
-                </Text>
-              </View>
+              <Text style={styles.relName} numberOfLines={2}>{r.title}</Text>
+              <Text style={styles.relKind}>
+                {[r.kind === 'edition' ? 'Édition' : 'Extension', r.year].filter(Boolean).join(' · ')}
+              </Text>
             </PressableScale>
           );
         })}
       </ScrollView>
-    </View>
+    </FicheSection>
   );
 }
 // Rangée « Commentaires » (titre + chevron) ouvrant la page dédiée /comments/:id
@@ -1451,7 +1363,7 @@ function CommentsRow({ mediaId, title }: { mediaId: string; title: string }) {
   const router = useRouter();
   return (
     <Pressable
-      style={({ pressed }) => [styles.section, styles.commentsRow, pressed && styles.commentsRowPressed]}
+      style={({ pressed }) => (pressed ? styles.commentsRowPressed : null)}
       onPress={() =>
         router.push(('/comments/' + mediaId + '?title=' + encodeURIComponent(title) + '&type=game') as Href)
       }
@@ -1459,15 +1371,11 @@ function CommentsRow({ mediaId, title }: { mediaId: string; title: string }) {
       accessibilityLabel={'Voir les commentaires sur ' + title}
       accessibilityHint="Ouvre la discussion dédiée à ce jeu"
     >
-      <View style={styles.commentsCopy}>
-        <View style={styles.sectionIcon}>
-          <Feather name="message-circle" size={18} color={COLORS.primary} />
-        </View>
-        <Text style={styles.commentsTitle}>Commentaires</Text>
-      </View>
-      <View style={styles.commentsArrow}>
-        <Feather name="chevron-right" size={21} color={COLORS.primary} />
-      </View>
+      <FicheSection
+        icon="message-circle"
+        title="Commentaires"
+        trailing={<Feather name="chevron-right" size={20} color={COLORS.textMuted} />}
+      />
     </Pressable>
   );
 }
@@ -1483,300 +1391,73 @@ const styles = StyleSheet.create({
   canvas: {
     width: '100%',
     maxWidth: SIZES.contentMax,
-    backgroundColor: COLORS.bg,
-  },
-  hero: {
-    width: '100%',
-    height: 288,
-    backgroundColor: '#160F2A',
-    overflow: 'hidden',
-  },
-  heroFallback: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#3E2678',
-  },
-  heroPrismOne: {
-    position: 'absolute',
-    width: 220,
-    height: 220,
-    borderRadius: 44,
-    backgroundColor: 'rgba(239,91,168,0.34)',
-    transform: [{ rotate: '28deg' }],
-    top: -88,
-    right: -34,
-  },
-  heroPrismTwo: {
-    position: 'absolute',
-    width: 190,
-    height: 190,
-    borderRadius: 38,
-    backgroundColor: 'rgba(243,197,79,0.27)',
-    transform: [{ rotate: '-24deg' }],
-    bottom: -98,
-    left: -42,
-  },
-  heroBtns: {
-    position: 'absolute',
-    left: SPACE.md,
-    right: SPACE.md,
-    zIndex: 2,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  heroActionGroup: {
-    flexDirection: 'row',
-    gap: SPACE.xs,
-  },
-  heroAction: {
-    width: SIZES.touch,
-    height: SIZES.touch,
-    borderRadius: RADIUS.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(20,13,36,0.62)',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.28)',
-  },
-  heroCopy: {
-    position: 'absolute',
-    left: SPACE.lg,
-    right: SPACE.lg,
-    bottom: SPACE.xl + SPACE.sm,
-  },
-  eyebrowRow: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACE.xs,
-    minHeight: 28,
-    paddingHorizontal: SPACE.sm,
-    borderRadius: RADIUS.pill,
-    backgroundColor: 'rgba(109,78,209,0.88)',
-  },
-  heroEyebrow: {
-    color: '#FFFFFF',
-    fontFamily: FONTS.extraBold,
-    fontSize: 11,
-    letterSpacing: 1.1,
-  },
-  heroTitle: {
-    marginTop: SPACE.sm,
-    color: '#FFFFFF',
-    fontFamily: FONTS.bold,
-    fontSize: 27,
-    lineHeight: 32,
-    letterSpacing: -0.35,
-    // Ombre portée : garde le titre lisible quelle que soit la couleur de la
-    // bannière (image claire comme sombre), en plus du dégradé du bas.
-    textShadowColor: 'rgba(0,0,0,0.55)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 12,
-  },
-  body: {
-    marginTop: -SPACE.xl,
+    backgroundColor: COLORS.pageMuted,
     paddingBottom: SPACE.sm,
   },
-  identityCard: {
-    marginHorizontal: SPACE.md,
-    marginBottom: SPACE.sm,
-    padding: SPACE.md,
-    borderRadius: RADIUS.card,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: COLORS.borderLight,
-    backgroundColor: COLORS.surface,
-    ...SHADOW.card,
+  // Méta de la carte d'identité : « Aventure • RPG » puis « Sortie le … ».
+  identityMeta: {
+    marginTop: SPACE.xs,
+    color: COLORS.textMuted,
+    fontFamily: FONTS.semiBold,
+    fontSize: 12.5,
+    lineHeight: 17,
   },
-  // Zone « verdict » : jaquette à gauche, genres + notes à droite (centrés
-  // verticalement pour longer la jaquette sans « flotter » en haut).
-  identityHead: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    gap: SPACE.md,
-  },
-  poster: {
-    width: 108,
-    aspectRatio: 2 / 3,
-    borderRadius: RADIUS.poster,
-    backgroundColor: COLORS.imagePlaceholder,
-  },
-  posterEmpty: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headMain: {
-    flex: 1,
-    minWidth: 0,
-    justifyContent: 'center',
-    gap: SPACE.sm,
-  },
-  // Genres = tags (données catégorielles) ; seul format « pilule » de la carte.
-  genreRow: {
+  // Badges de plateformes (PJ Étienne, adaptés à la DA) : pilules lavande
+  // compactes, texte fort, retour à la ligne libre.
+  platRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: SPACE.xxs,
+    gap: 6,
+    marginTop: SPACE.xs,
   },
-  genreChip: {
-    paddingHorizontal: SPACE.sm,
-    paddingVertical: 5,
+  platBadge: {
+    minHeight: 24,
+    justifyContent: 'center',
+    paddingHorizontal: 10,
     borderRadius: RADIUS.pill,
-    backgroundColor: COLORS.primarySoft,
+    backgroundColor: COLORS.surfaceMuted,
   },
-  genreChipText: {
-    color: COLORS.primary,
-    fontFamily: FONTS.bold,
-    fontSize: 12,
-  },
-  ratingRow: {
-    flexDirection: 'row',
-    gap: SPACE.xs,
-  },
-  ratingTile: {
-    flex: 1,
-    minWidth: 0,
-    overflow: 'hidden',
-    paddingVertical: SPACE.sm,
-    paddingHorizontal: SPACE.sm,
-    borderRadius: RADIUS.control,
-  },
-  // Halo lumineux en coin (clippé) : la « vie » du dégradé, comme la carte stats.
-  ratingOrb: {
-    position: 'absolute',
-    width: 82,
-    height: 82,
-    borderRadius: 41,
-    backgroundColor: 'rgba(255,255,255,0.16)',
-    right: -20,
-    top: -26,
-  },
-  ratingValueRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 2,
-  },
-  ratingValue: {
-    color: '#FFFFFF',
-    fontFamily: FONTS.extraBold,
-    fontSize: 20,
-    lineHeight: 24,
-  },
-  ratingMax: {
-    color: 'rgba(255,255,255,0.82)',
-    fontFamily: FONTS.semiBold,
-    fontSize: 11,
-  },
-  ratingLabelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 3,
-  },
-  ratingLabel: {
-    color: 'rgba(255,255,255,0.92)',
-    fontFamily: FONTS.semiBold,
-    fontSize: 11,
-  },
-  // Fiche technique : un seul format libellé / valeur, séparateurs discrets et
-  // UNIFORMES (le 1er trait sert aussi de séparation avec la zone du haut).
-  specList: {
-    marginTop: SPACE.md,
-  },
-  specRow: {
-    minHeight: SIZES.touch,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: SPACE.sm,
-    paddingVertical: SPACE.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: COLORS.borderLight,
-  },
-  specLabel: {
-    width: 116,
-    color: COLORS.textMuted,
-    fontFamily: FONTS.semiBold,
-    fontSize: 13,
-    lineHeight: 20,
-  },
-  specValue: {
-    flex: 1,
-    minWidth: 0,
+  platBadgeText: {
     color: COLORS.text,
-    fontFamily: FONTS.medium,
-    fontSize: 14,
-    lineHeight: 20,
+    fontFamily: FONTS.bold,
+    fontSize: 11.5,
   },
-  specEdit: {
-    marginTop: 2,
-  },
-  section: {
+  // Cartes « contrôle » (Suivi, Je possède) : titre bold sans pastille — les
+  // sections de CONTENU passent par FicheSection (pastille d'icône).
+  trackCard: {
+    marginTop: SPACE.sm,
     marginHorizontal: SPACE.md,
-    marginBottom: SPACE.sm,
     padding: SPACE.md,
-    borderRadius: RADIUS.card,
+    borderRadius: RADIUS.sheet,
+    backgroundColor: COLORS.surface,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: COLORS.borderLight,
-    backgroundColor: COLORS.surface,
     ...SHADOW.card,
   },
-  trackingCard: {
-    overflow: 'hidden',
-  },
-  overviewCard: {
-    paddingBottom: SPACE.lg,
-  },
-  sectionHeading: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACE.sm,
-    marginBottom: SPACE.md,
-  },
-  sectionHeadingCopy: {
-    flex: 1,
-    minWidth: 0,
-  },
-  sectionIcon: {
-    width: SIZES.touch,
-    height: SIZES.touch,
-    borderRadius: RADIUS.control,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.primarySoft,
-  },
-  sectionTitle: {
+  trackTitle: {
     color: COLORS.text,
-    fontFamily: FONTS.bold,
-    fontSize: 17,
-    lineHeight: 22,
+    fontFamily: FONTS.extraBold,
+    fontSize: 16.5,
+    lineHeight: 21,
+    marginBottom: SPACE.sm,
   },
-  // Petit titre discret du bloc suivi compact.
-  trackingTitle: {
-    color: COLORS.textMuted,
-    fontFamily: FONTS.bold,
-    fontSize: 13,
-    lineHeight: 17,
-    marginBottom: SPACE.xs,
-  },
+  infoRows: { marginTop: SPACE.xs },
   controlDisabled: {
     opacity: 0.48,
   },
-  // « Je possède » compact : une seule ligne label + interrupteur.
+  // « Je possède ce jeu » : rangée de tête de sa carte (label + interrupteur).
   ownedRow: {
-    minHeight: SIZES.touch,
-    marginTop: SPACE.sm,
-    paddingTop: SPACE.sm,
+    minHeight: 40,
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACE.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: COLORS.borderLight,
   },
   ownedLabel: {
     flex: 1,
     minWidth: 0,
     color: COLORS.text,
-    fontFamily: FONTS.bold,
-    fontSize: 14,
+    fontFamily: FONTS.extraBold,
+    fontSize: 16.5,
   },
   toggleTarget: {
     width: 60,
@@ -1798,30 +1479,27 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     ...SHADOW.card,
   },
-  // Bouton « Temps de jeu » du bloc suivi (visible dès que le jeu est suivi).
-  playtimeBtn: {
-    minHeight: SIZES.touchComfortable,
+  // Tuile « TEMPS DE JEU » (maquette) : fond lavande, libellé en petites
+  // capitales, valeur en gras, crayon d'édition à droite.
+  playtimeTile: {
+    minHeight: 64,
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACE.sm,
     marginTop: SPACE.sm,
     paddingHorizontal: SPACE.sm,
     paddingVertical: SPACE.xs,
-    borderRadius: RADIUS.control,
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
-    backgroundColor: COLORS.surfaceMuted,
+    borderRadius: RADIUS.card,
+    backgroundColor: COLORS.primarySoft,
   },
-  playtimeBtnPressed: { opacity: 0.75 },
+  playtimeTilePressed: { opacity: 0.75 },
   playtimeIcon: {
-    width: 32, height: 32, borderRadius: RADIUS.pill, backgroundColor: COLORS.yellow,
+    width: 32, height: 32, borderRadius: RADIUS.pill, backgroundColor: COLORS.surface,
     alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
-  playtimeLabel: { color: COLORS.textMuted, fontSize: 11.5, fontFamily: FONTS.bold, letterSpacing: 0.3, textTransform: 'uppercase' },
-  playtimeValue: { color: COLORS.text, fontSize: 15, fontFamily: FONTS.bold, marginTop: 1 },
-  // État « aucune heure déclarée » : libellé unique, direct (l'icône crayon
-  // suffit à signaler l'action — pas de sous-titre « déclarer mes heures »).
-  playtimeCta: { color: COLORS.text, fontSize: 15, fontFamily: FONTS.bold },
+  playtimeLabel: { color: COLORS.primary, fontSize: 11, fontFamily: FONTS.extraBold, letterSpacing: 0.9, textTransform: 'uppercase' },
+  playtimeValue: { color: COLORS.text, fontSize: 18, fontFamily: FONTS.extraBold, marginTop: 2 },
+  playtimeCta: { color: COLORS.text, fontSize: 14.5, fontFamily: FONTS.bold, marginTop: 2 },
   overview: {
     color: COLORS.text,
     fontFamily: FONTS.regular,
@@ -1852,99 +1530,62 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.72)',
     ...SHADOW.card,
   },
-  relatedSection: {
-    paddingHorizontal: 0,
-    paddingBottom: SPACE.md,
-    overflow: 'hidden',
-  },
-  relatedHeading: {
-    paddingHorizontal: SPACE.md,
-  },
   relatedContent: {
     gap: SPACE.sm,
     paddingHorizontal: SPACE.md,
+    paddingTop: SPACE.sm,
     paddingBottom: SPACE.xxs,
   },
   relCard: {
-    width: 152,
-    overflow: 'hidden',
-    borderRadius: RADIUS.poster,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.surfaceMuted,
+    width: 120,
   },
   relCover: {
-    width: 150,
-    height: 200,
+    width: 120,
+    height: 160,
+    borderRadius: RADIUS.card,
     overflow: 'hidden',
     backgroundColor: COLORS.imagePlaceholder,
   },
   relCoverEmpty: {
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: COLORS.surfaceMuted,
   },
   relBadge: {
     position: 'absolute',
-    top: SPACE.xs,
-    right: SPACE.xs,
-    width: 32,
-    height: 32,
-    borderRadius: RADIUS.pill,
+    top: 6,
+    right: 6,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.primary,
-    ...SHADOW.card,
+    backgroundColor: COLORS.success,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
   },
   relBusy: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(12,7,28,0.48)',
-  },
-  relCap: {
-    minHeight: 72,
-    paddingHorizontal: SPACE.sm,
-    paddingVertical: SPACE.xs,
+    borderRadius: RADIUS.card,
   },
   relName: {
+    marginTop: SPACE.xs,
     color: COLORS.text,
     fontFamily: FONTS.bold,
-    fontSize: 13.5,
-    lineHeight: 18,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   relKind: {
-    marginTop: SPACE.xxs,
+    marginTop: 1,
     color: COLORS.textMuted,
-    fontFamily: FONTS.regular,
-    fontSize: 11.5,
-  },
-  commentsRow: {
-    minHeight: 76,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    fontFamily: FONTS.medium,
+    fontSize: 11,
   },
   commentsRowPressed: {
     opacity: 0.78,
-  },
-  commentsCopy: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACE.sm,
-  },
-  commentsTitle: {
-    color: COLORS.text,
-    fontFamily: FONTS.extraBold,
-    fontSize: 17,
-  },
-  commentsArrow: {
-    width: SIZES.touch,
-    height: SIZES.touch,
-    borderRadius: RADIUS.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.primarySoft,
   },
   toastBar: {
     position: 'absolute',

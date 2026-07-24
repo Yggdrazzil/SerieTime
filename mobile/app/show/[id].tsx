@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, ScrollView, StyleSheet, Pressable, Modal, TextInput, ActivityIndicator, Image, Share, Platform, Animated, useWindowDimensions, Alert } from 'react-native';
-import { Feather, Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import { View, Text, ScrollView, StyleSheet, Pressable, Modal, TextInput, ActivityIndicator, Image, Share, Platform, useWindowDimensions, Alert } from 'react-native';
+import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import Svg, { Circle, Line, Polyline, Text as SvgText } from 'react-native-svg';
 import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import { goBack } from '@/lib/nav';
@@ -11,8 +10,11 @@ import { api, tmdbImage, ApiError } from '@/lib/api';
 import type { EpisodeDto, MediaDto, UserMediaState } from '@/lib/types';
 import { episodeCode } from '@/lib/format';
 import { COLORS, RADIUS, SHADOW, FONTS, STATUS_BAR, SIZES, SPACE } from '@/lib/theme';
-import { CheckCircle, Loading, LoadError, EmptyState } from '@/components/ui';
-import { SegmentedFilter } from '@/components/prisme';
+import { Loading, LoadError, EmptyState } from '@/components/ui';
+import {
+  FicheTopActions, FicheBanner, FicheIdentity, FicheTabs, StatTile, StatTiles,
+  FicheSection, InfoRow, ProgressRing, EpisodeCheck, rating5,
+} from '@/components/fiche';
 import { useFeedSessionStore } from '@/components/explore/feedSession';
 import { AnimatedFill, Pop, SlideUpBar, FadeSwitch, PressableScale } from '@/components/anim';
 import { Stars } from '@/components/Stars';
@@ -66,6 +68,14 @@ const ORDER_LABELS: Record<string, string> = {
   altdvd: 'DVD alternatif',
 };
 
+// « 1h 46m » (films) à partir de la durée en minutes.
+function fmtRuntime(minutes: number): string {
+  if (minutes < 60) return `${minutes}m`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m > 0 ? `${h}h ${String(m).padStart(2, '0')}m` : `${h}h`;
+}
+
 export default function ShowDetail() {
   const { id, type } = useLocalSearchParams<{ id: string; type?: string }>();
   const isMovie = type === 'movie';
@@ -88,7 +98,7 @@ export default function ShowDetail() {
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const addedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Bandeau jaune éphémère en bas d'écran (façon « AJOUTÉE ! » de TV Time).
+  // Bandeau éphémère en bas d'écran (façon « AJOUTÉE ! » de TV Time).
   const showToast = (msg: string) => {
     setToast(msg);
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -123,7 +133,7 @@ export default function ShowDetail() {
   const episodesQ = useQuery({
     queryKey: ['show', id, 'episodes'],
     queryFn: () =>
-      api.get<{ seasons: { seasonNumber: number; episodes: { airDate?: string | null; watched: boolean }[] }[] }>(
+      api.get<{ seasons: { seasonNumber: number; totalCount: number; episodes: { airDate?: string | null; watched: boolean }[] }[] }>(
         `/api/shows/${id}/episodes`,
       ),
     enabled: !isMovie,
@@ -282,11 +292,9 @@ export default function ShowDetail() {
     }
   };
 
-  // En-tête repliable façon TV Time : la bannière se réduit en barre compacte
-  // (titre centré) à mesure que le contenu défile, quel que soit l'onglet.
-  const scrollY = useRef(new Animated.Value(0)).current;
-
-  const responsiveHeroHeight = width >= 700 ? 300 : width < 380 ? 236 : 260;
+  // Bannière (refonte 2026-07-23) : elle DÉFILE avec le contenu — plus d'en-
+  // tête rétractable ; les boutons retour / cœur / menu restent épinglés.
+  const heroH = insets.top + (width >= 700 ? 252 : 196);
 
   // Explorer : dès que ce titre a un statut (déjà vu / à voir / en cours…), le
   // marquer « suivi cette session » pour que le deck figé de l'Explorer cesse
@@ -302,28 +310,15 @@ export default function ShowDetail() {
     else store.unmarkTracked([key]);
   }, [feedTmdbId, feedStatus, isMovie]);
 
-  if (detail.isLoading) return <FicheSkeleton heroHeight={responsiveHeroHeight} />;
+  if (detail.isLoading) return <FicheSkeleton heroHeight={heroH} />;
   if (!detail.data) return <View style={styles.fullState}><LoadError onRetry={detail.refetch} busy={detail.isRefetching} /></View>;
   const media: MediaDto = detail.data.media;
   const isFollowed = media.userStatus != null;
-  const HERO_MAX = responsiveHeroHeight;
-  const HERO_MIN = insets.top + 60;
-  // Plage de repli = exactement la hauteur perdue par l'en-tête : le bord bas
-  // de l'en-tête en surimpression suit alors le contenu au pixel près (aucun
-  // écart pendant le repli, cf. structure « overlay » plus bas).
-  const HERO_RANGE = HERO_MAX - HERO_MIN;
-  const heroH = scrollY.interpolate({ inputRange: [0, HERO_RANGE], outputRange: [HERO_MAX, HERO_MIN], extrapolate: 'clamp' });
-  const bigOpacity = scrollY.interpolate({ inputRange: [0, HERO_RANGE * 0.6], outputRange: [1, 0], extrapolate: 'clamp' });
-  const smallOpacity = scrollY.interpolate({ inputRange: [HERO_RANGE * 0.6, HERO_RANGE], outputRange: [0, 1], extrapolate: 'clamp' });
-  const onScroll = Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false });
-  // Hauteur de la barre d'onglets À propos / Épisodes (contrôle segmenté Prisme).
-  const TABS_H = 58;
-  const topPad = HERO_MAX + (isMovie ? 0 : TABS_H);
 
-  // Barre de progression globale : épisodes diffusés vus / diffusés (hors
-  // spéciaux), colorée par STATUT comme dans les bibliothèques du profil :
-  // jaune En cours, vert À jour, bleu Terminé (pleine), orange Regarder plus
-  // tard, rouge Arrêté (la barre montre où on s'est arrêté).
+  // Barre de progression au ras du bas de la bannière : épisodes diffusés vus /
+  // diffusés (hors spéciaux), colorée par STATUT comme dans les bibliothèques
+  // du profil (jaune En cours, vert À jour, bleu Terminé, orange À voir, rouge
+  // Arrêté) — violet Prisme pour « En cours » sur la fiche.
   const heroProg = (() => {
     if (isMovie) return null;
     let aired = 0;
@@ -344,17 +339,96 @@ export default function ShowDetail() {
       : media.userStatus === 'watchlist' ? 'watchlist'
       : complete ? 'upToDate' : 'watching';
     const pct = kind === 'completed' ? 100 : Math.min(100, (watched / aired) * 100);
-    // « En cours » : violet Prisme sur la fiche (plus le jaune TV Time) ; les
-    // autres statuts gardent leur code couleur (STATUS_BAR, partagé avec le profil).
     if (kind === 'watching') return { pct, fill: COLORS.primary, track: COLORS.primarySoft };
     return { pct, ...STATUS_BAR[kind] };
   })();
 
-  // Ligne de suivi (même présentation que la fiche jeu) : première carte du
-  // corps de la fiche, juste sous la bannière — le statut se règle sans scroller.
+  // Tuile « saisons / épisodes » : total hors saison 0 (spéciaux).
+  const totalEps = episodesQ.data
+    ? episodesQ.data.seasons.filter((s) => s.seasonNumber !== 0).reduce((n, s) => n + s.totalCount, 0)
+    : null;
+  const seasonsCount = detail.data.show?.numberOfSeasons ?? null;
+
+  const heroUri = tmdbImage(media.backdropPath, 'w1280') ?? tmdbImage(media.posterPath, 'w780');
+  const genresTxt = genresFr(media.genres);
+  const identityMeta = [
+    isMovie ? media.year : yearRange(media, detail.data.endYear),
+    genresTxt,
+  ].filter(Boolean).join(' • ');
+
+  // Haut de fiche partagé par les onglets : bannière + carte d'identité
+  // (badge, titre, méta, onglets pour les séries) + tuiles de stats.
+  const ficheTop = (
+    <>
+      <FicheBanner
+        uri={heroUri}
+        height={heroH}
+        fallback={<Feather name={isMovie ? 'film' : 'tv'} size={64} color="rgba(255,255,255,0.34)" />}
+        progress={heroProg}
+      />
+      <FicheIdentity
+        posterUri={tmdbImage(media.posterPath, 'w342')}
+        posterFallback={<Feather name={isMovie ? 'film' : 'tv'} size={30} color={COLORS.textSoft} />}
+        posterLabel={'Affiche de ' + media.title}
+        badge={isMovie ? 'FILM' : 'SÉRIE'}
+        title={media.title}
+        tiles={
+          <StatTiles>
+            {media.voteAverage ? (
+              <StatTile
+                icon={<Ionicons name="star" size={21} color={COLORS.tertiary} />}
+                value={`${rating5(media.voteAverage, 10)}/5`}
+                sub="Note TMDb"
+                a11y={`Note ${rating5(media.voteAverage, 10)} sur 5`}
+              />
+            ) : null}
+            {genresTxt ? (
+              <StatTile
+                icon={<MaterialCommunityIcons name="drama-masks" size={21} color={COLORS.primary} />}
+                text={genresTxt}
+                a11y={`Genres : ${genresTxt}`}
+              />
+            ) : null}
+            {isMovie
+              ? (media.runtime ? (
+                  <StatTile
+                    icon={<Feather name="clock" size={19} color={COLORS.primary} />}
+                    value={fmtRuntime(media.runtime)}
+                    sub="Durée"
+                    a11y={`Durée ${fmtRuntime(media.runtime)}`}
+                  />
+                ) : null)
+              : (seasonsCount ? (
+                  <StatTile
+                    icon={<Ionicons name="layers-outline" size={21} color={COLORS.primary} />}
+                    value={`${seasonsCount} saison${seasonsCount > 1 ? 's' : ''}`}
+                    sub={totalEps ? `${totalEps} épisode${totalEps > 1 ? 's' : ''}` : undefined}
+                    a11y={`${seasonsCount} saisons${totalEps ? `, ${totalEps} épisodes` : ''}`}
+                  />
+                ) : null)}
+          </StatTiles>
+        }
+      >
+        <Text style={styles.identityMeta}>{identityMeta}</Text>
+        {!isMovie ? (
+          <FicheTabs
+            options={[
+              { value: 'À PROPOS', label: 'À propos' },
+              { value: 'ÉPISODES', label: 'Épisodes' },
+            ]}
+            value={tab}
+            onChange={setTab}
+            accessibilityLabel="Sections de la fiche"
+          />
+        ) : null}
+      </FicheIdentity>
+    </>
+  );
+
+  // Carte « Suivi » : contrôle segmenté pleine largeur (maquette).
   const trackingLine = (
-    <View style={styles.section}>
-      <Text style={styles.trackingTitle}>Suivi</Text>
+    <View style={styles.trackCard}>
+      <Text style={styles.trackTitle}>Suivi</Text>
       <StatusLine
         options={isMovie ? MOVIE_STATUS_OPTIONS : SHOW_STATUS_OPTIONS}
         value={media.userStatus ?? null}
@@ -369,122 +443,39 @@ export default function ShowDetail() {
   return (
     <Pop style={styles.screen}>
       <View style={styles.canvas}>
-      {/* Contenu EN FLUX : il défile sous l'en-tête en surimpression (padding
-          haut constant = place de l'en-tête déployé + onglets). */}
       {isMovie ? (
         <MovieBody
           media={media}
           detail={detail.data}
           mediaId={String(id)}
           tracking={trackingLine}
-          onScroll={onScroll}
-          topPad={topPad}
+          ficheTop={ficheTop}
         />
       ) : (
         <FadeSwitch trigger={tab}>
           {tab === 'À PROPOS' ? (
-            <AboutTab media={media} detail={detail.data} mediaId={String(id)} tracking={trackingLine} onScroll={onScroll} topPad={topPad} />
+            <AboutTab media={media} detail={detail.data} mediaId={String(id)} tracking={trackingLine} ficheTop={ficheTop} />
           ) : (
-            <EpisodesTab showId={String(id)} title={media.title} posterPath={media.posterPath} onChange={refresh} onScroll={onScroll} topPad={topPad} />
+            <EpisodesTab
+              showId={String(id)}
+              title={media.title}
+              posterPath={media.posterPath}
+              runtime={media.runtime ?? null}
+              onChange={refresh}
+              ficheTop={ficheTop}
+            />
           )}
         </FadeSwitch>
       )}
 
-      {/* En-tête en SURIMPRESSION (hors flux) : sa hauteur animée ne re-layoute
-          que lui-même — auparavant l'en-tête était dans le flux et chaque frame
-          de repli re-layoutait TOUTE la fiche (saccades au défilement, web). */}
-      <View style={styles.headerOverlay}>
-      <Animated.View style={[styles.hero, { height: heroH }]}>
-        {(() => {
-          const heroUri = tmdbImage(media.backdropPath, 'w1280') ?? tmdbImage(media.posterPath, 'w780');
-          return heroUri ? <Image source={{ uri: heroUri }} style={StyleSheet.absoluteFill} resizeMode="cover" accessible={false} /> : null;
-        })()}
-        <LinearGradient
-          colors={['rgba(9,5,16,0.22)', 'rgba(9,5,16,0.48)', 'rgba(9,5,16,0.94)']}
-          locations={[0, 0.44, 1]}
-          style={StyleSheet.absoluteFill}
-          pointerEvents="none"
-        />
-        <View style={styles.heroPrism} pointerEvents="none" />
-        <View style={styles.heroOrb} pointerEvents="none" />
-        <View style={[styles.heroBtns, { top: insets.top + 4 }]}>
-          <Pressable
-            style={({ pressed }) => [styles.heroIconButton, pressed && styles.pressed]}
-            onPress={() => goBack('/')}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel="Retour"
-          >
-            <Feather name="chevron-down" size={25} color="#fff" />
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [styles.heroIconButton, pressed && styles.pressed]}
-            onPress={() => setMenu(true)}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel="Options"
-            accessibilityHint="Ouvre les actions de personnalisation et de suivi"
-          >
-            <Feather name="more-horizontal" size={24} color="#fff" />
-          </Pressable>
-        </View>
-        {/* Titre compact centré, visible quand l'en-tête est replié. */}
-        <Animated.Text
-          style={[styles.heroCollapsedTitle, { top: insets.top + 12, opacity: smallOpacity }]}
-          numberOfLines={1}
-          accessible={false}
-        >
-          {media.title}
-        </Animated.Text>
-        <Animated.View style={[styles.heroTitleWrap, { opacity: bigOpacity }]}>
-          {tmdbImage(media.posterPath, 'w342') ? (
-            <Image
-              source={{ uri: tmdbImage(media.posterPath, 'w342')! }}
-              style={styles.heroPoster}
-              resizeMode="cover"
-              accessible={false}
-            />
-          ) : null}
-          <View style={styles.heroCopy}>
-            <View style={styles.heroKindBadge}>
-              <Feather name={isMovie ? 'film' : 'tv'} size={12} color="#FFFFFF" />
-              <Text style={styles.heroKindText}>{isMovie ? 'FILM' : 'SÉRIE'}</Text>
-            </View>
-            <Text accessibilityRole="header" style={styles.heroTitle} numberOfLines={2}>{media.title}</Text>
-            <Text style={styles.heroSub} numberOfLines={2}>
-              {isMovie
-                ? [media.year, genresFr(media.genres)].filter(Boolean).join(' • ')
-                : [
-                    detail.data.show?.numberOfSeasons ? `${detail.data.show.numberOfSeasons} saison${detail.data.show.numberOfSeasons > 1 ? 's' : ''}` : null,
-                    statusFr(media.status),
-                    detail.data.show?.platform ?? detail.data.show?.network,
-                  ].filter(Boolean).join(' • ')}
-            </Text>
-          </View>
-        </Animated.View>
-        {/* Progression globale au bas de la bannière, colorée par statut. */}
-        {heroProg ? (
-          <View style={[styles.heroProgressTrack, { backgroundColor: heroProg.track }]}>
-            <AnimatedFill pct={heroProg.pct} color={heroProg.fill} style={styles.heroProgressFill} />
-          </View>
-        ) : null}
-      </Animated.View>
-      {/* Onglets Prisme (contrôle segmenté en pilule) — les commentaires vivent
-          au bas de « À propos ». Valeurs inchangées (pilotent FadeSwitch). */}
-      {!isMovie ? (
-        <View style={styles.ficheTabs}>
-          <SegmentedFilter
-            options={[
-              { value: 'À PROPOS', label: 'À propos' },
-              { value: 'ÉPISODES', label: 'Épisodes' },
-            ]}
-            value={tab}
-            onChange={setTab}
-            accessibilityLabel="Sections de la fiche"
-          />
-        </View>
-      ) : null}
-      </View>
+      {/* Boutons épinglés au-dessus de tout : retour / favori / options. */}
+      <FicheTopActions
+        topInset={insets.top}
+        onBack={() => goBack('/')}
+        backLabel="Retour"
+        favorite={{ on: !!media.isFavorite, busy: favorite.isPending, onPress: () => favorite.mutate() }}
+        onMenu={() => setMenu(true)}
+      />
 
       {/* Barre du bas façon TV Time : + AJOUTER, puis ✓ AJOUTÉE ! pendant 2 s. */}
       {!isFollowed && !justAdded && !toast ? (
@@ -1195,121 +1186,37 @@ function useOpenRec(type: 'show' | 'movie') {
   };
   return { open, busyId };
 }
-// En-tête de section Prisme : une icône et un seul titre utile.
-// `trailing` accueille uniquement une métadonnée ou une action.
-function SectionHead({
-  icon,
-  title,
-  trailing,
-  style,
-}: {
-  icon: keyof typeof Feather.glyphMap;
-  title: string;
-  trailing?: React.ReactNode;
-  style?: any;
-}) {
-  return (
-    <View style={[styles.sectionHead, style]}>
-      <View style={styles.sectionHeadIcon} accessible={false}>
-        <Feather name={icon} size={18} color={COLORS.primary} />
-      </View>
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <Text accessibilityRole="header" style={styles.sectionTitle} numberOfLines={2}>{title}</Text>
-      </View>
-      {trailing}
-    </View>
-  );
-}
 
-// « Où regarder » : pastilles violettes horizontales (une par plateforme).
+// « Où regarder » : tuiles lavande (une par plateforme), initiale en pastille.
 function WhereToWatch({ providers }: { providers: { name: string }[] }) {
   return (
-    <View style={styles.section}>
-      <SectionHead icon="play-circle" title="Où regarder" />
+    <FicheSection icon="play-circle" title="Où regarder">
       {providers.length === 0 ? (
         <Text style={styles.muted}>Non disponible</Text>
       ) : (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingTop: 12 }}>
+        <View style={styles.provWrap}>
           {providers.map((p) => (
-            <View key={p.name} style={styles.provBtn}>
-              <Ionicons name="play-circle-outline" size={17} color={COLORS.onPrimary} />
-              <Text style={styles.provText}>{p.name.toUpperCase()}</Text>
+            <View key={p.name} style={styles.provTile}>
+              <View style={styles.provBadge} accessible={false}>
+                <Text style={styles.provBadgeText}>{p.name.slice(0, 1).toUpperCase()}</Text>
+              </View>
+              <Text style={styles.provName} numberOfLines={1}>{p.name}</Text>
             </View>
           ))}
-        </ScrollView>
+        </View>
       )}
-    </View>
+    </FicheSection>
   );
 }
 
-// « Similaire à » : vignette ronde + titre de l'œuvre la plus proche (première
-// recommandation TMDb), ouvre sa fiche au clic.
-function SimilarTo({ item, isMovie }: { item: any; isMovie: boolean }) {
-  const rec = useOpenRec(isMovie ? 'movie' : 'show');
-  const thumb = tmdbImage(item.posterPath, 'w185');
-  return (
-    <PressableScale
-      style={[styles.section, styles.similarRow]}
-      onPress={() => rec.open(item)}
-      disabled={rec.busyId !== null}
-      accessibilityRole="button"
-      accessibilityLabel={`Ouvrir ${item.title}`}
-      accessibilityState={{ busy: rec.busyId === item.tmdbId, disabled: rec.busyId !== null }}
-    >
-      {thumb ? <Image source={{ uri: thumb }} style={styles.similarThumb} resizeMode="cover" accessible={false} /> : <View style={styles.similarThumb} />}
-      <View style={{ flex: 1 }}>
-        <Text style={styles.similarTitle}>Similaire à</Text>
-        <Text style={styles.similarName} numberOfLines={1}>{item.title}</Text>
-      </View>
-      {rec.busyId === item.tmdbId ? (
-        <ActivityIndicator size="small" color={COLORS.black} />
-      ) : (
-        <Feather name="chevron-right" size={20} color={COLORS.textMuted} />
-      )}
-    </PressableScale>
-  );
-}
-
-// Rangées d'infos sous le synopsis (horloge = jour/heure de diffusion,
-// chrono = durée d'épisode, silhouettes = « ajoutée par N personnes »).
-function MetaRows({ show, media, addedByCount, isMovie }: any) {
-  const schedule = !isMovie && show?.airDay ? [airDayFr(show.airDay), show.airTime].filter(Boolean).join(' ') : null;
-  if (!schedule && !media.runtime && !addedByCount) return null;
-  return (
-    <View style={styles.metaRows}>
-      {schedule ? (
-        <View style={styles.metaItem}>
-          <Feather name="clock" size={16} color={COLORS.black} />
-          <Text style={styles.metaText}>{schedule}</Text>
-        </View>
-      ) : null}
-      {media.runtime ? (
-        <View style={styles.metaItem}>
-          <Ionicons name="stopwatch-outline" size={17} color={COLORS.black} />
-          <Text style={styles.metaText}>{media.runtime}m</Text>
-        </View>
-      ) : null}
-      {addedByCount > 0 ? (
-        <View style={styles.metaItem}>
-          <Feather name="users" size={16} color={COLORS.black} />
-          <Text style={styles.metaText}>
-            {isMovie ? 'Film ajouté' : 'Série ajoutée'} par {compactCount(addedByCount)} personne{addedByCount > 1 ? 's' : ''}
-          </Text>
-        </View>
-      ) : null}
-    </View>
-  );
-}
-
-// « Distribution » : cartes horizontales photo + nom + rôle (bandeau sombre en
-// bas de carte, façon TV Time) ; le clic ouvre la fiche acteur (/person).
+// « Distribution » : photo arrondie, nom + rôle SOUS la photo (maquette) ;
+// le clic ouvre la fiche acteur (/person).
 function CastSection({ cast, mediaId, type }: { cast: any[]; mediaId: string; type: 'show' | 'movie' }) {
   const router = useRouter();
   if (!cast.length) return null;
   return (
-    <View style={[styles.section, { paddingHorizontal: 0 }]}>
-      <SectionHead icon="users" title="Distribution" style={{ paddingHorizontal: 20 }} />
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingHorizontal: 20, paddingTop: 14 }}>
+    <FicheSection icon="users" title="Distribution" flush>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.railContent}>
         {cast.map((c, i) => (
           <PressableScale
             key={`${c.name}-${i}`}
@@ -1319,33 +1226,33 @@ function CastSection({ cast, mediaId, type }: { cast: any[]; mediaId: string; ty
             accessibilityLabel={[c.name, c.character].filter(Boolean).join(', ')}
             accessibilityHint="Ouvre la fiche de cette personne"
           >
-            {tmdbImage(c.profilePath, 'w185') ? (
-              <Image source={{ uri: tmdbImage(c.profilePath, 'w185')! }} style={StyleSheet.absoluteFill} resizeMode="cover" accessible={false} />
-            ) : (
-              <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
-                <Feather name="user" size={30} color="#9a9a9a" />
-              </View>
-            )}
-            <View style={styles.castCap}>
-              <Text style={styles.castName} numberOfLines={1}>{c.name}</Text>
-              {c.character ? <Text style={styles.castRole} numberOfLines={1}>{c.character.toUpperCase()}</Text> : null}
+            <View style={styles.castPhoto}>
+              {tmdbImage(c.profilePath, 'w185') ? (
+                <Image source={{ uri: tmdbImage(c.profilePath, 'w185')! }} style={StyleSheet.absoluteFill} resizeMode="cover" accessible={false} />
+              ) : (
+                <View style={[StyleSheet.absoluteFill, styles.castPhotoEmpty]}>
+                  <Feather name="user" size={28} color={COLORS.textSoft} />
+                </View>
+              )}
             </View>
+            <Text style={styles.castName} numberOfLines={1}>{c.name}</Text>
+            {c.character ? <Text style={styles.castRole} numberOfLines={1}>{c.character}</Text> : null}
           </PressableScale>
         ))}
       </ScrollView>
-    </View>
+    </FicheSection>
   );
 }
 
-// « Les utilisateurs ont également regardé » : affiches horizontales, badge
-// coche jaune si déjà dans ma bibliothèque, import TMDb silencieux au clic.
+// Recommandations TMDb (« Également regardé » séries / « Similaire à » films,
+// libellés maquettes) : affiche + titre dessous, badge vert si déjà en
+// bibliothèque, import silencieux au clic.
 function AlsoWatched({ items, type }: { items: any[]; type: 'show' | 'movie' }) {
   const rec = useOpenRec(type);
   if (!items.length) return null;
   return (
-    <View style={[styles.section, { paddingHorizontal: 0 }]}>
-      <SectionHead icon="eye" title="Également regardé" style={{ paddingHorizontal: 20 }} />
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingHorizontal: 20, paddingTop: 14 }}>
+    <FicheSection icon={type === 'movie' ? 'compass' : 'eye'} title={type === 'movie' ? 'Similaire à' : 'Également regardé'} flush>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.railContent}>
         {items.map((r) => (
           <PressableScale
             key={r.tmdbId}
@@ -1356,27 +1263,31 @@ function AlsoWatched({ items, type }: { items: any[]; type: 'show' | 'movie' }) 
             accessibilityLabel={`Ouvrir ${r.title}`}
             accessibilityState={{ busy: rec.busyId === r.tmdbId, disabled: rec.busyId !== null }}
           >
-            {tmdbImage(r.posterPath, 'w342') ? (
-              <Image source={{ uri: tmdbImage(r.posterPath, 'w342')! }} style={StyleSheet.absoluteFill} resizeMode="cover" accessible={false} />
-            ) : (
-              <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
-                <Feather name={type === 'movie' ? 'film' : 'tv'} size={26} color="#9a9a9a" />
-              </View>
-            )}
-            {r.inLibrary ? (
-              <View style={styles.recoBadge}>
-                <Feather name="check" size={18} color={COLORS.onPrimary} />
-              </View>
-            ) : null}
-            {rec.busyId === r.tmdbId ? (
-              <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.35)', alignItems: 'center', justifyContent: 'center' }]}>
-                <ActivityIndicator color="#fff" />
-              </View>
-            ) : null}
+            <View style={styles.recoPoster}>
+              {tmdbImage(r.posterPath, 'w342') ? (
+                <Image source={{ uri: tmdbImage(r.posterPath, 'w342')! }} style={StyleSheet.absoluteFill} resizeMode="cover" accessible={false} />
+              ) : (
+                <View style={[StyleSheet.absoluteFill, styles.castPhotoEmpty]}>
+                  <Feather name={type === 'movie' ? 'film' : 'tv'} size={24} color={COLORS.textSoft} />
+                </View>
+              )}
+              {r.inLibrary ? (
+                <View style={styles.recoBadge}>
+                  <Feather name="check" size={14} color="#FFFFFF" />
+                </View>
+              ) : null}
+              {rec.busyId === r.tmdbId ? (
+                <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.35)', alignItems: 'center', justifyContent: 'center' }]}>
+                  <ActivityIndicator color="#fff" />
+                </View>
+              ) : null}
+            </View>
+            <Text style={styles.recoTitle} numberOfLines={2}>{r.title}</Text>
+            <Text style={styles.recoKind}>{type === 'movie' ? 'Film' : 'Série'}</Text>
           </PressableScale>
         ))}
       </ScrollView>
-    </View>
+    </FicheSection>
   );
 }
 
@@ -1384,7 +1295,7 @@ type RatingPoint = { episodeNumber: number; avg: number; count: number };
 type RatingSeason = { seasonNumber: number; points: RatingPoint[] };
 
 // « Notes de la communauté » : courbe des moyennes d'épisodes par saison
-// (quadrillage 0-5, polyline jaune, sélecteur de saison + points), cf. TV Time.
+// (quadrillage 0-5, polyline violette, sélecteur de saison + points).
 // Masquée tant qu'aucun épisode n'a été noté (404 / liste vide).
 function CommunityRatings({ mediaId }: { mediaId: string }) {
   const { width } = useWindowDimensions();
@@ -1398,7 +1309,7 @@ function CommunityRatings({ mediaId }: { mediaId: string }) {
   if (!seasons.length) return null;
   const idx = Math.min(season, seasons.length - 1);
   const cur = seasons[idx];
-  const W = Math.max(220, Math.min(width, SIZES.contentMax) - SPACE.xl * 2);
+  const W = Math.max(220, Math.min(width, SIZES.contentMax) - SPACE.md * 4);
   const H = 150;
   const PAD = { l: 26, r: 8, t: 8, b: 20 };
   // Les notes sont sur 5 dans l'app ; garde-fou si une source note sur 10.
@@ -1408,31 +1319,36 @@ function CommunityRatings({ mediaId }: { mediaId: string }) {
   const y = (v: number) => PAD.t + (1 - v / scaleMax) * (H - PAD.t - PAD.b);
   const pts = cur.points.map((p, i) => `${PAD.l + i * xs},${y(p.avg)}`).join(' ');
   return (
-    <View style={styles.section}>
-      <SectionHead icon="trending-up" title="Notes de la communauté" />
-      <Pressable
-        style={({ pressed }) => [styles.seasonPickRow, pressed && styles.pressed]}
-        onPress={() => setSeason((idx + 1) % seasons.length)}
-        disabled={seasons.length <= 1}
-        accessibilityRole="button"
-        accessibilityLabel={`Saison ${cur.seasonNumber}. ${seasons.length > 1 ? 'Afficher la saison suivante' : 'Seule saison disponible'}`}
-        accessibilityState={{ disabled: seasons.length <= 1 }}
-      >
-        <Text style={styles.seasonPick}>Saison {cur.seasonNumber}</Text>
-        {seasons.length > 1 ? <Feather name="chevron-down" size={18} color={COLORS.black} /> : null}
-      </Pressable>
+    <FicheSection
+      icon="trending-up"
+      title="Notes de la communauté"
+      trailing={
+        <Pressable
+          style={({ pressed }) => [styles.seasonPickRow, pressed && styles.pressed]}
+          onPress={() => setSeason((idx + 1) % seasons.length)}
+          disabled={seasons.length <= 1}
+          accessibilityRole="button"
+          accessibilityLabel={`Saison ${cur.seasonNumber}. ${seasons.length > 1 ? 'Afficher la saison suivante' : 'Seule saison disponible'}`}
+          accessibilityState={{ disabled: seasons.length <= 1 }}
+        >
+          <Text style={styles.seasonPick}>Saison {cur.seasonNumber}</Text>
+          {seasons.length > 1 ? <Feather name="chevron-down" size={16} color={COLORS.primary} /> : null}
+        </Pressable>
+      }
+    >
       <View
         accessible
         accessibilityRole="image"
         accessibilityLabel={`Courbe de notes de la saison ${cur.seasonNumber}, ${cur.points.length} épisode${cur.points.length > 1 ? 's' : ''}`}
+        style={{ marginTop: SPACE.sm }}
       >
       <Svg width={W} height={H} accessible={false}>
         {[0, 1, 2, 3, 4, 5].map((g) => {
           const v = (g * scaleMax) / 5;
           return (
             <React.Fragment key={g}>
-              <Line x1={PAD.l} y1={y(v)} x2={W - PAD.r} y2={y(v)} stroke="#ececec" strokeWidth={1} />
-              <SvgText x={PAD.l - 8} y={y(v) + 4} fontSize={10} fill="#9a9a9a" textAnchor="end">
+              <Line x1={PAD.l} y1={y(v)} x2={W - PAD.r} y2={y(v)} stroke={COLORS.borderLight} strokeWidth={1} />
+              <SvgText x={PAD.l - 8} y={y(v) + 4} fontSize={10} fill={COLORS.textSoft} textAnchor="end">
                 {String(v)}
               </SvgText>
             </React.Fragment>
@@ -1451,7 +1367,7 @@ function CommunityRatings({ mediaId }: { mediaId: string }) {
           ))}
         </View>
       ) : null}
-    </View>
+    </FicheSection>
   );
 }
 
@@ -1466,13 +1382,13 @@ function CommentsRowLink({ mediaId, title, type }: { mediaId: string; title: str
   const total = (q.data?.comments ?? []).reduce((n, c) => n + 1 + (c.replies?.length ?? 0), 0);
   return (
     <Pressable
-      style={({ pressed }) => [styles.section, pressed && styles.pressed]}
       onPress={() => router.push(`/comments/${mediaId}?title=${encodeURIComponent(title)}&type=${type}`)}
       accessibilityRole="button"
       accessibilityLabel={`Commentaires, ${total}`}
       accessibilityHint="Ouvre tous les commentaires"
+      style={({ pressed }) => (pressed ? styles.pressed : null)}
     >
-      <SectionHead
+      <FicheSection
         icon="message-circle"
         title="Commentaires"
         trailing={
@@ -1494,26 +1410,33 @@ function yearRange(media: MediaDto, endYear?: number | null) {
   return String(media.year);
 }
 
-// Onglet « À propos » — ordre des sections calqué sur la fiche TV Time :
-// où regarder, question d'intérêt, similaire à, informations (méta + étoiles +
-// synopsis + rangées), distribution, également regardé, notes, commentaires.
-function AboutTab({ media, detail, mediaId, tracking, onScroll, topPad }: any) {
+// Onglet « À propos » : Suivi, Où regarder, Informations (méta + étoiles +
+// synopsis + rangées), Distribution, Également regardé, Notes, Commentaires.
+function AboutTab({ media, detail, mediaId, tracking, ficheTop }: any) {
+  const schedule = detail.show?.airDay ? [airDayFr(detail.show.airDay), detail.show.airTime].filter(Boolean).join(' ') : null;
+  const network = detail.show?.platform ?? detail.show?.network;
   return (
-    <ScrollView onScroll={onScroll} scrollEventThrottle={16} contentContainerStyle={{ paddingTop: topPad, paddingBottom: 90 }}>
+    <ScrollView contentContainerStyle={styles.tabContent} showsVerticalScrollIndicator={false}>
+      {ficheTop}
       {tracking}
       <WhereToWatch providers={detail.providers ?? []} />
 
-      {detail.recommendations?.length ? <SimilarTo item={detail.recommendations[0]} isMovie={false} /> : null}
-
-      <View style={styles.section}>
-        <SectionHead icon="info" title="Informations sur la série" />
+      <FicheSection icon="info" title="Informations">
         <Text style={styles.infoMeta}>
           {[yearRange(media, detail.endYear), genresFr(media.genres)].filter(Boolean).join(' • ')}
         </Text>
         {media.voteAverage ? <Stars rating10={media.voteAverage} size={17} /> : null}
         {media.overview ? <Text style={styles.overview}>{media.overview}</Text> : null}
-        <MetaRows show={detail.show} media={media} addedByCount={detail.addedByCount} isMovie={false} />
-      </View>
+        <View style={styles.infoRows}>
+          {network ? <InfoRow icon="tv" label="Diffuseur" value={network} /> : null}
+          {schedule ? <InfoRow icon="clock" label="Diffusion" value={schedule} /> : null}
+          {media.runtime ? <InfoRow icon="watch" label="Durée épisode" value={`${media.runtime} min`} /> : null}
+          {media.status ? <InfoRow icon="activity" label="Statut" value={statusFr(media.status) ?? media.status} /> : null}
+          {detail.addedByCount > 0 ? (
+            <InfoRow icon="users" label="Communauté" value={`Ajoutée par ${compactCount(detail.addedByCount)} personne${detail.addedByCount > 1 ? 's' : ''}`} />
+          ) : null}
+        </View>
+      </FicheSection>
 
       <CastSection cast={detail.cast ?? []} mediaId={mediaId} type="show" />
       <AlsoWatched items={detail.recommendations ?? []} type="show" />
@@ -1523,23 +1446,25 @@ function AboutTab({ media, detail, mediaId, tracking, onScroll, topPad }: any) {
   );
 }
 
-function MovieBody({ media, detail, mediaId, tracking, onScroll, topPad }: any) {
+function MovieBody({ media, detail, mediaId, tracking, ficheTop }: any) {
   // La ligne de suivi (À voir / Vu) remplace l'ancienne rangée « Vu / Pas vu »
   // à coche : même mutation (watched/unwatched), présentation harmonisée.
   return (
-    <ScrollView onScroll={onScroll} scrollEventThrottle={16} contentContainerStyle={{ paddingTop: topPad, paddingBottom: 90 }}>
+    <ScrollView contentContainerStyle={styles.tabContent} showsVerticalScrollIndicator={false}>
+      {ficheTop}
       {tracking}
       <WhereToWatch providers={detail.providers ?? []} />
 
-      {detail.recommendations?.length ? <SimilarTo item={detail.recommendations[0]} isMovie /> : null}
-
-      <View style={styles.section}>
-        <SectionHead icon="info" title="Informations sur le film" />
-        <Text style={styles.infoMeta}>{[media.year, genresFr(media.genres)].filter(Boolean).join(' • ')}</Text>
-        {media.voteAverage ? <Stars rating10={media.voteAverage} size={17} /> : null}
-        {media.overview ? <Text style={styles.overview}>{media.overview}</Text> : null}
-        <MetaRows show={null} media={media} addedByCount={detail.addedByCount} isMovie />
-      </View>
+      {media.overview || detail.addedByCount > 0 ? (
+        <FicheSection icon="book-open" title="Synopsis">
+          {media.overview ? <Text style={styles.overview}>{media.overview}</Text> : null}
+          {detail.addedByCount > 0 ? (
+            <View style={styles.infoRows}>
+              <InfoRow icon="users" label="Communauté" value={`Ajouté par ${compactCount(detail.addedByCount)} personne${detail.addedByCount > 1 ? 's' : ''}`} />
+            </View>
+          ) : null}
+        </FicheSection>
+      ) : null}
 
       <CastSection cast={detail.cast ?? []} mediaId={mediaId} type="movie" />
       <AlsoWatched items={detail.recommendations ?? []} type="movie" />
@@ -1557,21 +1482,84 @@ const isUpcoming = (iso?: string | null) => !!iso && new Date(iso).getTime() > D
 const daysUntil = (iso?: string | null) =>
   iso ? Math.max(1, Math.ceil((new Date(iso).getTime() - Date.now()) / 86_400_000)) : 0;
 
+// « 5 h 20 min » restantes (est.) à partir des minutes.
+function fmtRemaining(minutes: number): string {
+  if (minutes < 60) return `${minutes} min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m > 0 ? `${h} h ${String(m).padStart(2, '0')} min` : `${h} h`;
+}
+
 // Vignette d'épisode : image TheTVDB/TMDb si disponible, sinon affiche de la série, sinon pictogramme.
 function EpThumb({ stillPath, fallback }: { stillPath?: string | null; fallback?: string | null }) {
   const uri = tmdbImage(stillPath, 'w300') ?? tmdbImage(fallback, 'w342');
   if (uri) return <Image source={{ uri }} style={styles.epThumb} resizeMode="cover" accessible={false} />;
   return (
     <View style={[styles.epThumb, { alignItems: 'center', justifyContent: 'center' }]}>
-      <Feather name="image" size={24} color="#9a9a9a" />
+      <Feather name="image" size={20} color={COLORS.textSoft} />
     </View>
   );
 }
 
-function EpisodesTab({ showId, title, posterPath, onChange, onScroll, topPad }: { showId: string; title: string; posterPath?: string | null; onChange: () => void; onScroll?: any; topPad?: number }) {
+// Rangée d'épisode (maquette) : vignette 16:9, code violet + titre + durée,
+// coche verte / anneau à droite (ou décompte J-x avant diffusion).
+function EpisodeRow({
+  episode,
+  runtime,
+  posterPath,
+  onOpen,
+  onToggle,
+  busy,
+}: {
+  episode: EpisodeDto;
+  runtime: number | null;
+  posterPath?: string | null;
+  onOpen?: () => void;
+  onToggle?: () => void;
+  busy: boolean;
+}) {
+  const upcoming = isUpcoming(episode.airDate);
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.epRow, pressed && onOpen && styles.pressed]}
+      onPress={onOpen}
+      accessibilityRole={onOpen ? 'button' : undefined}
+      accessibilityLabel={`Épisode ${episodeCode(episode.seasonNumber, episode.episodeNumber)}`}
+    >
+      <EpThumb stillPath={episode.stillPath} fallback={posterPath} />
+      <View style={styles.epCopy}>
+        <Text style={styles.epCode}>{episodeCode(episode.seasonNumber, episode.episodeNumber)}</Text>
+        <Text style={styles.epTitle} numberOfLines={2}>{episode.title}</Text>
+        {runtime ? (
+          <View style={styles.epDurRow}>
+            <Feather name="clock" size={11} color={COLORS.textSoft} />
+            <Text style={styles.epDur}>{runtime} min</Text>
+          </View>
+        ) : null}
+      </View>
+      {upcoming ? (
+        <View style={styles.daysWrap}>
+          <Text style={styles.daysNum}>{daysUntil(episode.airDate)}</Text>
+          <Text style={styles.daysLabel}>{daysUntil(episode.airDate) > 1 ? 'JOURS' : 'JOUR'}</Text>
+        </View>
+      ) : (
+        <EpisodeCheck
+          checked={episode.watched}
+          onPress={onToggle}
+          disabled={busy}
+          label={`Épisode ${episodeCode(episode.seasonNumber, episode.episodeNumber)} vu`}
+        />
+      )}
+    </Pressable>
+  );
+}
+
+function EpisodesTab({ showId, title, posterPath, runtime, onChange, ficheTop }: { showId: string; title: string; posterPath?: string | null; runtime: number | null; onChange: () => void; ficheTop: React.ReactNode }) {
   const qc = useQueryClient();
   const { width } = useWindowDimensions();
-  const [open, setOpen] = useState<Record<number, boolean>>({});
+  // Saison affichée dans la carte « Épisodes » (maquette : une saison à la
+  // fois, sélecteur en tête) ; null = suivre le prochain épisode à voir.
+  const [seasonSel, setSeasonSel] = useState<number | null>(null);
   // Pop-up « Cocher aussi les épisodes précédents ? » : proposée quand on
   // coche un épisode alors que des épisodes antérieurs diffusés sont non vus.
   const [prevAsk, setPrevAsk] = useState<EpisodeDto | null>(null);
@@ -1682,7 +1670,6 @@ function EpisodesTab({ showId, title, posterPath, onChange, onScroll, topPad }: 
     },
     onSettled: refresh,
   });
-  // Coche d'un épisode : bascule + proposition de cocher les précédents.
   // Tout démarquer (hors spéciaux quand aucune saison précise), avec la même
   // mise à jour optimiste que « tout marquer ».
   const markAllUnwatched = useMutation({
@@ -1714,12 +1701,11 @@ function EpisodesTab({ showId, title, posterPath, onChange, onScroll, topPad }: 
     toggleEp.mutate(e);
   };
 
-  // Les états intermédiaires descendent sous l'en-tête en surimpression.
-  if (isLoading) return <View style={{ paddingTop: topPad }}><Loading /></View>;
-  if (!data) return <View style={{ paddingTop: topPad }}><LoadError onRetry={refetch} busy={isRefetching} /></View>;
-  if (data.seasons.length === 0) return <View style={{ paddingTop: topPad }}><EmptyState title="Aucun épisode" /></View>;
+  if (isLoading) return <ScrollView contentContainerStyle={styles.tabContent}>{ficheTop}<Loading /></ScrollView>;
+  if (!data) return <ScrollView contentContainerStyle={styles.tabContent}>{ficheTop}<LoadError onRetry={refetch} busy={isRefetching} /></ScrollView>;
+  if (data.seasons.length === 0) return <ScrollView contentContainerStyle={styles.tabContent}>{ficheTop}<EmptyState title="Aucun épisode" /></ScrollView>;
 
-  // Épisodes spéciaux (saison 0) toujours en bas de la liste (façon TV Time).
+  // Épisodes spéciaux (saison 0) toujours en fin de liste (façon TV Time).
   const isSpecial = (s: SeasonData) => s.seasonNumber === 0;
   const seasons = [...data.seasons].sort((a, b) => {
     if (isSpecial(a) !== isSpecial(b)) return isSpecial(a) ? 1 : -1;
@@ -1741,70 +1727,153 @@ function EpisodesTab({ showId, title, posterPath, onChange, onScroll, topPad }: 
     markAllUnwatched.mutate(undefined);
   };
 
+  // Progression globale (épisodes réguliers diffusés) pour la carte du haut.
+  let airedTotal = 0;
+  let airedWatched = 0;
+  for (const s of seasons) {
+    if (isSpecial(s)) continue;
+    for (const e of s.episodes) {
+      if (isUpcoming(e.airDate)) continue;
+      airedTotal += 1;
+      if (e.watched) airedWatched += 1;
+    }
+  }
+  const progressPct = airedTotal > 0 ? (airedWatched / airedTotal) * 100 : 0;
+  const remainingMin = runtime && airedTotal > airedWatched ? (airedTotal - airedWatched) * runtime : null;
+
+  // Saison affichée : sélection manuelle, sinon celle du prochain épisode à
+  // voir, sinon la première.
+  const effectiveSeason =
+    seasons.find((s) => s.seasonNumber === seasonSel) ??
+    (data.nextEpisode ? seasons.find((s) => s.seasonNumber === data.nextEpisode!.seasonNumber) : undefined) ??
+    seasons[0];
+  const seasonLabel = (s: SeasonData) => (isSpecial(s) ? 'Spéciaux' : `Saison ${s.seasonNumber}`);
+  const cycleSeason = () => {
+    const i = seasons.findIndex((s) => s.seasonNumber === effectiveSeason.seasonNumber);
+    setSeasonSel(seasons[(i + 1) % seasons.length].seasonNumber);
+  };
+  // Coche de saison : basée sur les épisodes DÉJÀ DIFFUSÉS (règle TV Time).
+  const seasonAired = effectiveSeason.episodes.filter((e) => !isUpcoming(e.airDate));
+  const seasonDone = seasonAired.length > 0 && seasonAired.every((e) => e.watched);
+  const seasonPct = seasonAired.length > 0 ? (seasonAired.filter((e) => e.watched).length / seasonAired.length) * 100 : 0;
+
+  // File « Continuer le suivi » : épisodes réguliers diffusés non vus, dans
+  // l'ordre — on coche l'un, la carte suivante prend sa place.
+  const queue = data.nextEpisode
+    ? seasons
+        .filter((s) => !isSpecial(s))
+        .flatMap((s) => s.episodes)
+        .filter((e) => !isUpcoming(e.airDate) && !e.watched)
+        .slice(0, 24)
+    : [];
+  const CARD_W = Math.max(248, Math.min(width, SIZES.contentMax) - 120);
+
   return (
     <View style={{ flex: 1 }}>
-    <ScrollView
-      style={{ backgroundColor: COLORS.pageMuted }}
-      contentContainerStyle={{ paddingTop: topPad, paddingBottom: 40 }}
-      onScroll={onScroll}
-      scrollEventThrottle={16}
-    >
-      {data.nextEpisode ? (() => {
-        // Carrousel latéral (façon TV Time) : TOUS les épisodes réguliers déjà
-        // diffusés et non vus, dans l'ordre — on coche l'un, la carte suivante
-        // prend sa place (la liste se recalcule via le cache optimiste).
-        const queue = seasons
-          .filter((s) => !isSpecial(s))
-          .flatMap((s) => s.episodes)
-          .filter((e) => !isUpcoming(e.airDate) && !e.watched)
-          .slice(0, 24);
-        const CARD_W = Math.max(248, Math.min(width, SIZES.contentMax) - 56); // la suivante dépasse
-        return (
-          <View style={{ paddingTop: 20, borderBottomWidth: 1, borderBottomColor: COLORS.borderLight, backgroundColor: COLORS.white }}>
-            <Text accessibilityRole="header" style={[styles.sectionTitle, { paddingHorizontal: 24 }]}>{anyWatched ? 'Continuer le suivi' : 'Démarrer le suivi'}</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              snapToInterval={CARD_W + 10}
-              decelerationRate="fast"
-              contentContainerStyle={{ padding: 12, gap: 10 }}
-            >
-              {queue.map((e) => (
-                <Pressable
-                  key={e.id}
-                  style={[styles.eprow, { width: CARD_W, marginBottom: 0 }]}
-                  onPress={() => openSheet(e)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Épisode ${episodeCode(e.seasonNumber, e.episodeNumber)}`}
-                >
-                  <EpThumb stillPath={e.stillPath} fallback={posterPath} />
-                  <View style={{ flex: 1, padding: 12, justifyContent: 'center' }}>
-                    <Text style={styles.epCode}>{episodeCode(e.seasonNumber, e.episodeNumber)}</Text>
-                    <Text style={styles.epRowTitle} numberOfLines={1}>{e.title}</Text>
-                  </View>
-                  <View style={{ justifyContent: 'center', paddingRight: 14 }}>
-                    <CheckCircle checked={e.watched} onPress={episodeBusy ? undefined : () => pressEp(e)} />
-                  </View>
-                </Pressable>
-              ))}
-            </ScrollView>
-          </View>
-        );
-      })() : null}
+    <ScrollView contentContainerStyle={styles.tabContent} showsVerticalScrollIndicator={false}>
+      {ficheTop}
 
-      <View style={{ paddingTop: 20 }}>
-        <View style={[styles.sectionHeadRow, { marginBottom: 0 }]}>
-          <Text accessibilityRole="header" style={styles.sectionTitle}>Tous les épisodes</Text>
-          <Pressable
-            style={({ pressed }) => [styles.markAllBtn, pressed && styles.pressed]}
-            onPress={episodeBusy ? undefined : onMasterPress}
-            disabled={episodeBusy}
-            accessibilityRole="button"
-            accessibilityLabel={caughtUp ? 'Proposer de tout marquer comme non vu' : 'Tout marquer comme vu'}
-            accessibilityState={{ busy: episodeBusy, disabled: episodeBusy }}
+      {/* « Ma progression » (maquette) : anneau + épisodes vus + temps restant
+          estimé ; la coche maîtresse « tout marquer vu » vit dans l'en-tête. */}
+      {airedTotal > 0 ? (
+        <View style={styles.progressCard}>
+          <View style={styles.progressHead}>
+            <Text style={styles.trackTitle}>Ma progression</Text>
+            <EpisodeCheck
+              checked={caughtUp}
+              size={34}
+              onPress={onMasterPress}
+              disabled={episodeBusy}
+              label={caughtUp ? 'Proposer de tout marquer comme non vu' : 'Tout marquer comme vu'}
+            />
+          </View>
+          <View style={styles.progressRow}>
+            <ProgressRing size={104} stroke={11} pct={progressPct}>
+              <Text style={styles.progressPct}>{Math.round(progressPct)}%</Text>
+              <Text style={styles.progressPctSub}>terminée</Text>
+            </ProgressRing>
+            <View style={styles.progressStats}>
+              <View style={styles.progressStat}>
+                <Feather name="tv" size={17} color={COLORS.primary} />
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={styles.progressStatValue}>{airedWatched} / {airedTotal}</Text>
+                  <Text style={styles.progressStatSub}>épisodes vus</Text>
+                </View>
+              </View>
+              {remainingMin ? (
+                <View style={styles.progressStat}>
+                  <Feather name="clock" size={17} color={COLORS.primary} />
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={styles.progressStatValue}>{fmtRemaining(remainingMin)}</Text>
+                    <Text style={styles.progressStatSub}>restantes (est.)</Text>
+                  </View>
+                </View>
+              ) : null}
+            </View>
+          </View>
+        </View>
+      ) : null}
+
+      {/* File latérale (façon TV Time) : tous les épisodes diffusés non vus. */}
+      {queue.length > 0 ? (
+        <FicheSection icon="play" title={anyWatched ? 'Continuer le suivi' : 'Démarrer le suivi'} flush>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            snapToInterval={CARD_W + SPACE.xs}
+            decelerationRate="fast"
+            contentContainerStyle={styles.railContent}
           >
-            <Feather name="check" size={18} color={COLORS.black} />
-          </Pressable>
+            {queue.map((e) => (
+              <Pressable
+                key={e.id}
+                style={[styles.queueCard, { width: CARD_W }]}
+                onPress={() => openSheet(e)}
+                accessibilityRole="button"
+                accessibilityLabel={`Épisode ${episodeCode(e.seasonNumber, e.episodeNumber)}`}
+              >
+                <EpThumb stillPath={e.stillPath} fallback={posterPath} />
+                <View style={styles.epCopy}>
+                  <Text style={styles.epCode}>{episodeCode(e.seasonNumber, e.episodeNumber)}</Text>
+                  <Text style={styles.epTitle} numberOfLines={1}>{e.title}</Text>
+                </View>
+                <EpisodeCheck
+                  checked={e.watched}
+                  onPress={episodeBusy ? undefined : () => pressEp(e)}
+                  disabled={episodeBusy}
+                  label={`Épisode ${episodeCode(e.seasonNumber, e.episodeNumber)} vu`}
+                />
+              </Pressable>
+            ))}
+          </ScrollView>
+        </FicheSection>
+      ) : null}
+
+      {/* Carte « Épisodes » (maquette) : une saison à la fois — le sélecteur
+          fait défiler les saisons, la coche marque/démarque toute la saison. */}
+      <View style={styles.episodesCard}>
+        <View style={styles.episodesHead}>
+          <Text style={styles.trackTitle}>Épisodes</Text>
+          <View style={styles.episodesHeadRight}>
+            <Pressable
+              style={({ pressed }) => [styles.seasonPickRow, pressed && styles.pressed]}
+              onPress={cycleSeason}
+              disabled={seasons.length <= 1}
+              accessibilityRole="button"
+              accessibilityLabel={`${seasonLabel(effectiveSeason)}. ${seasons.length > 1 ? 'Afficher la saison suivante' : 'Seule saison'}`}
+              accessibilityState={{ disabled: seasons.length <= 1 }}
+            >
+              <Text style={styles.seasonPick}>{seasonLabel(effectiveSeason)}</Text>
+              {seasons.length > 1 ? <Feather name="chevron-down" size={16} color={COLORS.primary} /> : null}
+            </Pressable>
+            <EpisodeCheck
+              checked={seasonDone}
+              size={30}
+              onPress={episodeBusy ? undefined : () => (seasonDone ? markAllUnwatched.mutate(effectiveSeason.seasonNumber) : markAll.mutate(effectiveSeason.seasonNumber))}
+              disabled={episodeBusy}
+              label={seasonDone ? `Marquer ${seasonLabel(effectiveSeason)} comme non vue` : `Marquer ${seasonLabel(effectiveSeason)} comme vue`}
+            />
+          </View>
         </View>
         {/* Légende discrète : visible seulement quand la numérotation suivie
             n'est pas l'ordre officiel (remappage déjà appliqué par le serveur). */}
@@ -1814,82 +1883,25 @@ function EpisodesTab({ showId, title, posterPath, onChange, onScroll, topPad }: 
             {data.episodeOrder.source === 'auto' ? ' (auto)' : ''}
           </Text>
         ) : null}
-        <View style={{ padding: 12 }}>
-          {seasons.map((s) => {
-            const isOpen = open[s.seasonNumber];
-            // Progression basée sur les épisodes DÉJÀ DIFFUSÉS (règle TV Time) :
-            // « terminé » (vert) = tous les épisodes disponibles à date sont vus,
-            // même si la saison compte encore des épisodes à venir.
-            const airedEps = s.episodes.filter((e) => !isUpcoming(e.airDate));
-            const airedWatched = airedEps.filter((e) => e.watched).length;
-            const done = airedEps.length > 0 && airedWatched >= airedEps.length;
-            const pct = airedEps.length > 0 ? Math.min(100, (airedWatched / airedEps.length) * 100) : 0;
-            const label = isSpecial(s) ? 'Épisodes spéciaux' : s.title;
+        <View style={styles.seasonProgressRow}>
+          <Text style={styles.seasonProgText}>{effectiveSeason.watchedCount}/{effectiveSeason.totalCount} vus</Text>
+          <View style={[styles.seasonTrack, seasonDone && { backgroundColor: 'rgba(46,154,98,0.22)' }]}>
+            <AnimatedFill pct={seasonPct} color={seasonDone ? COLORS.green : COLORS.primary} style={styles.seasonFill} />
+          </View>
+        </View>
+        <View style={styles.epList}>
+          {effectiveSeason.episodes.map((e) => {
+            const upcoming = isUpcoming(e.airDate);
             return (
-              <View key={s.id} style={{ marginBottom: 12 }}>
-                <Pressable
-                  style={styles.season}
-                  onPress={() => setOpen((o) => ({ ...o, [s.seasonNumber]: !o[s.seasonNumber] }))}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${label}, ${s.watchedCount} sur ${s.totalCount} vus`}
-                  accessibilityState={{ expanded: !!isOpen }}
-                >
-                  <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, marginRight: 8 }}>
-                    <Text style={[styles.seasonTitle, { flexShrink: 1 }]} numberOfLines={1}>
-                      {label}
-                    </Text>
-                    <Feather name={isOpen ? 'chevron-up' : 'chevron-down'} size={22} color={COLORS.black} />
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <Text style={styles.seasonProg}>{s.watchedCount}/{s.totalCount}</Text>
-                    <CheckCircle
-                      size={44}
-                      checked={done}
-                      onPress={episodeBusy ? undefined : () => (done ? markAllUnwatched.mutate(s.seasonNumber) : markAll.mutate(s.seasonNumber))}
-                    />
-                  </View>
-                  {/* Barre : piste violette pâle toujours visible, remplissage
-                      violet Prisme, le tout vert quand tous les épisodes diffusés
-                      sont vus. */}
-                  <View style={[styles.progressTrack, done && { backgroundColor: COLORS.green }]}>
-                    <AnimatedFill pct={pct} color={done ? COLORS.green : COLORS.primary} style={styles.progressFill} />
-                  </View>
-                </Pressable>
-                {isOpen
-                  ? s.episodes.map((e) => {
-                      const upcoming = isUpcoming(e.airDate);
-                      return (
-                        // Taper la carte ouvre la fenêtre épisode (les non
-                        // diffusés restent inertes : rien à y voir/cocher).
-                        <Pressable
-                          key={e.id}
-                          style={styles.eprow}
-                          onPress={upcoming ? undefined : () => openSheet(e)}
-                          accessibilityRole={upcoming ? undefined : 'button'}
-                          accessibilityLabel={`Épisode ${episodeCode(e.seasonNumber, e.episodeNumber)}`}
-                        >
-                          <EpThumb stillPath={e.stillPath} fallback={posterPath} />
-                          <View style={{ flex: 1, padding: 10, justifyContent: 'center' }}>
-                            <Text style={styles.epCode}>{episodeCode(e.seasonNumber, e.episodeNumber)}</Text>
-                            <Text style={styles.epRowTitle} numberOfLines={2}>{e.title}</Text>
-                          </View>
-                          <View style={{ justifyContent: 'center', paddingRight: 14 }}>
-                            {upcoming ? (
-                              // Épisode pas encore diffusé : pas de coche, mais le
-                              // compte à rebours en jours (façon TV Time).
-                              <View style={styles.daysWrap}>
-                                <Text style={styles.daysNum}>{daysUntil(e.airDate)}</Text>
-                                <Text style={styles.daysLabel}>{daysUntil(e.airDate) > 1 ? 'JOURS' : 'JOUR'}</Text>
-                              </View>
-                            ) : (
-                              <CheckCircle size={44} checked={e.watched} onPress={episodeBusy ? undefined : () => pressEp(e)} />
-                            )}
-                          </View>
-                        </Pressable>
-                      );
-                    })
-                  : null}
-              </View>
+              <EpisodeRow
+                key={e.id}
+                episode={e}
+                runtime={runtime}
+                posterPath={posterPath}
+                onOpen={upcoming ? undefined : () => openSheet(e)}
+                onToggle={episodeBusy ? undefined : () => pressEp(e)}
+                busy={episodeBusy}
+              />
             );
           })}
         </View>
@@ -1939,111 +1951,17 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.bg,
     padding: SPACE.lg,
   },
-  headerOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 20,
-    backgroundColor: COLORS.white,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: COLORS.borderLight,
-  },
-  hero: {
-    height: 260,
-    backgroundColor: '#171120',
-    justifyContent: 'flex-end',
-    overflow: 'hidden',
-  },
-  heroPrism: {
-    position: 'absolute',
-    right: -86,
-    bottom: -124,
-    width: 220,
-    height: 220,
-    borderRadius: 46,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.17)',
-    backgroundColor: 'rgba(239,91,168,0.18)',
-    transform: [{ rotate: '34deg' }],
-  },
-  heroOrb: {
-    position: 'absolute',
-    left: -72,
-    top: -96,
-    width: 210,
-    height: 210,
-    borderRadius: 105,
-    backgroundColor: 'rgba(243,197,79,0.13)',
-  },
-  heroBtns: {
-    position: 'absolute',
-    left: SPACE.sm,
-    right: SPACE.sm,
-    zIndex: 4,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  heroIconButton: {
-    width: SIZES.touch,
-    height: SIZES.touch,
-    borderRadius: RADIUS.control,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(14,8,22,0.56)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.22)',
-  },
+  tabContent: { paddingBottom: 96 },
   pressed: { opacity: 0.7 },
-  heroTitleWrap: {
-    width: '100%',
-    minHeight: 112,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: SPACE.sm,
-    paddingHorizontal: SPACE.md,
-    paddingBottom: SPACE.md,
+  // Méta de la carte d'identité : « 2023 • Science-fiction, Action, Drame ».
+  identityMeta: {
+    marginTop: SPACE.xs,
+    color: COLORS.textMuted,
+    fontFamily: FONTS.semiBold,
+    fontSize: 12.5,
+    lineHeight: 17,
   },
-  heroPoster: {
-    width: 64,
-    height: 94,
-    borderRadius: RADIUS.poster,
-    backgroundColor: COLORS.imagePlaceholder,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.5)',
-  },
-  heroCopy: { flex: 1, minWidth: 0, paddingBottom: 2 },
-  // Pilule « SÉRIE / FILM » : verre translucide à arête blanche (Prisme), plus
-  // le pastille jaune héritée de TV Time.
-  heroKindBadge: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    minHeight: 24,
-    paddingHorizontal: SPACE.sm,
-    borderRadius: RADIUS.pill,
-    backgroundColor: 'rgba(255,255,255,0.16)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.42)',
-    marginBottom: SPACE.xs,
-  },
-  heroKindText: { color: '#FFFFFF', fontSize: 10, fontFamily: FONTS.extraBold, letterSpacing: 1.2 },
-  heroTitle: { color: '#FFFFFF', fontSize: 23, lineHeight: 27, fontFamily: FONTS.bold },
-  heroSub: { color: 'rgba(255,255,255,0.86)', fontFamily: FONTS.semiBold, fontSize: 13, lineHeight: 18, marginTop: 3 },
-  heroCollapsedTitle: {
-    position: 'absolute',
-    left: 70,
-    right: 70,
-    zIndex: 3,
-    textAlign: 'center',
-    color: '#FFFFFF',
-    fontSize: 17,
-    fontFamily: FONTS.extraBold,
-  },
-  heroProgressTrack: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 5 },
-  heroProgressFill: { height: '100%' },
-  // Barre d'ajout flottante : pilule violette Prisme (plus le jaune TV Time).
+  // Barre d'ajout flottante : pilule violette Prisme.
   addBar: {
     position: 'absolute',
     left: SPACE.sm,
@@ -2060,159 +1978,164 @@ const styles = StyleSheet.create({
   addBarPressed: { opacity: 0.84, transform: [{ scale: 0.99 }] },
   addBarRow: { minHeight: SIZES.touch, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACE.xs },
   addBarText: { color: COLORS.onPrimary, fontSize: 14, fontFamily: FONTS.extraBold, letterSpacing: 0.7 },
-  // Conteneur des onglets segmentés Prisme, dans l'en-tête (hauteur = TABS_H).
-  ficheTabs: { paddingHorizontal: SPACE.sm, paddingTop: SPACE.xxs, paddingBottom: SPACE.xs },
-  section: {
-    marginHorizontal: SPACE.sm,
+  // Cartes « contrôle » (Suivi, Ma progression, Épisodes) : titre bold sans
+  // pastille — les sections de CONTENU passent par FicheSection (pastille).
+  trackCard: {
     marginTop: SPACE.sm,
-    paddingHorizontal: SPACE.md,
-    paddingVertical: SPACE.md,
-    borderWidth: 1,
+    marginHorizontal: SPACE.md,
+    padding: SPACE.md,
+    borderRadius: RADIUS.sheet,
+    backgroundColor: COLORS.surface,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: COLORS.borderLight,
-    borderRadius: RADIUS.card,
-    backgroundColor: COLORS.white,
+    ...SHADOW.card,
   },
-  sectionHeadRow: {
-    minHeight: SIZES.touch,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: SPACE.lg,
+  trackTitle: {
+    flex: 1,
+    color: COLORS.text,
+    fontFamily: FONTS.extraBold,
+    fontSize: 16.5,
+    lineHeight: 21,
     marginBottom: SPACE.sm,
   },
-  // Petit titre discret de la ligne de suivi (même recette que la fiche jeu).
-  trackingTitle: {
-    color: COLORS.textMuted,
-    fontFamily: FONTS.bold,
-    fontSize: 13,
-    lineHeight: 17,
-    marginBottom: SPACE.xs,
+  muted: { color: COLORS.textMuted, fontFamily: FONTS.regular, fontSize: 13.5, lineHeight: 20, marginTop: SPACE.sm },
+  overview: { color: COLORS.text, fontFamily: FONTS.regular, fontSize: 14, lineHeight: 21, marginTop: SPACE.sm },
+  infoMeta: { color: COLORS.textMuted, fontFamily: FONTS.semiBold, fontSize: 13, lineHeight: 18, marginTop: SPACE.sm },
+  infoRows: { marginTop: SPACE.sm },
+  // « Où regarder » : tuiles lavande qui s'enroulent.
+  provWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACE.xs, marginTop: SPACE.sm },
+  provTile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACE.xs,
+    minHeight: 46,
+    paddingHorizontal: SPACE.sm,
+    paddingVertical: SPACE.xs,
+    borderRadius: RADIUS.card,
+    backgroundColor: COLORS.surfaceMuted,
   },
-  sectionTitle: { color: COLORS.text, fontSize: 17, lineHeight: 22, fontFamily: FONTS.bold },
-  // Légende « Numérotation : … » sous l'en-tête « Tous les épisodes ».
+  provBadge: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.primary,
+  },
+  provBadgeText: { color: COLORS.onPrimary, fontFamily: FONTS.extraBold, fontSize: 12 },
+  provName: { color: COLORS.text, fontFamily: FONTS.bold, fontSize: 13 },
+  railContent: { gap: SPACE.sm, paddingHorizontal: SPACE.md, paddingTop: SPACE.sm },
+  castCard: { width: 96 },
+  castPhoto: {
+    width: 96,
+    height: 122,
+    borderRadius: RADIUS.card,
+    overflow: 'hidden',
+    backgroundColor: COLORS.imagePlaceholder,
+  },
+  castPhotoEmpty: { alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.surfaceMuted },
+  castName: { marginTop: SPACE.xs, color: COLORS.text, fontSize: 12.5, lineHeight: 16, fontFamily: FONTS.bold },
+  castRole: { color: COLORS.textMuted, fontSize: 11, lineHeight: 15, fontFamily: FONTS.medium, marginTop: 1 },
+  recoCard: { width: 108 },
+  recoPoster: {
+    width: 108,
+    height: 162,
+    borderRadius: RADIUS.card,
+    overflow: 'hidden',
+    backgroundColor: COLORS.imagePlaceholder,
+  },
+  recoBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: COLORS.success,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+  },
+  recoTitle: { marginTop: SPACE.xs, color: COLORS.text, fontSize: 12.5, lineHeight: 16, fontFamily: FONTS.bold },
+  recoKind: { color: COLORS.textMuted, fontSize: 11, lineHeight: 15, fontFamily: FONTS.medium, marginTop: 1 },
+  seasonPickRow: {
+    minHeight: 34,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: SPACE.sm,
+    borderRadius: RADIUS.pill,
+    backgroundColor: COLORS.surfaceMuted,
+  },
+  seasonPick: { color: COLORS.primary, fontSize: 13.5, fontFamily: FONTS.bold },
+  dotsRow: { flexDirection: 'row', gap: 6, justifyContent: 'center', marginTop: SPACE.xs },
+  dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: COLORS.chipSelected },
+  dotOn: { width: 20, backgroundColor: COLORS.primary },
+  commentsCount: { fontSize: 14, fontFamily: FONTS.bold, color: COLORS.secondary },
+  // Carte « Ma progression ».
+  progressCard: {
+    marginTop: SPACE.sm,
+    marginHorizontal: SPACE.md,
+    padding: SPACE.md,
+    borderRadius: RADIUS.sheet,
+    backgroundColor: COLORS.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: COLORS.borderLight,
+    ...SHADOW.card,
+  },
+  progressHead: { flexDirection: 'row', alignItems: 'center' },
+  progressRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.lg, marginTop: SPACE.xs },
+  progressPct: { color: COLORS.text, fontFamily: FONTS.extraBold, fontSize: 21 },
+  progressPctSub: { color: COLORS.textMuted, fontFamily: FONTS.medium, fontSize: 11, marginTop: 1 },
+  progressStats: { flex: 1, minWidth: 0, gap: SPACE.md },
+  progressStat: { flexDirection: 'row', alignItems: 'center', gap: SPACE.sm },
+  progressStatValue: { color: COLORS.text, fontFamily: FONTS.extraBold, fontSize: 16, lineHeight: 20 },
+  progressStatSub: { color: COLORS.textMuted, fontFamily: FONTS.medium, fontSize: 12, lineHeight: 16 },
+  // Carte « Épisodes ».
+  episodesCard: {
+    marginTop: SPACE.sm,
+    marginHorizontal: SPACE.md,
+    padding: SPACE.md,
+    borderRadius: RADIUS.sheet,
+    backgroundColor: COLORS.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: COLORS.borderLight,
+    ...SHADOW.card,
+  },
+  episodesHead: { flexDirection: 'row', alignItems: 'center', gap: SPACE.sm },
+  episodesHeadRight: { flexDirection: 'row', alignItems: 'center', gap: SPACE.sm },
   orderLegend: {
     color: COLORS.textMuted,
     fontFamily: FONTS.regular,
     fontSize: 12.5,
     lineHeight: 17,
-    paddingHorizontal: SPACE.lg,
   },
-  // En-tête de section Prisme compact (pastille + titre unique).
-  sectionHead: { flexDirection: 'row', alignItems: 'center', gap: SPACE.sm },
-  sectionHeadIcon: {
-    width: 38,
-    height: 38,
-    flexShrink: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: RADIUS.control,
-    backgroundColor: COLORS.primarySoft,
-  },
-  muted: { color: COLORS.textMuted, fontFamily: FONTS.regular, fontSize: 13.5, lineHeight: 20, marginTop: SPACE.xs },
-  overview: { color: COLORS.text, fontFamily: FONTS.regular, fontSize: 14, lineHeight: 21, marginTop: SPACE.sm },
-  infoMeta: { color: COLORS.textMuted, fontFamily: FONTS.semiBold, fontSize: 13, lineHeight: 18, marginTop: 5 },
-  provBtn: {
-    minHeight: SIZES.touch,
+  seasonProgressRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.sm, marginTop: SPACE.xxs, marginBottom: SPACE.xs },
+  seasonProgText: { color: COLORS.textMuted, fontFamily: FONTS.bold, fontSize: 12 },
+  seasonTrack: { flex: 1, height: 6, borderRadius: 3, overflow: 'hidden', backgroundColor: COLORS.primarySoft },
+  seasonFill: { position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: 3 },
+  epList: { gap: SPACE.sm, marginTop: SPACE.xs },
+  epRow: { flexDirection: 'row', alignItems: 'center', gap: SPACE.sm, minHeight: 56 },
+  epThumb: { width: 92, height: 54, borderRadius: RADIUS.small + 2, backgroundColor: COLORS.imagePlaceholder, overflow: 'hidden' },
+  epCopy: { flex: 1, minWidth: 0 },
+  epCode: { color: COLORS.primary, fontSize: 12, fontFamily: FONTS.extraBold, letterSpacing: 0.4 },
+  epTitle: { color: COLORS.text, fontFamily: FONTS.semiBold, fontSize: 13.5, lineHeight: 18, marginTop: 2 },
+  epDurRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 },
+  epDur: { color: COLORS.textSoft, fontFamily: FONTS.medium, fontSize: 11.5 },
+  // File « Continuer le suivi » : cartes horizontales sur fond lavande.
+  queueCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACE.xs,
-    backgroundColor: COLORS.primary,
-    borderRadius: RADIUS.pill,
-    paddingHorizontal: SPACE.md,
-  },
-  provText: { color: COLORS.onPrimary, fontSize: 12, fontFamily: FONTS.extraBold, letterSpacing: 0.3 },
-  // Puces d'intérêt : pilules Prisme qui s'enroulent (plus la liste empilée TV Time).
-  similarRow: { minHeight: 78, flexDirection: 'row', alignItems: 'center', gap: SPACE.sm },
-  similarThumb: { width: 52, height: 52, borderRadius: RADIUS.control, backgroundColor: COLORS.imagePlaceholder },
-  similarTitle: { color: COLORS.text, fontSize: 16, fontFamily: FONTS.extraBold },
-  similarName: { fontSize: 13.5, fontFamily: FONTS.regular, color: COLORS.textMuted, marginTop: 2 },
-  metaRows: { marginTop: SPACE.md, gap: SPACE.sm },
-  metaItem: { minHeight: 24, flexDirection: 'row', alignItems: 'center', gap: SPACE.xs },
-  metaText: { flex: 1, color: COLORS.text, fontSize: 14, lineHeight: 20, fontFamily: FONTS.regular },
-  castCard: {
-    width: 112,
-    height: 156,
-    borderRadius: RADIUS.poster,
-    overflow: 'hidden',
-    backgroundColor: COLORS.imagePlaceholder,
-    justifyContent: 'flex-end',
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
-  },
-  castCap: { backgroundColor: 'rgba(9,5,16,0.72)', paddingHorizontal: SPACE.xs, paddingVertical: SPACE.xs },
-  castName: { color: '#FFFFFF', fontSize: 13, fontFamily: FONTS.bold },
-  castRole: { color: 'rgba(255,255,255,0.82)', fontSize: 10.5, fontFamily: FONTS.bold, letterSpacing: 0.3, marginTop: 1 },
-  recoCard: {
-    width: 132,
-    aspectRatio: 2 / 3,
-    borderRadius: RADIUS.poster,
-    overflow: 'hidden',
-    backgroundColor: COLORS.imagePlaceholder,
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
-  },
-  recoBadge: { position: 'absolute', top: 0, right: SPACE.xs, width: 36, height: 32, backgroundColor: COLORS.primary, borderBottomLeftRadius: RADIUS.small, borderBottomRightRadius: RADIUS.small, alignItems: 'center', justifyContent: 'center' },
-  seasonPickRow: {
-    minHeight: SIZES.touch,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACE.xs,
-    alignSelf: 'flex-start',
-    marginTop: SPACE.xs,
-    marginBottom: SPACE.xs,
-    paddingHorizontal: SPACE.xs,
-    borderRadius: RADIUS.control,
+    gap: SPACE.sm,
+    padding: SPACE.xs,
+    paddingRight: SPACE.sm,
+    borderRadius: RADIUS.card,
     backgroundColor: COLORS.surfaceMuted,
   },
-  seasonPick: { color: COLORS.text, fontSize: 15, fontFamily: FONTS.bold },
-  dotsRow: { flexDirection: 'row', gap: 6, justifyContent: 'center', marginTop: SPACE.xs },
-  dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: COLORS.chipSelected },
-  dotOn: { width: 20, backgroundColor: COLORS.primary },
-  commentsCount: { fontSize: 14, fontFamily: FONTS.bold, color: COLORS.secondary },
-  eprow: {
-    flexDirection: 'row',
-    minHeight: 96,
-    overflow: 'hidden',
-    marginBottom: SPACE.xs,
-    borderRadius: RADIUS.poster,
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
-    backgroundColor: COLORS.white,
-    ...SHADOW.card,
-  },
-  epThumb: { width: 106, backgroundColor: COLORS.imagePlaceholder },
-  epCode: { color: COLORS.primary, fontSize: 14, fontFamily: FONTS.extraBold, letterSpacing: 0.4 },
-  epRowTitle: { color: COLORS.text, fontFamily: FONTS.regular, fontSize: 13, lineHeight: 18, marginTop: 3 },
-  markAllBtn: { width: SIZES.touch, height: SIZES.touch, borderRadius: 22, borderWidth: 2, borderColor: COLORS.primary, backgroundColor: COLORS.primarySoft, alignItems: 'center', justifyContent: 'center' },
-  season: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: 80,
-    paddingHorizontal: SPACE.md,
-    backgroundColor: COLORS.white,
-    borderRadius: RADIUS.card,
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
-    ...SHADOW.season,
-  },
-  seasonTitle: { color: COLORS.text, fontSize: 18, fontFamily: FONTS.extraBold },
-  seasonProg: { color: COLORS.textMuted, fontFamily: FONTS.bold, fontSize: 14, marginRight: SPACE.xs },
-  daysWrap: { minWidth: SIZES.touch, minHeight: SIZES.touch, alignItems: 'center', justifyContent: 'center' },
-  daysNum: { color: COLORS.text, fontSize: 21, fontFamily: FONTS.extraBold, lineHeight: 24 },
-  daysLabel: { color: COLORS.textMuted, fontSize: 9.5, fontFamily: FONTS.bold, letterSpacing: 0.8 },
-  progressTrack: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 5,
-    borderBottomLeftRadius: RADIUS.card,
-    borderBottomRightRadius: RADIUS.card,
-    overflow: 'hidden',
-    backgroundColor: COLORS.primarySoft,
-  },
-  progressFill: { position: 'absolute', left: 0, bottom: 0, top: 0, borderBottomLeftRadius: RADIUS.card },
+  daysWrap: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  daysNum: { color: COLORS.text, fontSize: 19, fontFamily: FONTS.extraBold, lineHeight: 22 },
+  daysLabel: { color: COLORS.textMuted, fontSize: 9, fontFamily: FONTS.bold, letterSpacing: 0.8 },
   unmarkBar: {
     position: 'absolute',
     left: SPACE.sm,

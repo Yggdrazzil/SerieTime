@@ -1,13 +1,25 @@
 import React from 'react';
-import { ScrollView, Pressable, Text, StyleSheet } from 'react-native';
+import { View, Pressable, Text, StyleSheet } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { COLORS, FONTS, RADIUS, SPACE } from '@/lib/theme';
 
-// Ligne de suivi partagée (fiches jeu / série / film / animé) : les statuts
-// tiennent sur UNE seule ligne de petites pilules ; si l'écran est trop étroit,
-// la ligne défile horizontalement (pas de retour à la ligne).
+// Ligne de suivi partagée (fiches jeu / série / film / animé) — refonte
+// maquettes 2026-07-23 : contrôle SEGMENTÉ sur toute la largeur (icône au-
+// dessus du libellé), segment actif en pilule violette pleine. Même API
+// qu'avant (options/value/onChange/allowDeselect) : aucune logique changée.
 // `allowDeselect` : re-taper le statut actif le retire (onChange(null)) —
 // activé uniquement quand l'API le permet sans effet destructeur.
-export type StatusOption = { value: string; label: string };
+export type StatusOption = { value: string; label: string; icon?: keyof typeof Feather.glyphMap };
+
+// Icônes par défaut par statut (série/film/jeu partagent les mêmes valeurs).
+const STATUS_ICONS: Record<string, keyof typeof Feather.glyphMap> = {
+  watchlist: 'bookmark',
+  wishlist: 'bookmark',
+  watching: 'play-circle',
+  playing: 'play-circle',
+  completed: 'check-circle',
+  abandoned: 'x-circle',
+};
 
 export function StatusLine({
   options,
@@ -25,23 +37,22 @@ export function StatusLine({
   allowDeselect?: boolean;
 }) {
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
+    <View
+      style={styles.track}
       accessibilityRole="radiogroup"
       accessibilityLabel={accessibilityLabel}
-      contentContainerStyle={styles.row}
     >
       {options.map((o) => {
         const selected = value === o.value;
+        const icon = o.icon ?? STATUS_ICONS[o.value] ?? 'circle';
         return (
           <Pressable
             key={o.value}
             style={({ pressed }) => [
-              styles.pill,
-              selected && styles.pillSel,
-              pressed && styles.pillPressed,
-              disabled && styles.pillDisabled,
+              styles.segment,
+              selected && styles.segmentSel,
+              pressed && !disabled && styles.segmentPressed,
+              disabled && styles.segmentDisabled,
             ]}
             onPress={() => {
               if (selected) {
@@ -51,9 +62,6 @@ export function StatusLine({
               onChange(o.value);
             }}
             disabled={disabled}
-            // Pilules compactes (34) : hitSlop vertical pour garder une cible
-            // tactile confortable (~44) sans épaissir la ligne.
-            hitSlop={{ top: 6, bottom: 6 }}
             accessibilityRole="radio"
             accessibilityLabel={o.label}
             accessibilityHint={
@@ -61,51 +69,60 @@ export function StatusLine({
             }
             accessibilityState={{ checked: selected, disabled: !!disabled, busy: !!disabled }}
           >
-            <Text style={[styles.pillText, selected && styles.pillTextSel]} numberOfLines={1}>
+            <Feather
+              name={icon}
+              size={17}
+              color={selected ? COLORS.onPrimary : COLORS.textMuted}
+            />
+            <Text
+              style={[styles.segmentText, selected && styles.segmentTextSel]}
+              numberOfLines={1}
+            >
               {o.label}
             </Text>
           </Pressable>
         );
       })}
-    </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  row: {
+  track: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACE.xs,
-    // ScrollView : petite marge de fin pour que la dernière pilule ne colle
-    // pas au bord quand la ligne défile.
-    paddingRight: SPACE.xs,
-  },
-  pill: {
-    height: 34,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: SPACE.sm,
-    borderRadius: RADIUS.pill,
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
+    padding: 4,
+    gap: 2,
+    borderRadius: RADIUS.card,
     backgroundColor: COLORS.surfaceMuted,
   },
-  pillSel: {
-    borderColor: COLORS.primary,
+  segment: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 58,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingHorizontal: 2,
+    paddingVertical: SPACE.xs,
+    borderRadius: RADIUS.card - 4,
+  },
+  segmentSel: {
     backgroundColor: COLORS.primary,
   },
-  pillPressed: {
+  segmentPressed: {
     opacity: 0.78,
   },
-  pillDisabled: {
+  segmentDisabled: {
     opacity: 0.48,
   },
-  pillText: {
+  segmentText: {
+    maxWidth: '100%',
     color: COLORS.text,
     fontFamily: FONTS.semiBold,
-    fontSize: 13,
+    fontSize: 12,
   },
-  pillTextSel: {
+  segmentTextSel: {
     color: COLORS.onPrimary,
+    fontFamily: FONTS.bold,
   },
 });
